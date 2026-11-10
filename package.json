@@ -66,11 +66,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HunYiSage/dsh-purge.git"
+    "url": "git+https://github.com/xiuchuan666/dsh-purge-maintained.git"
   },
-  "homepage": "https://github.com/HunYiSage/dsh-purge#readme",
+  "homepage": "https://github.com/xiuchuan666/dsh-purge-maintained#readme",
   "bugs": {
-    "url": "https://github.com/HunYiSage/dsh-purge/issues"
+    "url": "https://github.com/xiuchuan666/dsh-purge-maintained/issues"
   },
   "dsh": {
     "bundle": {
@@ -101,7 +101,7 @@
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "dshTarget": "0.2.2-rc.1",
   "dshTargets": [
