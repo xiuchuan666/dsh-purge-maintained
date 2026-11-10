@@ -41,6 +41,8 @@
     "check": "npm run check:syntax && npm run check:metadata && npm test",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:metadata": "node scripts/check-metadata.mjs",
+    "host:status": "node scripts/host-baseline.mjs",
+    "host:capture": "node scripts/host-baseline.mjs --capture",
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "build:client": "node scripts/build-client.mjs",
     "postinstall": "node scripts/ensure-profile-bundle.mjs"

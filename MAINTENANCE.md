@@ -32,6 +32,25 @@ node scripts/e2e-desktop.mjs --main <纯净 resources/app/lib/main.js>
 - `e2e-apply` 把宿主树复制到临时目录，验证备份、两次应用、状态及逐字节回退。
 - `e2e-desktop` 只接受纯净桌面主进程文件；已打补丁的 `main.js` 不作为原始基线。
 
+## 宿主升级：先跑宿主基线
+
+```bash
+npm run host:status     # 与 docs/host-baseline.json 比对，只读
+npm run host:capture    # 升级适配完成后，把新状态记为基线
+```
+
+`host:status` 自动探测本机宿主（也接受 `--ai-base <目录>`，或环境变量 `DSH_HOST_AI_BASE`），把当前状态与 `docs/host-baseline.json` 比对，输出三段：宿主版本变化、目标文件指纹变化、补丁状态迁移。结论分三级：
+
+| verdict | 含义 | 处理 |
+| --- | --- | --- |
+| `ok` | 与基线完全一致 | 不用管 |
+| `review` | 版本或文件变了，但没有补丁从可用跌成失效 | 记下变化，继续用；确认无碍后 `host:capture` 更新基线 |
+| `broken` | 有补丁从 `settled`/`would-apply` 跌成 `drifted` | 立即列出失效补丁 ID，按 `verify-target --pad` 定位字面量 |
+
+判定规则不在这里另写一份：`host:status` 调用 `scripts/verify-target.mjs --json`，补丁分类始终只有一处实现。退出码 `0` 表示 ok/review，`1` 表示 broken，`2` 表示探测或用法失败。
+
+基线文件 `docs/host-baseline.json` 只存相对路径与 sha256，不含绝对安装路径，入库无害；桌面补丁需要纯净 `main.js` 的验证仍走 `e2e-desktop`。
+
 宿主升级适配、前端重建与巨型模块拆分应分别成为独立维护任务，不与无关业务修改混在同一提交。
 
 ## CI 与发布
@@ -44,4 +63,4 @@ node scripts/e2e-desktop.mjs --main <纯净 resources/app/lib/main.js>
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
-详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)。
+详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md) 与 [宿主适配基线设计](docs/maintenance-host-baseline.md)。

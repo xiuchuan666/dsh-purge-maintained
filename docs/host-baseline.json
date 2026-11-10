@@ -1,0 +1,1063 @@
+{
+  "schema": 1,
+  "capturedAt": "2026-11-10T08:34:03.463Z",
+  "pluginVersion": "1.1.94",
+  "host": {
+    "version": "0.2.2-rc.1",
+    "name": "@deepseek-ai/dsh",
+    "packagePath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app\\dsh\\node_modules\\@deepseek-ai\\dsh\\package.json"
+  },
+  "aiBase": "C:/Users/Administrator/AppData/Local/Programs/DeepSeek Harness/resources/app/dsh/node_modules/@deepseek-ai",
+  "files": {
+    "agent-instructions": {
+      "rel": "dsh-agent-instructions/lib/index.js",
+      "bytes": 63970,
+      "sha256": "f60fc5f2a6dc1ab2b74f35b03a51ed30bda7e3718304645e1e8d1321e319b78b"
+    },
+    "web-app": {
+      "rel": "dsh-web-app/cordis.patch.yml",
+      "bytes": 22818,
+      "sha256": "37d4e932246bf97b55650a8c1cfb18ba248a0677ded5ef61394a3ff443efeb41"
+    },
+    "web-app-lib": {
+      "rel": "dsh-web-app/lib/index.js",
+      "bytes": 7976,
+      "sha256": "f061f660fd280af4a7a91f75e4a738a992fd21f672b30aedcd9a189695125445"
+    },
+    "harness-dev-context": {
+      "rel": "dsh-harness-dev-context/lib/index.js",
+      "bytes": 6903,
+      "sha256": "549f8b30da563cd1b00c2e9d86701fdb516de098371f41b398297c66da9e764f"
+    },
+    "skill-badge": {
+      "rel": "dsh-skill-badge/lib/index.js",
+      "bytes": 1669,
+      "sha256": "80273c95c0f37b4c30dbbe6de5350163460bcdaf1e33c3d18dc23ea3ed6aa255"
+    },
+    "headless": {
+      "rel": "dsh-headless/cordis.patch.yml",
+      "bytes": 1510,
+      "sha256": "bddeb19110c622ce8e28182b244f7c0614ed0171fa7cc690a9825650ff6f0ae8"
+    },
+    "agent-preset": {
+      "rel": "dsh-web-app/presets/standard.patch.yml",
+      "bytes": 6931,
+      "sha256": "9d024855e0e92d1894d82f0f9f6fd6cc01bfc92cc1fabe9894ce9cb055d0432f"
+    },
+    "user-approval": {
+      "rel": "dsh-user-approval/lib/types/index.js",
+      "bytes": 11072,
+      "sha256": "1b32e22c6dc4a1042b67d5418664217b52925ff2184725e9480d476b2dc0beac"
+    },
+    "user-approval-code": {
+      "rel": "dsh-user-approval/lib/index.js",
+      "bytes": 8846,
+      "sha256": "24681642bc2f578515daf5752c6990d72ba90900af19590c221a41be77f701ba"
+    },
+    "escalation": {
+      "rel": "dsh-sandbox/lib/index.js",
+      "bytes": 19064,
+      "sha256": "83a468404036bb1f625f63f6c2fe869a4553ccd945f006475ac07e6b4c2cb007"
+    },
+    "fs-sandbox": {
+      "rel": "dsh-fs-sandbox/lib/index.js",
+      "bytes": 8767,
+      "sha256": "1464eb5e2ba3715a1752d7f4290666a5048371ede21eecf09d1f6c64e7196534"
+    },
+    "sandbox-local": {
+      "rel": "dsh-sandbox-local/lib/index.js",
+      "bytes": 22694,
+      "sha256": "0084d8471a9536ce30610ac00258f1f27308eae216ada22414806fb7b3134457"
+    },
+    "base": {
+      "rel": "dsh-base/cordis.patch.yml",
+      "bytes": 21093,
+      "sha256": "0f92d92f84afb0632ec2d9ac3bbfdc6ec8a654f1dcb7939603ce1ea27dcaa345"
+    },
+    "settings": {
+      "rel": "dsh-settings/lib/index.js",
+      "bytes": 27650,
+      "sha256": "c3b695ac67146015dc4dfe79fa5377cb1ebbd4b607992bc8c8c8009555b32c0e"
+    },
+    "fs-observation-policy": {
+      "rel": "dsh-fs-observation-policy/lib/index.js",
+      "bytes": 4255,
+      "sha256": "ff24f30da8ad29ad0731267cad33fc0b6ac6a71666760a27bbb9a2ec188478dd"
+    },
+    "repeat-tool-reminder": {
+      "rel": "dsh-repeat-tool-reminder/lib/index.js",
+      "bytes": 92925,
+      "sha256": "512abbb6a061b0c6c84b80baad21916e67794a3fac187ce663eaeea9bf63dce7"
+    },
+    "compaction-tool-result-pruner": {
+      "rel": "dsh-compaction-tool-result-pruner/lib/index.js",
+      "bytes": 7553,
+      "sha256": "cb89cd266e4063e6f50dc4b0d6640943dd41d7d197dd775b71db8fc6a9c93a91"
+    },
+    "tool-fs": {
+      "rel": "dsh-tool-fs/lib/index.js",
+      "bytes": 76992,
+      "sha256": "6c83d4ed7c66604bd0a52bda3f7d08de12518c7e3595c3cc08d937bbb981724e"
+    },
+    "tool-subagent": {
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "bytes": 28145,
+      "sha256": "224423377e79db6153c3b6891ac4957b497e41bc7631286b11f5effaa921e366"
+    },
+    "subagent": {
+      "rel": "dsh-subagent/lib/index.js",
+      "bytes": 142389,
+      "sha256": "2a85a14f100e3ee0f3dc385dd45cb125b201caf0035921958a0137bc0eb2edee"
+    },
+    "subagent-types": {
+      "rel": "dsh-subagent/lib/types/child-agent.js",
+      "bytes": 10248,
+      "sha256": "363ebdfd94fd5e3f6e093f088443381a9b9e98c46e2bdd3b82366f81a738c946"
+    },
+    "base-package": {
+      "rel": "dsh-base/package.json",
+      "bytes": 6242,
+      "sha256": "e4c91192e947bfe6879092845d65f5bccb9fd77d3251b292f446205f442a95d8"
+    },
+    "preset-standard": {
+      "rel": "dsh-web-app/presets/standard.patch.yml",
+      "bytes": 6931,
+      "sha256": "9d024855e0e92d1894d82f0f9f6fd6cc01bfc92cc1fabe9894ce9cb055d0432f"
+    },
+    "preset-cordis": {
+      "rel": "dsh-web-app/presets/cordis.patch.yml",
+      "bytes": 7488,
+      "sha256": "02e24f835db08c1ac19bc3c0484016e6fc81f7820052452e1f5e177e5254fdf4"
+    },
+    "preset-minimal": {
+      "rel": "dsh-web-app/presets/minimal.patch.yml",
+      "bytes": 3554,
+      "sha256": "9e61cea6dc690fc8c3d96d43c0c6a3f7b988d80e0b1e51c4177037ca6f1813e4"
+    },
+    "preset-ptc": {
+      "rel": "dsh-web-app/presets/ptc.patch.yml",
+      "bytes": 7036,
+      "sha256": "b5688b8a2baa154e02e5f550955727d3335851e111093959efa576c93321e391"
+    },
+    "preset-acp-app": {
+      "rel": "dsh-acp-app/cordis.patch.yml",
+      "bytes": 438,
+      "sha256": "725b8533f1699724c664d7cfe49ecc2742ffcf5aaf27d01b5748a7f91a19d9bc"
+    },
+    "preset-sdk-app": {
+      "rel": "dsh-sdk-app/cordis.patch.yml",
+      "bytes": 2818,
+      "sha256": "45673e5cd8aaaeeff8b61a1dfe3144a447850ba2047c14e93844ffcb49d840a2"
+    },
+    "preset-sdk-minimal": {
+      "rel": "dsh-sdk-minimal/cordis.patch.yml",
+      "bytes": 5620,
+      "sha256": "d3aba1cfc0deba3790c43db50396302b75cb8b65de75f8f767a779361c3e14d1"
+    },
+    "tool-bash": {
+      "rel": "dsh-tool-bash/lib/index.js",
+      "bytes": 27841,
+      "sha256": "4f512a60fcb6c17185fafbcb46d9e19452b0d5f5eada7acde4ce2800e5d11179"
+    },
+    "tool-pwsh": {
+      "rel": "dsh-tool-pwsh/lib/index.js",
+      "bytes": 30631,
+      "sha256": "485f38009c804a4e04c1becd6b1198ece30d51235c14531c9cf6fb502f2a1813"
+    },
+    "persona": {
+      "rel": "dsh-persona/lib/index.js",
+      "bytes": 2280,
+      "sha256": "dc14afff0654b652cccaca9d015ff3b6f084d01254be3e6c1a79872cb2b8d968"
+    },
+    "session-format-v0": {
+      "rel": "dsh-session-format-v0-to-v1/lib/index.js",
+      "bytes": 105457,
+      "sha256": "387f24498c6b5b7cc566681b38895ba36f842e451d29bb713f2006ac1231f988"
+    },
+    "system-prompt": {
+      "rel": "dsh-system-prompt/lib/index.js",
+      "bytes": 20707,
+      "sha256": "9f9aa091d22d734ac22d58014937546961bb802486bf13e5f9de77f3c5072639"
+    },
+    "tool-web": {
+      "rel": "dsh-tool-web/lib/index.js",
+      "bytes": 36512,
+      "sha256": "bc4879458d26acde0ff43f2390b3c77ce18f85c34f76c459fec844e28a9a3bc5"
+    },
+    "api-session-controller": {
+      "rel": "dsh-api-session-controller/lib/index.js",
+      "bytes": 159347,
+      "sha256": "3940393fa4cab1a6fa841ffc18c850c9e88ee3c8d43854a19e672fd284ab254c"
+    },
+    "session-reference#0": {
+      "rel": "dsh-session-reference/lib/index.js",
+      "bytes": 32304,
+      "sha256": "ae22f33d8e4007bdd5dcda72edd8a1c6cee9b1853531a7024ec5e2be1ab5213d"
+    },
+    "session-reference#1": {
+      "rel": "dsh-session-reference/lib/types/index.js",
+      "bytes": 23715,
+      "sha256": "7002555a826b4f5ef7f5b325337ced402f471e82116c6d8296f5c5628f902e3a"
+    },
+    "session-reference#2": {
+      "rel": "dsh-session-reference/lib/types/spill.js",
+      "bytes": 3078,
+      "sha256": "0d365cdb82d0fa580c3eab5566e969c9b2898678d9db70a87216642cb3e8f2bb"
+    },
+    "permission-presets": {
+      "rel": "dsh-permission-presets/lib/index.js",
+      "bytes": 17038,
+      "sha256": "b5dc259d583f2633024147b45621362e05380404247b4de65a73749a0682281e"
+    },
+    "permission-presets-types": {
+      "rel": "dsh-permission-presets/lib/types/index.js",
+      "bytes": 20968,
+      "sha256": "5e646c4da09c21c2d571d14fb6d032c1b04ccdbe2b5dc2194158a7ae6adac702"
+    },
+    "session-log-deepseek": {
+      "rel": "dsh-session-log-deepseek/lib/index.js",
+      "bytes": 9187,
+      "sha256": "d1390c51a8c1494fd51e9c0a5efe96239658e022310476b32852697ecd6742cd"
+    },
+    "session-log-deepseek-types": {
+      "rel": "dsh-session-log-deepseek/lib/types/index.js",
+      "bytes": 11891,
+      "sha256": "e331f59c0e9ac17b58757a731a8236683b48e548490b10f293373731bfeb9b4d"
+    },
+    "deliverables-prompt": {
+      "rel": "dsh-client-ui-deliverables/lib/index.js",
+      "bytes": 10931,
+      "sha256": "0ad0b4f4e1cf715c28aeb513a41bc08b09c3c84c36b7f81a60a41ddec7ade3a1"
+    },
+    "deliverables-prompt-v2": {
+      "rel": "dsh-deliverable-file-references/lib/index.js",
+      "bytes": 1937,
+      "sha256": "52d49b662c4809783d14cc4e2ea95c1dbca5bee985fac03ba1b2cdbbb18652c9"
+    },
+    "llm-deepseek": {
+      "rel": "dsh-llm-deepseek/lib/index.js",
+      "bytes": 127748,
+      "sha256": "263dcd84b4c97b19c6fdc85cc431f81bf185922682d17c4c884132514b59af1d"
+    },
+    "session": {
+      "rel": "dsh-session/lib/index.js",
+      "bytes": 96375,
+      "sha256": "cfa7963b0ce1e660bd2815b66cb3e4b86d55a6534603f50e785d71ef0864e995"
+    },
+    "agent-loop": {
+      "rel": "dsh-agent-loop/lib/index.js",
+      "bytes": 67867,
+      "sha256": "ad1dc00cb410680f1af0ecffe332e0d77b1f6cb188f886c2fc44e0501c4f1bfc"
+    },
+    "app-boot": {
+      "rel": "dsh-app-boot/lib/index.js",
+      "bytes": 226030,
+      "sha256": "5fe6f8568503e0278654527dfbcac50524237bf07449380a59586075f662d38d"
+    },
+    "conversation-client": {
+      "rel": "dsh-client-ui-conversation/lib/client.js",
+      "bytes": 942662,
+      "sha256": "e9894a7f81f9f1308c724abe21ecc2f087f18b4e7fdc040b351dce66016eac15"
+    },
+    "tool-todo": {
+      "rel": "dsh-tool-todo/lib/index.js",
+      "bytes": 6966,
+      "sha256": "846cdf2bf43507e61ba3b1e403ffa1f655798b5c0f4b3d4d8fb873af8a993dd1"
+    },
+    "auto-review": {
+      "rel": "dsh-experimental-auto-review/lib/index.js",
+      "bytes": 29111,
+      "sha256": "d1258a57527f15f4e8aedc4ec613170952caba1664525f5576b3011819fbd58d"
+    },
+    "dsh-tools": {
+      "rel": "dsh-tools/lib/index.js",
+      "bytes": 27415,
+      "sha256": "1889cbf718d64518dd83245d4dba1e1f080b2c5326259c3ed5b1be7a7666a2bd"
+    },
+    "dsh-tools-types": {
+      "rel": "dsh-tools/lib/types/index.js",
+      "bytes": 16627,
+      "sha256": "595154ed8db690d5bea18dc32e03cbca07fbdf20b55f75fbd33e66480dd20511"
+    },
+    "dsh-tools-pipeline": {
+      "rel": "dsh-tools/lib/pipeline.js",
+      "bytes": 34265,
+      "sha256": "a05224ab40fde127296c0deb126f05049624e7baf5a2f12b77edd96c1ef69aa0"
+    },
+    "dsh-tools-pipeline-types": {
+      "rel": "dsh-tools/lib/types/pipeline.js",
+      "bytes": 31481,
+      "sha256": "ecffcf3e1f344ee3a01164d3bc4d9d951f7eba603251b9b4802fc77edc810a98"
+    },
+    "tool-executor-ptc": {
+      "rel": "dsh-tool-executor-ptc/lib/index.js",
+      "bytes": 80308,
+      "sha256": "90c467870d35aa4fc48f24cf33a7500a6992683cd179543a623f91800db28489"
+    },
+    "tool-executor-ptc-types": {
+      "rel": "dsh-tool-executor-ptc/lib/types/ptc.js",
+      "bytes": 39207,
+      "sha256": "cf985d87f72dab1dbb77cd30a57b0415463c0dbb87619024d3a22aeb372fbc50"
+    },
+    "sandbox-policy": {
+      "rel": "dsh-sandbox-policy/lib/index.js",
+      "bytes": 8921,
+      "sha256": "1d03396e25ab5bf55d736ac483f0b727f79d262b9abf6241306bc9745818d3ba"
+    }
+  },
+  "patches": [
+    {
+      "id": 1,
+      "name": "WORKSPACE_CONTEXT_INTRO",
+      "status": "settled",
+      "files": {
+        "agent-instructions": "settled"
+      }
+    },
+    {
+      "id": 2,
+      "name": "REPLACEMENT_WORKSPACE_CONTEXT_INTRO",
+      "status": "settled",
+      "files": {
+        "agent-instructions": "settled"
+      }
+    },
+    {
+      "id": 3,
+      "name": "SCOPE_INTRO",
+      "status": "settled",
+      "files": {
+        "agent-instructions": "settled"
+      }
+    },
+    {
+      "id": 4,
+      "name": "SYSTEM_PROMPT_PERSONA",
+      "status": "settled",
+      "files": {
+        "agent-preset": "settled",
+        "web-app": "settled",
+        "headless": "settled",
+        "preset-acp-app": "settled",
+        "preset-sdk-app": "settled"
+      }
+    },
+    {
+      "id": 43,
+      "name": "WEB_PRESET_IDENTITY_STRIP",
+      "status": "settled",
+      "files": {
+        "preset-standard": "settled",
+        "preset-ptc": "settled",
+        "preset-cordis": "settled",
+        "preset-minimal": "settled"
+      }
+    },
+    {
+      "id": 76,
+      "name": "PRESET_UNRESTRICTED_IDENTITY_STRIP",
+      "status": "no-file",
+      "files": {
+        "preset-unrestricted": "no-file"
+      }
+    },
+    {
+      "id": 70,
+      "name": "PRESET_SHELL_NETWORK",
+      "status": "settled",
+      "files": {
+        "preset-minimal": "settled",
+        "preset-sdk-minimal": "settled"
+      }
+    },
+    {
+      "id": 73,
+      "name": "PRESET_BASH_MIRROR_LINE",
+      "status": "settled",
+      "files": {
+        "preset-minimal": "settled",
+        "preset-sdk-minimal": "settled"
+      }
+    },
+    {
+      "id": 71,
+      "name": "LIANGSHEN_IDENTITY_LINE",
+      "status": "no-file",
+      "files": {
+        "preset-liangshen": "no-file",
+        "preset-liangshen-pkg": "no-file"
+      }
+    },
+    {
+      "id": 5,
+      "name": "APPROVAL_NEVER_SENTENCE",
+      "status": "settled",
+      "files": {
+        "user-approval": "settled",
+        "user-approval-invariant": "no-file"
+      }
+    },
+    {
+      "id": 6,
+      "name": "SANDBOX_DENY_FILE_WRITE",
+      "status": "settled",
+      "files": {
+        "sandbox-local": "settled"
+      }
+    },
+    {
+      "id": 7,
+      "name": "SANDBOX_MODE_DEFAULT",
+      "status": "settled",
+      "files": {
+        "base": "settled"
+      }
+    },
+    {
+      "id": 8,
+      "name": "APPROVAL_POLICY_DEFAULT",
+      "status": "settled",
+      "files": {
+        "base": "settled"
+      }
+    },
+    {
+      "id": 9,
+      "name": "APPROVAL_AUTO_GRANT",
+      "status": "settled",
+      "files": {
+        "user-approval-code": "settled",
+        "user-approval-invariant": "no-file",
+        "user-approval": "settled"
+      }
+    },
+    {
+      "id": 10,
+      "name": "APPROVAL_CONFIG_DEFAULT_NEVER",
+      "status": "settled",
+      "files": {
+        "user-approval-code": "settled"
+      }
+    },
+    {
+      "id": 11,
+      "name": "APPROVAL_NEVER_SENTENCE_BYPASS",
+      "status": "settled",
+      "files": {
+        "user-approval-code": "settled"
+      }
+    },
+    {
+      "id": 12,
+      "name": "APPROVAL_ASK_SENTENCE_BYPASS",
+      "status": "settled",
+      "files": {
+        "user-approval-code": "settled",
+        "user-approval": "settled",
+        "user-approval-invariant": "no-file"
+      }
+    },
+    {
+      "id": 13,
+      "name": "ESCALATION_WIDENING_EXEMPT",
+      "status": "settled",
+      "files": {
+        "escalation": "settled"
+      }
+    },
+    {
+      "id": 14,
+      "name": "ESCALATION_GRANT_UNCONDITIONAL",
+      "status": "settled",
+      "files": {
+        "escalation": "settled"
+      }
+    },
+    {
+      "id": 15,
+      "name": "SANDBOX_CONFINE_PASSTHROUGH",
+      "status": "settled",
+      "files": {
+        "sandbox-local": "settled"
+      }
+    },
+    {
+      "id": 16,
+      "name": "FS_FENCE_DISABLED",
+      "status": "settled",
+      "files": {
+        "fs-sandbox": "settled"
+      }
+    },
+    {
+      "id": 17,
+      "name": "FS_OBSERVATION_INTENT_FREE",
+      "status": "settled",
+      "files": {
+        "fs-observation-policy": "settled"
+      }
+    },
+    {
+      "id": 18,
+      "name": "REPEAT_TOOL_REMINDER_DISABLED",
+      "status": "settled",
+      "files": {
+        "repeat-tool-reminder": "settled"
+      }
+    },
+    {
+      "id": 19,
+      "name": "TOOL_RESULT_PRUNER_DISABLED",
+      "status": "settled",
+      "files": {
+        "compaction-tool-result-pruner": "settled"
+      }
+    },
+    {
+      "id": 21,
+      "name": "BASH_TIMEOUT_RESTORE",
+      "status": "settled",
+      "files": {
+        "base": "settled"
+      }
+    },
+    {
+      "id": 22,
+      "name": "READ_CAPS_RAISED",
+      "status": "settled",
+      "files": {
+        "tool-fs": "settled"
+      }
+    },
+    {
+      "id": 23,
+      "name": "SUBAGENT_MAXDEPTH_RAISED",
+      "status": "settled",
+      "files": {
+        "subagent": "settled",
+        "tool-subagent": "settled"
+      }
+    },
+    {
+      "id": 24,
+      "name": "PRESET_FETCH_ENABLED",
+      "status": "settled",
+      "files": {
+        "preset-unrestricted": "no-file",
+        "preset-standard": "settled",
+        "preset-cordis": "settled",
+        "preset-ptc": "settled",
+        "preset-liangshen": "no-file",
+        "preset-liangshen-pkg": "no-file"
+      }
+    },
+    {
+      "id": 25,
+      "name": "HARNESS_IDENTITY_STRIP",
+      "status": "settled",
+      "files": {
+        "system-prompt": "settled"
+      }
+    },
+    {
+      "id": 26,
+      "name": "MINIMAL_PERSONA_PURGE",
+      "status": "settled",
+      "files": {
+        "preset-minimal": "settled",
+        "preset-sdk-minimal": "settled"
+      }
+    },
+    {
+      "id": 80,
+      "name": "MINIMAL_OFFICIAL_TOOLSET",
+      "status": "settled",
+      "files": {
+        "preset-minimal": "self-marked",
+        "preset-sdk-minimal": "self-marked"
+      }
+    },
+    {
+      "id": 28,
+      "name": "LIANGSHEN_PHASE1_KEEP_INJECT",
+      "status": "no-file",
+      "files": {
+        "liangshen-tool-bootstrap": "no-file"
+      }
+    },
+    {
+      "id": 32,
+      "name": "WEB_SURFACE_IDENTITY_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "web-app-lib": "settled",
+        "harness-dev-context": "settled"
+      }
+    },
+    {
+      "id": 29,
+      "name": "TOOL_WEB_UNTRUSTED_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "tool-web": "settled",
+        "tool-web-nested": "no-file"
+      }
+    },
+    {
+      "id": 30,
+      "name": "HOOKS_CLAUDE_DENY_ALLOW",
+      "status": "no-file",
+      "files": {
+        "hooks-claude-code": "no-file",
+        "hooks-claude-code-nested": "no-file"
+      }
+    },
+    {
+      "id": 31,
+      "name": "HOOKS_CODEX_DENY_ALLOW",
+      "status": "no-file",
+      "files": {
+        "hooks-codex": "no-file",
+        "hooks-codex-nested": "no-file"
+      }
+    },
+    {
+      "id": 33,
+      "name": "TOOL_SHELL_DENIAL_PROMPT",
+      "status": "settled",
+      "files": {
+        "tool-bash": "settled",
+        "tool-pwsh": "settled"
+      }
+    },
+    {
+      "id": 34,
+      "name": "SANDBOX_HINT_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "escalation": "settled"
+      }
+    },
+    {
+      "id": 35,
+      "name": "ESCALATION_NEVER_REJECT",
+      "status": "settled",
+      "files": {
+        "escalation": "settled"
+      }
+    },
+    {
+      "id": 36,
+      "name": "TOOL_FS_ESCALATION_SCHEMA",
+      "status": "settled",
+      "files": {
+        "tool-fs": "settled",
+        "escalation": "settled",
+        "tool-bash": "settled",
+        "tool-pwsh": "settled"
+      }
+    },
+    {
+      "id": 37,
+      "name": "SUBAGENT_SCOPE_LOCK_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "subagent": "settled",
+        "subagent-types": "settled"
+      }
+    },
+    {
+      "id": 38,
+      "name": "PERSONA_TEXT_PREFIX_ALIAS",
+      "status": "settled",
+      "files": {
+        "persona": "settled"
+      }
+    },
+    {
+      "id": 39,
+      "name": "SESSION_V0_PLUGIN_SUMMARY_ALIAS",
+      "status": "settled",
+      "files": {
+        "session-format-v0": "settled"
+      }
+    },
+    {
+      "id": 40,
+      "name": "COMPLETE_PROMPT_KEEP_INJECT",
+      "status": "settled",
+      "files": {
+        "system-prompt": "settled",
+        "system-prompt-nested": "no-file"
+      }
+    },
+    {
+      "id": 42,
+      "name": "SETTINGS_LEGACY_API",
+      "status": "settled",
+      "files": {
+        "settings": "settled"
+      }
+    },
+    {
+      "id": 45,
+      "name": "OFFICIAL_DESKTOP_UPDATE_HANDOFF",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 46,
+      "name": "OFFICIAL_DESKTOP_UPDATE_ASCII",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 47,
+      "name": "ANTHROPIC_OAUTH_NO_CLAUDE_IDENTITY",
+      "status": "settled",
+      "files": {
+        "pi-ai-anthropic-messages": "settled"
+      }
+    },
+    {
+      "id": 48,
+      "name": "TOOL_SHELL_DELETE_MOVE_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "tool-bash": "settled",
+        "tool-pwsh": "settled"
+      }
+    },
+    {
+      "id": 49,
+      "name": "ANTHROPIC_OAUTH_CLI_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "pi-ai-anthropic-messages": "settled"
+      }
+    },
+    {
+      "id": 50,
+      "name": "SESSION_REFERENCE_FRAMING_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "session-reference": "settled"
+      }
+    },
+    {
+      "id": 51,
+      "name": "FRESH_SESSION_FULL_ACCESS",
+      "status": "settled",
+      "files": {
+        "permission-presets": "settled",
+        "permission-presets-types": "settled"
+      }
+    },
+    {
+      "id": 52,
+      "name": "SESSION_LOG_UPLOAD_DEFAULT_OFF",
+      "status": "settled",
+      "files": {
+        "session-log-deepseek": "settled",
+        "session-log-deepseek-types": "settled"
+      }
+    },
+    {
+      "id": 53,
+      "name": "WEB_SURFACE_PROHIBITION",
+      "status": "settled",
+      "files": {
+        "web-app-lib": "settled",
+        "harness-dev-context": "settled"
+      }
+    },
+    {
+      "id": 54,
+      "name": "DELIVERABLE_DO_NOT",
+      "status": "settled",
+      "files": {
+        "deliverables-prompt-v2": "settled",
+        "deliverables-prompt": "soft-moved"
+      }
+    },
+    {
+      "id": 55,
+      "name": "SYSTEM_PROMPT_REPLACE_HEAD",
+      "status": "settled",
+      "files": {
+        "agent-loop": "settled"
+      }
+    },
+    {
+      "id": 74,
+      "name": "ASSEMBLE_BEFORE_PRESTEP",
+      "status": "settled",
+      "files": {
+        "agent-loop": "settled"
+      }
+    },
+    {
+      "id": 66,
+      "name": "SYSTEM_PROMPT_RENDER_GUARD",
+      "status": "settled",
+      "files": {
+        "system-prompt": "settled",
+        "system-prompt-nested": "no-file"
+      }
+    },
+    {
+      "id": 83,
+      "name": "DESKTOP_HOST_CLOSE_NO_FATAL",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 84,
+      "name": "DESKTOP_HOST_CLOSE_CODE0_NO_FAIL",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 92,
+      "name": "DESKTOP_HOST_EXIT_TRACE",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 93,
+      "name": "DESKTOP_MAIN_EXIT_TRACE",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 67,
+      "name": "AGENT_LOOP_MESSAGES_GUARD",
+      "status": "settled",
+      "files": {
+        "agent-loop": "settled"
+      }
+    },
+    {
+      "id": 68,
+      "name": "SYSTEM_NODES_CONTENT_GUARD",
+      "status": "settled",
+      "files": {
+        "agent-loop": "settled",
+        "session": "settled"
+      }
+    },
+    {
+      "id": 69,
+      "name": "MODEL_STREAM_RELEASE",
+      "status": "settled",
+      "files": {
+        "llm-deepseek": "settled"
+      }
+    },
+    {
+      "id": 72,
+      "name": "MESSAGES_SYSTEM_CURRENT",
+      "status": "settled",
+      "files": {
+        "llm-deepseek": "settled"
+      }
+    },
+    {
+      "id": 56,
+      "name": "REWIND_HIDE_CUT_ONLY",
+      "status": "settled",
+      "files": {
+        "conversation-client": "settled"
+      }
+    },
+    {
+      "id": 77,
+      "name": "REWIND_DROP_SENT_ON_APPEND",
+      "status": "settled",
+      "files": {
+        "conversation-client": "settled"
+      }
+    },
+    {
+      "id": 75,
+      "name": "REWIND_RESET_TODOS",
+      "status": "settled",
+      "files": {
+        "tool-todo": "settled"
+      }
+    },
+    {
+      "id": 57,
+      "name": "DEEPSEEK_SYSTEM_ROLE",
+      "status": "settled",
+      "files": {
+        "pi-ai-completions": "settled",
+        "pi-ai-responses-shared": "settled"
+      }
+    },
+    {
+      "id": 58,
+      "name": "REWIND_SKIP_DERIVE",
+      "status": "settled",
+      "files": {
+        "session": "settled"
+      }
+    },
+    {
+      "id": 59,
+      "name": "OFFICIAL_AUTO_REVIEW_PASSTHROUGH",
+      "status": "settled",
+      "files": {
+        "auto-review": "settled"
+      }
+    },
+    {
+      "id": 60,
+      "name": "OFFICIAL_RUN_CODE_APPROVAL_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "tool-executor-ptc": "settled",
+        "tool-executor-ptc-types": "settled",
+        "dsh-tools": "soft-moved",
+        "dsh-tools-ptc": "no-file"
+      }
+    },
+    {
+      "id": 61,
+      "name": "OFFICIAL_SANDBOX_POLICY_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "sandbox-policy": "settled"
+      }
+    },
+    {
+      "id": 62,
+      "name": "OFFICIAL_TOOL_ASK_FAILOPEN",
+      "status": "settled",
+      "files": {
+        "dsh-tools-pipeline": "settled",
+        "dsh-tools-pipeline-types": "settled",
+        "dsh-tools": "soft-moved",
+        "dsh-tools-types": "soft-moved"
+      }
+    },
+    {
+      "id": 63,
+      "name": "OFFICIAL_PLAN_MODE_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "base": "settled",
+        "preset-ptc": "settled",
+        "preset-standard": "settled",
+        "preset-cordis": "settled"
+      }
+    },
+    {
+      "id": 64,
+      "name": "HOOKS_STOP_STEER_NEUTRAL",
+      "status": "no-file",
+      "files": {
+        "hooks-claude-code": "no-file",
+        "hooks-claude-code-nested": "no-file",
+        "hooks-codex": "no-file",
+        "hooks-codex-nested": "no-file"
+      }
+    },
+    {
+      "id": 65,
+      "name": "HOOKS_PRESTEP_REJECT_NEUTRAL",
+      "status": "no-file",
+      "files": {
+        "hooks-claude-code": "no-file",
+        "hooks-claude-code-nested": "no-file",
+        "hooks-codex": "no-file",
+        "hooks-codex-nested": "no-file"
+      }
+    },
+    {
+      "id": 78,
+      "name": "OVERLAY_RESTORE_FROM_BAK",
+      "status": "settled",
+      "files": {
+        "app-boot": "settled"
+      }
+    },
+    {
+      "id": 82,
+      "name": "DESKTOP_SHELL_PROFILE_FALLBACK",
+      "status": "settled",
+      "files": {
+        "desktop-shell": "settled"
+      }
+    },
+    {
+      "id": 85,
+      "name": "SESSION_PROMPT_ALWAYS_FOLLOWUP",
+      "status": "settled",
+      "files": {
+        "api-session-controller": "settled"
+      }
+    },
+    {
+      "id": 86,
+      "name": "SESSION_QUEUE_STEER_INTERRUPT",
+      "status": "settled",
+      "files": {
+        "api-session-controller": "settled",
+        "agent-loop": "settled"
+      }
+    },
+    {
+      "id": 87,
+      "name": "HUNG_PROMPT_LF_NEEDLE",
+      "status": "settled",
+      "files": {
+        "agent-loop": "settled"
+      }
+    },
+    {
+      "id": 88,
+      "name": "HUNG_PROMPT_STRICT_NEEDLE",
+      "status": "settled",
+      "files": {
+        "agent-loop": "settled"
+      }
+    },
+    {
+      "id": 89,
+      "name": "SANDBOX_POLICY_BRAND_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "sandbox-policy": "settled"
+      }
+    },
+    {
+      "id": 90,
+      "name": "SKILL_BADGE_DESCRIPTION_NEUTRAL",
+      "status": "settled",
+      "files": {
+        "skill-badge": "settled"
+      }
+    }
+  ],
+  "summary": {
+    "patches": 86,
+    "settled": 79,
+    "wouldApply": 0,
+    "drifted": 0,
+    "noFile": 7,
+    "na": 0
+  }
+}
