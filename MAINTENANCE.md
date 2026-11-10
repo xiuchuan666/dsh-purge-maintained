@@ -12,7 +12,8 @@ npm run check
 
 1. `npm run check:syntax`：检查 `bin/`、`lib/`、`scripts/` 与 `client.js` 的 JavaScript 语法，并动态导入 `lib/index.js`。
 2. `npm run check:metadata`：检查 `package.json` 版本与 `release-notes.md` 首行一致、`dshTarget` 在 `dshTargets` 内、补丁 ID 唯一且有效。`ALL_PATCHES` 的数组顺序是实际应用顺序，不要求数字 ID 升序，也不为重排而重排。
-3. `npm test`：自动发现并逐个运行 `scripts/test-*.mjs`，每个测试使用独立 Node 子进程。
+3. `npm run check:client`：前端产物链校验（见下节「前端产物链」）。
+4. `npm test`：自动发现并逐个运行 `scripts/test-*.mjs`，每个测试使用独立 Node 子进程。
 
 默认检查不读取或改写 DSH profile，不应用宿主补丁，也不需要安装宿主。补丁数量从 `ALL_PATCHES` 动态读取，不在检查器里固定写死。
 
@@ -53,6 +54,37 @@ npm run host:capture    # 升级适配完成后，把新状态记为基线
 
 宿主升级适配、前端重建与巨型模块拆分应分别成为独立维护任务，不与无关业务修改混在同一提交。
 
+## 前端产物链（client.js）
+
+`client.js` 由三层构成：
+
+| 层 | 来源 | 状态 |
+| --- | --- | --- |
+| 主体（设置面板 / 清洗 UI / rewind UI） | 上游手写成品，源码已失传 | 只能哈希锚定，无法从零重建 |
+| dock / 授权弹窗补丁 | `scripts/patch-client-dock.mjs` 四步模板，已固化进成品 | 脚本可重放（幂等守卫），「未补丁原版」不存在 |
+| 演练台片段（DRILL 标记之间） | `lib/redteam/client.js` → `scripts/build-client.mjs` 抽取嵌入 | 真源码在库，可重建 |
+
+`npm run check:client`（只读）校验三件事：
+
+1. 锚点 `docs/origin/client-1.1.94.js` 与 `client-1.1.94.sha256` 一致（锚点取自 1.1.94 发布包，与 Git 基线 fa8d09d 的工作区版本字节一致）。
+2. 当前 `client.js` 结构完整：DRILL 标记存在且顺序正确，dock 补丁锚点在。
+3. DRILL 标记之间的片段与从 `lib/redteam/client.js` 现抽片段一致——**改了演练台源码忘跑 build 时这里会报错**。
+
+改前端的正确流程：
+
+```bash
+# 1. 改 lib/redteam/client.js（演练台源码）
+npm run build:client    # 2. 重嵌片段进 client.js
+npm run check           # 3. 全量校验（含片段同步检测）
+```
+
+注意：
+
+- 不要手工编辑 `client.js` 里 DRILL 标记之间的内容——那部分由 `build-client.mjs` 生成，手工改动会被下一次 build 覆盖、且 `check:client` 会报片段过期。
+- 主体与 dock 补丁层可以改（改的是成品本身），但改前想清楚：这两层没有源码，改坏只能回退 Git 或从锚点对拍。
+- `patch-client-dock.mjs` 重放到已补丁文件时会把全文件 CRLF 归一成 LF；`build-client.mjs` 不动主文件换行。两者的片段算法由 `scripts/client-chain-lib.mjs` 单一实现，校验器与测试共用，避免出现「校验器说同步、build 一跑却变」的分叉。
+- 换宿主大版本若 client.js 需要成批改锚点，先更新 `docs/origin/` 下的锚点与哈希记录，再动成品，保持「先锚后改」。
+
 ## CI 与发布
 
 `.github/workflows/ci.yml` 在 `main` 推送、pull request 和手动触发时运行 `npm run check`。CI 使用 Node.js 24，不需要 `npm install`。
@@ -63,4 +95,4 @@ npm run host:capture    # 升级适配完成后，把新状态记为基线
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
-详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md) 与 [宿主适配基线设计](docs/maintenance-host-baseline.md)。
+详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md) 与 [前端产物链设计](docs/maintenance-client-chain.md)。
