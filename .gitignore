@@ -10,16 +10,8 @@ Thumbs.db
 docs/agents/
 .cursor/
 
-# 本地草稿，不进仓库
+# 本地草稿，不进仓库；scripts/test-*.mjs 是正式回归测试，一律入库
 scripts/tmp-*.mjs
-scripts/test-*.mjs
-!scripts/test-bom-guard.mjs
-!scripts/test-preset-compat.mjs
-!scripts/test-resource-visibility.mjs
-!scripts/test-knowledge-dispatch.mjs
-!scripts/test-package-integrity.mjs
-!scripts/test-destructive-guards.mjs
-!scripts/test-runtime-heal.mjs
 .scratch/
 dsh-redteam-mode-main/
 /1

@@ -37,6 +37,10 @@
     "NOTICE"
   ],
   "scripts": {
+    "test": "node scripts/run-tests.mjs",
+    "check": "npm run check:syntax && npm run check:metadata && npm test",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "check:metadata": "node scripts/check-metadata.mjs",
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "build:client": "node scripts/build-client.mjs",
     "postinstall": "node scripts/ensure-profile-bundle.mjs"
