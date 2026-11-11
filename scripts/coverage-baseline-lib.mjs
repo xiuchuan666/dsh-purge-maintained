@@ -10,6 +10,13 @@ export const BASELINE_SCHEMA = 1
 
 const METRICS = ['lh', 'lf', 'fnh', 'fnf', 'brh', 'brf']
 
+// 只有「命中数」算倒退；「总数」是源码体量，删代码让它变小不是覆盖率问题。
+//
+// 这条是踩出来的：把 lib/index.js 里 3 行冗余判定抽成纯函数后，lf 从 2953
+// 掉到 2950，lh 反而 +1，检查器却报 FAIL。总数下降本身无害——真正要拦的是
+// 「原来跑到的行/函数/分支现在跑不到了」，那由 lh/fnh/brh 负责。
+const HIT_METRICS = new Set(['lh', 'fnh', 'brh'])
+
 // 把 lcov 文本解析成 { 'lib/core.js': { lh, lf, fnh, fnf, brh, brf } }。
 // lcov 用 SF: 起段、end_of_record 收段；路径统一成正斜杠，Windows 反斜杠会
 // 让「基线里是 lib/core.js、实测是 lib\core.js」这种纯格式差异被误判成掉文件。
@@ -70,7 +77,7 @@ export function buildBaseline(coverage, { commit = '', note = '', now = new Date
 //   rows    = [{ file, metric, before, after }]，只列变化的（↑ 或 ↓ 都列）
 //   missing = 基线里有、实测没有的文件（掉文件，红）
 //   added   = 实测有、基线没有的文件（新文件，只提示，不红）
-//   dropped = 任何指标 after < before（红）
+//   dropped = 命中类指标（lh/fnh/brh）after < before（红）；总数变小不算
 export function diffBaseline(baseline, coverage) {
   const before = (baseline && baseline.files) || {}
   const rows = []
@@ -89,7 +96,7 @@ export function diffBaseline(baseline, coverage) {
       const a = Number(after[metric] || 0)
       if (a === b) continue
       rows.push({ file, metric, before: b, after: a })
-      if (a < b) dropped.push({ file, metric, before: b, after: a })
+      if (a < b && HIT_METRICS.has(metric)) dropped.push({ file, metric, before: b, after: a })
     }
   }
   for (const file of Object.keys(coverage).sort()) {

@@ -118,6 +118,41 @@ test('diffBaseline：覆盖率上涨 → 绿，但要在报告里看得见', () 
   assert.deepEqual(up.rows, [{ file: 'lib/core.js', metric: 'lh', before: 100, after: 120 }])
 })
 
+// 下面三条守的是「总数不算倒退」这个判定。真实事故：把 lib/index.js 里 3 行
+// 冗余判定抽成纯函数后 lf 2953→2950，lh 反而 +1，检查器却报 FAIL——删代码
+// 让总数变小不是覆盖率问题，只有「原来跑到的现在跑不到」才是。
+test('diffBaseline：行总数变小但命中数没掉 → 绿（删冗余代码不该红）', () => {
+  const shrunk = diffBaseline(baseline, {
+    'lib/core.js': { ...CORE, lf: 480, lh: 101 },
+    'lib/gone.js': GONE,
+  })
+  assert.equal(shrunk.ok, true, '总数下降不等于覆盖倒退')
+  assert.deepEqual(shrunk.dropped, [])
+  assert.deepEqual(shrunk.rows, [
+    { file: 'lib/core.js', metric: 'lh', before: 100, after: 101 },
+    { file: 'lib/core.js', metric: 'lf', before: 500, after: 480 },
+  ])
+})
+
+test('diffBaseline：函数总数、分支总数变小同样不红', () => {
+  const shrunk = diffBaseline(baseline, {
+    'lib/core.js': { ...CORE, fnf: 8, brf: 30 },
+    'lib/gone.js': GONE,
+  })
+  assert.equal(shrunk.ok, true)
+  assert.deepEqual(shrunk.dropped, [])
+})
+
+test('diffBaseline：函数命中数与分支命中数下跌仍然红', () => {
+  const downFn = diffBaseline(baseline, { 'lib/core.js': { ...CORE, fnh: 4 }, 'lib/gone.js': GONE })
+  assert.equal(downFn.ok, false)
+  assert.deepEqual(downFn.dropped, [{ file: 'lib/core.js', metric: 'fnh', before: 5, after: 4 }])
+
+  const downBr = diffBaseline(baseline, { 'lib/core.js': { ...CORE, brh: 19 }, 'lib/gone.js': GONE })
+  assert.equal(downBr.ok, false)
+  assert.deepEqual(downBr.dropped, [{ file: 'lib/core.js', metric: 'brh', before: 20, after: 19 }])
+})
+
 test('diffBaseline：基线里有、本次没记录 → 红（文件被删或被 exclude 误伤）', () => {
   const gone = diffBaseline(baseline, { 'lib/core.js': CORE })
   assert.equal(gone.ok, false)

@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T06:58:02.597Z",
-  "commit": "22b7c91",
+  "capturedAt": "2026-11-11T08:12:14.936Z",
+  "commit": "ed35167",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -45,12 +45,12 @@
       "brf": 48
     },
     "lib/capability-protocol.js": {
-      "lh": 29,
+      "lh": 32,
       "lf": 32,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 1,
-      "brh": 1,
-      "brf": 1
+      "brh": 2,
+      "brf": 3
     },
     "lib/continue-retry.js": {
       "lh": 85,
@@ -61,11 +61,11 @@
       "brf": 1
     },
     "lib/core.js": {
-      "lh": 894,
+      "lh": 909,
       "lf": 5268,
-      "fnh": 20,
+      "fnh": 21,
       "fnf": 265,
-      "brh": 80,
+      "brh": 81,
       "brf": 114
     },
     "lib/desktop.js": {
@@ -85,12 +85,12 @@
       "brf": 1
     },
     "lib/extract-asar.js": {
-      "lh": 205,
+      "lh": 208,
       "lf": 493,
-      "fnh": 12,
+      "fnh": 16,
       "fnf": 39,
-      "brh": 29,
-      "brf": 39
+      "brh": 33,
+      "brf": 44
     },
     "lib/hide-console.js": {
       "lh": 106,
@@ -125,28 +125,28 @@
       "brf": 1
     },
     "lib/identity.js": {
-      "lh": 216,
-      "lf": 1104,
-      "fnh": 0,
-      "fnf": 59,
-      "brh": 1,
-      "brf": 1
+      "lh": 788,
+      "lf": 1148,
+      "fnh": 57,
+      "fnf": 82,
+      "brh": 149,
+      "brf": 283
     },
     "lib/index.js": {
-      "lh": 215,
-      "lf": 2953,
+      "lh": 216,
+      "lf": 2950,
       "fnh": 1,
       "fnf": 65,
       "brh": 5,
       "brf": 5
     },
     "lib/net-scope.js": {
-      "lh": 277,
+      "lh": 279,
       "lf": 766,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 41,
-      "brh": 1,
-      "brf": 1
+      "brh": 2,
+      "brf": 2
     },
     "lib/official-update.js": {
       "lh": 50,
@@ -317,12 +317,12 @@
       "brf": 1
     },
     "lib/rules.js": {
-      "lh": 119,
+      "lh": 262,
       "lf": 560,
-      "fnh": 0,
-      "fnf": 41,
-      "brh": 1,
-      "brf": 1
+      "fnh": 16,
+      "fnf": 43,
+      "brh": 44,
+      "brf": 65
     },
     "lib/settle-policy.js": {
       "lh": 23,

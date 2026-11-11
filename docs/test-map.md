@@ -48,14 +48,17 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| 注入决策树（strict / fallback / always 三种工作区策略） | `❗缺` | `lib/index.js` 7% |
-| `prompt-inject.md` 非空时优先于工作区 md | `❗缺` | `lib/index.js` 7% |
-| 两种都没有时回落到插件内的加密 slot 默认 | `❗缺` | `lib/index.js` 7% |
+| 注入决策树（strict / fallback / always 三种工作区策略） | `test-prompt-inject.mjs`（`decideInject` 6 条：strict 无注入也剥 / fallback 有注入才剥 / always 保留 / 停用一律不剥 / 未知策略按 always） | `lib/identity.js` 69% |
+| `prompt-inject.md` 非空时优先于工作区 md | `test-prompt-inject.mjs`（5 条：优先级 / cwd 回落 / 纯空白视为空 / 都不拼接 / 都空给空串） | `lib/identity.js` 69% |
+| 两种都没有时回落到插件内的加密 slot 默认 | `test-prompt-inject.mjs`（`inject === ""` + `source === "none"`，下游 `rewritePromptAssembly` 的回落另有 3 条） | `lib/identity.js` 69% |
+| 装配结果段序（注入在最前、capabilities 其次、persona 收尾、anchor 最后） | `test-prompt-inject.mjs`（8 条，含不原地改写传入对象、`null`/`{}` 原样返回） | `lib/identity.js` 69% |
+| `stripChatmlTags` 只剥三种形态（完整 `im_start system:`、`project_instructions`、`im_end`） | `test-prompt-inject.mjs`（含一条现状锁定：裸 `<\|im_start\|>` 不剥） | `lib/identity.js` 69% |
 | `anchorMode` 只有 `auto` 与 `off`（不是 strict/fallback/always） | `test-plugin-surface.mjs`（现状锁定：`"bogus"` 原样透传） | `lib/anchor.js` 55% |
-| 规则集读写（`AGENTS.md` / `CLAUDE.md`，含备份与恢复） | `❗缺` | `lib/rules.js` 21% |
+| 规则集读写（`AGENTS.md` / `CLAUDE.md`，含备份与恢复） | `❗缺`（本轮只覆盖了策略与 cwd 勾选） | `lib/rules.js` 47% |
+| 工作区策略与 cwd 勾选的持久化（含跨目录穿越防护） | `test-prompt-inject.mjs`（8 条：默认 fallback / 非法值拒绝 / 损坏文件回落 / 跨目录不注入 / `cwd-rule` 头 / lastCwd 空值不覆盖） | `lib/rules.js` 47% |
 | `rewriteLiveAssembly` 的缓存签名（11 段，WeakMap） | `❗缺` | `lib/index.js` 7% |
 
-**这一组是当前最大的洞**：提示词注入是本插件的核心卖点，三种注入来源的优先级决策零测试。改错的表现是「AI 行为突然变了」，但没有任何红字。
+**本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住。剩下的洞是缓存签名（`lib/index.js` 的 `liveRewriteCache`）与规则集的备份恢复分支。
 
 ---
 
