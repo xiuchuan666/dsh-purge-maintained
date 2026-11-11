@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T11:34:53.295Z",
-  "commit": "e0f717f",
+  "capturedAt": "2026-11-11T11:46:27.908Z",
+  "commit": "ba6c38e",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -325,28 +325,28 @@
       "brf": 31
     },
     "lib/redteam/score-rules.js": {
-      "lh": 919,
+      "lh": 923,
       "lf": 940,
-      "fnh": 29,
+      "fnh": 30,
       "fnf": 31,
-      "brh": 167,
-      "brf": 242
+      "brh": 171,
+      "brf": 246
     },
     "lib/redteam/store-core.js": {
-      "lh": 3229,
+      "lh": 3562,
       "lf": 5429,
-      "fnh": 207,
-      "fnf": 354,
-      "brh": 492,
-      "brf": 951
+      "fnh": 234,
+      "fnf": 363,
+      "brh": 706,
+      "brf": 1192
     },
     "lib/redteam/validate.js": {
-      "lh": 64,
+      "lh": 84,
       "lf": 88,
-      "fnh": 5,
+      "fnh": 7,
       "fnf": 7,
-      "brh": 8,
-      "brf": 13
+      "brh": 32,
+      "brf": 37
     },
     "lib/rewind.js": {
       "lh": 68,
