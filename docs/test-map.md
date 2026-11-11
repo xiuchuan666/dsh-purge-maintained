@@ -72,7 +72,11 @@
 | 12 个布尔键收敛 `"false"/"0"/"no"/"off"` | `test-plugin-surface.mjs` | 同上 |
 | 4 条聊天命令（`purge` / `rules` / `skills` / `rewind`）注册 succeeded 且备名可用 | `❗缺` | `lib/index.js` 7% |
 | 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`） | `❗缺` | `lib/index.js` 7% |
-| 17 条 HTTP 路由（13 条 exact + 3 条 prefix 覆盖 `/dsh-purge/*`，加演练台 `/redteam/api`）的参数校验与鉴权（CSRF / Origin） | `❗缺` | `lib/index.js` 7% |
+| 跨站准入：`Origin` / `Sec-Fetch-Site` / `Host` 三元组判定（DNS rebinding、sandbox iframe、同机异端口） | `test-http-guards.mjs` | `lib/http.js` 100% |
+| 方法白名单：405 + `Allow` 头 | `test-http-guards.mjs` | 同上 |
+| JSON 响应头统一（`no-store`，500 也不漏） | `test-http-guards.mjs` | 同上 |
+| 请求体上限按累计字节算，超限即抛，非法上限回落 512KB | `test-http-guards.mjs` | 同上 |
+| 17 条路由各自的业务分支（参数校验、状态码、副作用） | `❗缺` | `lib/index.js` 7% |
 | `/redteam/api` 桥只接受 POST、Origin 与 Host 一致 | `❗缺` | `lib/redteam/ui.js` 未纳入基线 |
 
 ---
@@ -147,7 +151,7 @@
 
 不是遗漏，是当前接受的风险，写出来免得下次以为是「测过了」：
 
-1. **`lib/index.js` 的 16 条 `/dsh-purge/*` 路由零测试。** 它承载界面上所有按钮，改错的表现是「点了没反应」，只能靠人手点。7% 覆盖率全部来自 import 时的模块初始化。
+1. **`lib/index.js` 的 17 条路由只有公共零件被测，业务分支仍零测试。** 它承载界面上所有按钮，改错的表现是「点了没反应」，只能靠人手点。公共零件（Origin 判定、方法白名单、JSON 收发）已抽到 `lib/http.js` 并由 32 条用例钉住；剩下的洞是每条路由自己的参数校验与副作用。7% 覆盖率全部来自 import 时的模块初始化。
 2. **提示词注入决策树零测试。** 三种注入来源的优先级、`dropWorkspaceBaseline` 的三分支（strict/fallback/always）、`rewriteLiveAssembly` 的缓存签名，全靠人工看代码。
 3. **演练台计分口径零测试。** `scoreReport` 1080 行，注释明确要求与 `listScorePoints` 共用 `applyScoreCaps`，否则「面板 50 分、报告 150 分」自相矛盾——但没有任何测试守着这个一致性。
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。
