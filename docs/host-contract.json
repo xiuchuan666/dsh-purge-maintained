@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "capturedAt": "2026-11-11T04:02:00.000Z",
+  "hostVersion": "0.2.2-rc.1",
+  "note": "宿主契约：我们依赖的宿主服务/事件/导出。扫描时优先读 <file>.dshpurge.bak（那是官方原文），否则读当前文件——否则会把我们自己的补丁当成宿主原生契约。",
+  "packages": {
+    "dsh-host-webserver": "提供 webServer 服务",
+    "dsh-system-prompt": "提供 systemPrompt 服务",
+    "dsh-tools": "提供 tools 服务",
+    "dsh-agent": "提供 agents 服务",
+    "dsh-settings": "提供 settings 服务",
+    "dsh-agent-preset-registry": "提供 agentPresets 服务",
+    "dsh-subprocess": "提供 subprocess 服务（服务类，成员实现在 dsh-subprocess-local）",
+    "dsh-subprocess-local": "subprocess.resolveExecutable 的实现方",
+    "dsh-client-ui-renderer": "提供 slots 服务（浏览器侧）",
+    "dsh-home-paths": "提供 dshHomePath，cordis.patch.yml 的 root 表达式依赖它"
+  },
+  "services": [
+    {
+      "name": "webServer",
+      "package": "dsh-host-webserver",
+      "members": ["register"],
+      "why": "lib/index.js 注册 13 条路由；lib/redteam/ui.js 注册 /redteam/api"
+    },
+    {
+      "name": "systemPrompt",
+      "package": "dsh-system-prompt",
+      "members": ["section"],
+      "why": "lib/index.js 注入 systemPrompt section；inject 声明依赖该服务"
+    },
+    {
+      "name": "tools",
+      "package": "dsh-tools",
+      "members": ["register"],
+      "why": "注册 purge_status / purge_apply / purge_revert 与演练台 64 个工具"
+    },
+    {
+      "name": "agents",
+      "package": "dsh-agent",
+      "members": ["get"],
+      "why": "lib/index.js:754 与 lib/identity.js:635 通过 registry.get(parentId) 找父会话"
+    },
+    {
+      "name": "settings",
+      "package": "dsh-settings",
+      "members": ["update"],
+      "why": "lib/preset-default.js:115 用 settings.update 把预设默认值改回 standard。注意宿主 settings 服务没有 get()，我们代码里的 settings?.get?.() 是防御性可选调用，不是契约"
+    },
+    {
+      "name": "agentPresets",
+      "package": "dsh-agent-preset-registry",
+      "members": ["register"],
+      "why": "lib/redteam/index.js:537 注册 redteam 预设"
+    },
+    {
+      "name": "subprocess",
+      "package": "dsh-subprocess",
+      "members": ["resolveExecutable"],
+      "memberProviders": {
+        "resolveExecutable": "dsh-subprocess-local"
+      },
+      "why": "注入代码里调用 ctx.subprocess.resolveExecutable('bash', ...)（lib/core.js 4 处字符串）。服务类在 dsh-subprocess，实现在 dsh-subprocess-local——只查服务包会漏判"
+    },
+    {
+      "name": "slots",
+      "package": "dsh-client-ui-renderer",
+      "members": ["register", "inject"],
+      "why": "lib/redteam/client.js 用 slots.inject + slots.register 往 4 个位置插 UI"
+    }
+  ],
+  "events": [
+    { "name": "session/created", "why": "刷新会话级状态（lib/index.js 4 处）" },
+    { "name": "agent/pre-step", "why": "注入前改写装配（lib/index.js 3 处）" },
+    { "name": "system-prompt/assemble", "why": "装配层改写入口" },
+    { "name": "session/event", "why": "观察会话事件流" },
+    { "name": "tools/pre-execute", "why": "工具执行前拦截" },
+    { "name": "approval/request", "why": "审批链改写" },
+    { "name": "agent-preset/selected", "why": "预设切换后同步状态" }
+  ],
+  "exports": [
+    {
+      "package": "dsh-home-paths",
+      "name": "dshHomePath",
+      "form": "function",
+      "why": "cordis.patch.yml:67 的 root: !!js dshHomePath('redteam') 直接依赖；缺失会让演练台数据目录指向错误位置"
+    }
+  ],
+  "notChecked": [
+    "ctx.__dshPurge* 这 10 个自建属性是我们自己挂的，不属于宿主契约",
+    "redteam / redteamMode 两个服务由我们自己 provide（lib/redteam/store.js:77、lib/redteam/index.js:655）",
+    "desktopRuntime / desktopActions 在宿主全树 0 命中，属桌面壳可选服务，lib/desktop.js:1015 已做 typeof 防御"
+  ]
+}

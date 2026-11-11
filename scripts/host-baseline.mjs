@@ -12,7 +12,8 @@
  * 退出码：0 = ok/review，1 = broken（有补丁从可用跌成 drifted），2 = 用法/探测失败。
  *
  * 只读：不改宿主任何文件。补丁分类全部来自 verify-target.mjs 的既有判定，
- * 这里不再维护第二份平行逻辑。
+ * 这里不再维护第二份平行逻辑。宿主契约（我们调的 API 还在不在）来自
+ * host-contract-lib.mjs，同样只合并 verdict、不重算。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -20,12 +21,14 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  buildSnapshot, diffSnapshots, findAiBase, renderDiff, resolveAiBase, SNAPSHOT_SCHEMA,
+  buildSnapshot, diffSnapshots, findAiBase, mergeVerdicts, renderDiff, resolveAiBase, SNAPSHOT_SCHEMA,
 } from "./host-baseline-lib.mjs";
+import { checkContract, loadContract, scanHost } from "./host-contract-lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const DEFAULT_BASELINE = path.join(ROOT, "docs", "host-baseline.json");
+const DEFAULT_CONTRACT = path.join(ROOT, "docs", "host-contract.json");
 
 const argv = process.argv.slice(2);
 function arg(name, fallback = "") {
@@ -100,10 +103,35 @@ if (CAPTURE) {
     console.error(`[host] 基线 schema=${baseline.schema} 与当前 ${SNAPSHOT_SCHEMA} 不同，请重新 --capture`);
   }
   const diff = diffSnapshots(baseline, snapshot);
-  if (JSON_OUT) {
-    console.log(JSON.stringify({ baselineFile: BASELINE_FILE, baselineAt: baseline.capturedAt, diff }, null, 2));
+
+  // 契约：宿主把这些 API 改名/删掉时，补丁照样能打上去，所以必须单算一遍。
+  // 契约文件缺失不算破——有人可能就想只查补丁；但要在输出里说清楚没查。
+  let contract = null;
+  let contractSkip = "";
+  const contractFile = path.resolve(arg("contract") || DEFAULT_CONTRACT);
+  if (!fs.existsSync(contractFile)) {
+    contractSkip = "未找到 docs/host-contract.json，本次只查补丁";
   } else {
-    console.log(renderDiff(diff));
+    try {
+      contract = checkContract(loadContract(contractFile), scanHost(aiBase));
+    } catch (e) {
+      contractSkip = `契约检查失败: ${e.message}`;
+    }
   }
-  process.exitCode = diff.verdict === "broken" ? 1 : 0;
+
+  const verdict = mergeVerdicts(diff.verdict, contract);
+  if (JSON_OUT) {
+    console.log(JSON.stringify({
+      baselineFile: BASELINE_FILE,
+      baselineAt: baseline.capturedAt,
+      verdict,
+      diff,
+      contract: contract ? { ok: contract.ok, total: contract.total, counts: contract.counts, missing: contract.missing } : null,
+      contractSkip,
+    }, null, 2));
+  } else {
+    console.log(renderDiff(diff, { contract }));
+    if (contractSkip) console.log(`[host] ${contractSkip}`);
+  }
+  process.exitCode = verdict === "broken" ? 1 : 0;
 }

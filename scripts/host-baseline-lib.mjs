@@ -252,13 +252,27 @@ export function diffSnapshots(baseline, current) {
   };
 }
 
-/** 人读渲染。刻意短：升级当天要能一眼看出「哪个补丁废了」。 */
-export function renderDiff(diff, { limit = 40 } = {}) {
+/**
+ * 合并两份判定：补丁还能不能打上去（host-baseline） + 我们调的宿主 API 还在不在
+ * （host-contract）。两者不重叠，verdict 取更严重的那一个。
+ *
+ * 为什么不合算成一个分数：这两件事的修法完全不同——补丁 drifted 要改 pattern，契约
+ * missing 要改代码或改契约。混成一个数字只会把这个信息丢掉。
+ */
+export function mergeVerdicts(patchVerdict, contractResult) {
+  if (!contractResult || contractResult.ok !== false) return patchVerdict;
+  return "broken";
+}
+
+/** 人读渲染。刻意短：升级当天要能一眼看出「哪个补丁废了」或「哪个宿主 API 没了」。 */
+export function renderDiff(diff, { limit = 40, contract = null } = {}) {
   const lines = [];
+  const contractFailed = Boolean(contract && contract.ok === false);
+  const verdict = mergeVerdicts(diff.verdict, contract);
   const head = diff.versionChanged
     ? `host ${diff.fromVersion} -> ${diff.toVersion}`
     : `host ${diff.toVersion} (未变)`;
-  lines.push(`[host] ${head}  verdict=${diff.verdict}`);
+  lines.push(`[host] ${head}  verdict=${verdict}`);
 
   if (diff.files.length) {
     lines.push(`[host] 目标文件变化 ${diff.files.length} 个`);
@@ -282,11 +296,23 @@ export function renderDiff(diff, { limit = 40 } = {}) {
   if (diff.gained.length) {
     lines.push(`[host] 新增可打位置 ${diff.gained.length} 个: ${diff.gained.map((g) => `#${g.id}`).join(", ")}`);
   }
-  if (diff.verdict === "ok") lines.push("[host] 与基线一致，无需处理");
-  if (diff.verdict === "review") lines.push("[host] 有变化但补丁仍站得住：记录后继续观察");
+
+  if (contractFailed) {
+    lines.push(`[host] 宿主契约缺失 ${contract.missing.length}/${contract.total} 项（补丁能打上去，但代码调的 API 没了）`);
+    for (const m of contract.missing.slice(0, 12)) {
+      lines.push(`    ${m.kind.padEnd(8)}${m.name.padEnd(30)}${m.detail}`);
+    }
+    if (contract.missing.length > 12) lines.push(`    ... 还有 ${contract.missing.length - 12} 项`);
+  }
+
   if (diff.verdict === "broken") {
     lines.push(`[host] 失效补丁: ${diff.broken.map((b) => `#${b.id} ${b.name}`).join(", ")}`);
     lines.push("[host] 定位用: node scripts/verify-target.mjs --ai-base <aiBase> --pad");
   }
+  if (contractFailed) {
+    lines.push("[host] 契约详情: node scripts/host-contract.mjs --ai-base <aiBase>");
+  }
+  if (verdict === "ok") lines.push("[host] 补丁与契约都与基线一致，无需处理");
+  if (verdict === "review") lines.push("[host] 有变化但补丁与契约仍站得住：记录后继续观察");
   return lines.join("\n");
 }

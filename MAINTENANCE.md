@@ -13,11 +13,23 @@ npm run check
 1. `npm run check:syntax`：检查 `bin/`、`lib/`、`scripts/` 与 `client.js` 的 JavaScript 语法，并动态导入 `lib/index.js`。
 2. `npm run check:metadata`：检查 `package.json` 版本与 `release-notes.md` 首行一致、`dshTarget` 在 `dshTargets` 内、补丁 ID 唯一且有效。`ALL_PATCHES` 的数组顺序是实际应用顺序，不要求数字 ID 升序，也不为重排而重排。
 3. `npm run check:client`：前端产物链校验（见下节「前端产物链」）。
-4. `npm test`：自动发现并逐个运行 `scripts/test-*.mjs`，每个测试使用独立 Node 子进程。
+4. `npm test`：`node --test "scripts/test-*.mjs"`，离线、默认不含覆盖率，实测约 1 秒。
 
 默认检查不读取或改写 DSH profile，不应用宿主补丁，也不需要安装宿主。补丁数量从 `ALL_PATCHES` 动态读取，不在检查器里固定写死。
 
 新增独立回归测试时，将文件命名为 `scripts/test-<主题>.mjs`，失败时设置非零退出码或抛出异常，成功时正常退出。测试临时数据放在系统临时目录，并在结束时清理。
+
+命令分三层，按「什么时候跑」选：
+
+| 命令 | 用途 | 耗时 | 需要什么 |
+| --- | --- | --- | --- |
+| `npm test` | 改完就跑。只跑测试 | 约 1 秒 | 无 |
+| `npm run check` | 提交前跑。语法 + 元数据 + 前端产物 + 测试 | 约 3 秒 | 无 |
+| `npm run test:full` | 想知道「有没有让覆盖率倒退」时跑。测试 + lcov + 与基线比对 | 约 2 秒 | git 工作副本 |
+
+`test:full` 用的是**棘轮基线**（`docs/test-baseline.json`），不是百分比阈值：只要求每个文件的行 / 函数 / 分支覆盖不低于记录值，涨上去之后用 `npm run test:baseline` 手动刷。理由很实际——把阈值定在 17% 等于宣布 `lib/core.js` 烂着也算合格；棘轮只记住「现在是多少」，然后逼它单向往上走。
+
+无 `.git` 的目录（例如 `npm pack` 解包出来的 tgz）跑 `test:full` 会返回退出码 2 并说明原因，不会误报覆盖率下降：`lib/update.js` 里 `gitHead` / `canGit` 的 catch 分支在无 git 时走不到，行数天然少十几行。这是环境差异，不是倒退。
 
 ## 需要宿主样本的验证
 
@@ -53,6 +65,62 @@ npm run host:capture    # 升级适配完成后，把新状态记为基线
 基线文件 `docs/host-baseline.json` 只存相对路径与 sha256，不含绝对安装路径，入库无害；桌面补丁需要纯净 `main.js` 的验证仍走 `e2e-desktop`。
 
 宿主升级适配、前端重建与巨型模块拆分应分别成为独立维护任务，不与无关业务修改混在同一提交。
+
+### 宿主契约：我们调的 API 还在不在
+
+`host:status` 有两层判定，缺一层就会假绿：
+
+| 层 | 看什么 | 数据 | 宿主改名时会怎样 |
+| --- | --- | --- | --- |
+| 补丁适配 | 86 条补丁的 pattern 还能不能在宿主源码里匹配上 | `docs/host-baseline.json` | 照样 `settled` —— 补丁改的是文本，不是 API |
+| 宿主契约 | 我们调的 `ctx.webServer.register` / `settings.update` / 事件名等还在不在 | `docs/host-contract.json` | 立刻 `broken` |
+
+补丁是**文本替换**：宿主把 `ctx.webServer` 改名成 `ctx.httpServer`，一段不含 `webServer` 字样的补丁依然能原样打上去，`verdict` 还是 `ok`，但插件启动时就崩。契约层补的就是这个盲区。
+
+```bash
+node scripts/host-contract.mjs                # 只查契约
+node scripts/host-contract.mjs --json          # 机器可读
+npm run host:status                            # 补丁 + 契约合并判定
+```
+
+退出码 `0` = 全部命中，`1` = 有缺失，`2` = 探测或用法失败。只读，不写宿主。
+
+#### 为什么要优先读 `.dshpurge.bak`
+
+宿主树里现在有 58 个 `.dshpurge.bak`，它们里面 `[dsh-purge]` 标记数为 0——**备份是官方原文**。扫描必须优先读备份，否则会读到自己注入的代码，把「我们自己加的东西」当成「宿主承诺的契约」，形成自证式假绿。
+
+这不是理论风险。实测证据：`dsh-settings/lib/index.js` 当前文件比它的 `.dshpurge.bak` 多出 5 个方法——`register` / `get` / `ensureLegacyDocument` / `persistLegacy` / `commitLegacy`，全部来自补丁 **#42 `SETTINGS_LEGACY_API`**（`file: settings`，12 条 replacement，带 `// [dsh-purge] legacy settings api` 标记）。而 `lib/preset-default.js:109` 恰好调了 `settings?.get?.(...)`。也就是说：**这一行依赖的是我们自己注入的方法，不是宿主契约**。如果扫描读当前文件，`settings.get` 就会假通过；读 `.bak` 才会明确告诉我们「宿主没有这个」。
+
+#### 为什么粒度要到成员，还要允许「服务包 ≠ 实现包」
+
+只查「`webServer` 由 `dsh-host-webserver` 提供」不够——宿主保留了服务、删掉某个方法，照样崩。所以契约里每个服务都列 `members`。
+
+但成员不一定长在服务包上。实测反例：`subprocess` 服务由 `dsh-subprocess` 提供，而 `resolveExecutable` 的方法体在 `dsh-subprocess-local/lib/index.js:1523`。只查服务包会一条都找不到。契约用 `memberProviders` 覆盖：
+
+```json
+{ "name": "subprocess", "package": "dsh-subprocess",
+  "members": ["resolveExecutable"],
+  "memberProviders": { "resolveExecutable": "dsh-subprocess-local" } }
+```
+
+缺失时报告会顺手告诉你方法现在在哪个包——升级当天最常见的情况不是方法消失，而是「方法还在，搬包了」：
+
+```text
+member  subprocess.resolveExecutable  dsh-subprocess 里没有 resolveExecutable() 的声明（但在 dsh-subprocess-local 里有，可能搬包了）
+```
+
+#### 契约里刻意不写的东西
+
+- `ctx.__dshPurge*`（SessionHook / RewindDerive / PresetHook 等 10 个）：我们自己在 ctx 上挂的，不是宿主 API。
+- `redteam` / `redteamMode`：我们自己 `ctx.provide` 的。
+- `desktopRuntime` / `desktopActions`：宿主全树 0 命中，桌面壳的可选服务；调用处（`lib/desktop.js:1015`）已经用 `typeof runtime.requestRestart === "function"` 做了防御，写进契约只会制造噪音。
+- `settings.get`：见上，是我们注入的。
+
+这些都在 `docs/host-contract.json` 的 `notChecked` 里写明理由，避免下次有人以为漏了。
+
+#### 判定只有一份
+
+`host:status` 不重算契约，只调 `checkContract()` 拿结果再合并 verdict（`mergeVerdicts`：任一层 broken 就是 broken）。补丁分类同样只有 `verify-target` 一处实现。这条规矩来自补丁 #88 的历史教训——同一件事两处判定，一处改了另一处没改，就会互相打脸。
 
 ## 前端产物链（client.js）
 
@@ -91,12 +159,12 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 | 层 | 文件 | 行数 | 职责 |
 | --- | --- | --- | --- |
-| 模板 | `lib/patches/templates.mjs` | 91 | 提示词字面量、网络模板、替换链 helper |
-| 注册表 | `lib/patches/patch-registry.mjs` | 277 | `PATCHES`（10 条） |
-| 代码补丁 | `lib/patches/code-patches.mjs` | 43 | `CODE_PATCHES`（3 条） |
-| 引擎补丁 | `lib/patches/engine-patches.mjs` | 296 | `ENGINE_PATCHES`（8 条） |
-| 新工具补丁 | `lib/patches/new-tool-patches.mjs` | 3112 | `NEW_TOOL_PATCHES`（65 条） |
-| 组装 | `lib/patches/index.mjs` | 9 | 按原顺序拼 `ALL_PATCHES`（86 条） |
+| 模板 | `lib/patches/templates.mjs` | 90 | 提示词字面量、网络模板、替换链 helper |
+| 注册表 | `lib/patches/patch-registry.mjs` | 276 | `PATCHES`（10 条） |
+| 代码补丁 | `lib/patches/code-patches.mjs` | 42 | `CODE_PATCHES`（3 条） |
+| 引擎补丁 | `lib/patches/engine-patches.mjs` | 295 | `ENGINE_PATCHES`（8 条） |
+| 新工具补丁 | `lib/patches/new-tool-patches.mjs` | 3111 | `NEW_TOOL_PATCHES`（65 条） |
+| 组装 | `lib/patches/index.mjs` | 8 | 按原顺序拼 `ALL_PATCHES`（86 条） |
 
 改补丁只动 `lib/patches/` 里的数组文件；`core.js` 只保留 `import { ALL_PATCHES } from './patches/index.mjs'` 一行再原样导出。
 
@@ -107,6 +175,8 @@ npm run check           # 3. 全量校验（含片段同步检测）
 ## CI 与发布
 
 `.github/workflows/ci.yml` 在 `main` 推送、pull request 和手动触发时运行 `npm run check`。CI 使用 Node.js 24，不需要 `npm install`。
+
+CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安装，只会得到「全 no-file」的假绿。这两条是本机命令。
 
 `.github/workflows/release.yml` 也在发布前运行相同检查。现有上游仓库条件保持不变，因此维护仓库的提交不会触发上游 Release 发布。
 
@@ -125,4 +195,4 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
-详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)。
+详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)，以及[测试机制设计](docs/superpowers/specs/2026-11-11-test-mechanism-design.md)。
