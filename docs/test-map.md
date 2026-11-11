@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | 86 条补丁能打在当前宿主上（文本替换成功） | `npm run host:status` → `docs/host-baseline.json` | — |
 | 我们调的宿主 API 还在（`ctx.webServer` 等 8 个服务、9 个成员、7 个事件、`dshHomePath`） | `scripts/host-contract.mjs` / `test-host-contract.mjs` | — |
-| 宿主版本兼容判定（major.minor.patch.pre 全等） | `lib/core.js` `hostCompat`，被 `host:status` 间接覆盖 | `lib/core.js` 17% |
+| 宿主版本兼容判定（major.minor.patch.pre 全等） | `lib/core.js` `hostCompat`，被 `host:status` 间接覆盖 | `lib/core.js` 18% |
 | 探测真宿主树、排除 Electron 外壳依赖树 | `test-host-baseline.mjs`（`looksLikeHostTree` / `resolveAiBase`） | —（同上） |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
@@ -39,8 +39,8 @@
 | 应用顺序不可重排（`#76` 必须早于 `#70`） | `test-patch-registry.mjs` | 同上 |
 | 239 个 replacement 在真实引擎上跑出相同结果（690 组 LF/CRLF/YAML 对拍） | `test-patch-registry.mjs` | 同上 |
 | 补丁 id 唯一、非空、是整数 | `check-metadata.mjs` / `test-verification.mjs` | — |
-| 界面显示分组与状态汇总（`PATCH_DISPLAY_GROUPS`、`rollupDisplayStatus`） | `❗缺` | `lib/core.js` 17% |
-| 补丁对宿主文件的落点（`targetFiles` 57 个键） | `❗缺`（靠 `host:status` 的 `no-file` 侧面反映） | `lib/core.js` 17% |
+| 界面显示分组与状态汇总（`PATCH_DISPLAY_GROUPS`、`rollupDisplayStatus`） | `❗缺` | `lib/core.js` 18% |
+| 补丁对宿主文件的落点（`targetFiles` 57 个键） | `❗缺`（靠 `host:status` 的 `no-file` 侧面反映） | `lib/core.js` 18% |
 
 ---
 
@@ -54,8 +54,8 @@
 | 装配结果段序（注入在最前、capabilities 其次、persona 收尾、anchor 最后） | `test-prompt-inject.mjs`（8 条，含不原地改写传入对象、`null`/`{}` 原样返回） | `lib/identity.js` 69% |
 | `stripChatmlTags` 只剥三种形态（完整 `im_start system:`、`project_instructions`、`im_end`） | `test-prompt-inject.mjs`（含一条现状锁定：裸 `<\|im_start\|>` 不剥） | `lib/identity.js` 69% |
 | `anchorMode` 只有 `auto` 与 `off`（不是 strict/fallback/always） | `test-plugin-surface.mjs`（现状锁定：`"bogus"` 原样透传） | `lib/anchor.js` 55% |
-| 规则集读写（`AGENTS.md` / `CLAUDE.md`，含备份与恢复） | `❗缺`（本轮只覆盖了策略与 cwd 勾选） | `lib/rules.js` 47% |
-| 工作区策略与 cwd 勾选的持久化（含跨目录穿越防护） | `test-prompt-inject.mjs`（8 条：默认 fallback / 非法值拒绝 / 损坏文件回落 / 跨目录不注入 / `cwd-rule` 头 / lastCwd 空值不覆盖） | `lib/rules.js` 47% |
+| 规则集读写（`AGENTS.md` / `CLAUDE.md`，含备份与恢复） | `❗缺`（本轮只覆盖了策略与 cwd 勾选） | `lib/rules.js` 78% |
+| 工作区策略与 cwd 勾选的持久化（含跨目录穿越防护） | `test-prompt-inject.mjs`（8 条：默认 fallback / 非法值拒绝 / 损坏文件回落 / 跨目录不注入 / `cwd-rule` 头 / lastCwd 空值不覆盖） | `lib/rules.js` 78% |
 | `rewriteLiveAssembly` 的缓存签名（11 段） | `test-live-cache.mjs`（13 条签名覆盖面 + 命中规则 + 5 条生产接线） | `lib/live-cache.js` 100% |
 | 缓存命中规则（同对象换签名必须落空、非对象不缓存、空对象算有效结果） | `test-live-cache.mjs`（命中/落空/覆盖写入/原始值/非对象结果 共 8 条） | `lib/live-cache.js` 100% |
 | 会话签名 `sessionKeyOf`（id → sessionId → 空，cwd 参与，属性抛异常不冒泡） | `test-live-cache.mjs`（5 条） | `lib/live-cache.js` 100% |
@@ -68,12 +68,12 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| `name` / `inject` 能装配（写错 `pluginPackages` → 宿主退出码 1） | `test-plugin-surface.mjs` | `lib/index.js` 7% |
+| `name` / `inject` 能装配（写错 `pluginPackages` → 宿主退出码 1） | `test-plugin-surface.mjs` | `lib/index.js` 8% |
 | 7 个 export 名字不能多不能少 | `test-plugin-surface.mjs` | 同上 |
 | `normalizeConfig()` 返回 18 键，且默认值逐项锁定 | `test-plugin-surface.mjs` | 同上 |
 | 12 个布尔键收敛 `"false"/"0"/"no"/"off"` | `test-plugin-surface.mjs` | 同上 |
-| 4 条聊天命令（`purge` / `rules` / `skills` / `rewind`）注册 succeeded 且备名可用 | `❗缺` | `lib/index.js` 7% |
-| 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`） | `❗缺` | `lib/index.js` 7% |
+| 4 条聊天命令（`purge` / `rules` / `skills` / `rewind`）注册 succeeded 且备名可用 | `❗缺` | `lib/index.js` 8% |
+| 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`） | `❗缺` | `lib/index.js` 8% |
 | 跨站准入：`Origin` / `Sec-Fetch-Site` / `Host` 三元组判定（DNS rebinding、sandbox iframe、同机异端口） | `test-http-guards.mjs` | `lib/http.js` 100% |
 | 方法白名单：405 + `Allow` 头 | `test-http-guards.mjs` | 同上 |
 | JSON 响应头统一（`no-store`，500 也不漏） | `test-http-guards.mjs` | 同上 |
@@ -83,7 +83,7 @@
 | `rules` / `skills` 两个分发器的 op 优先级（forcedOp > body.op > 尾段 > `?op=` > `?id=` 推断 > status）与 OPTIONS/405 | `test-http-routes.mjs` | 同上 |
 | `skills` 的 14MB 请求体上限（区别于默认 512KB） | `test-http-routes.mjs` | 同上 |
 | `registerRoute` 给 handler 套跨站守卫，注册失败只 warn 不炸 | `test-http-routes.mjs` | 同上 |
-| 13 条 `exact` 路由（`status` / `apply` / `revert` / `uninstall` / `update` / `rewind` / `override` / `own-servers` / `restart` / `hooks-deny` / `last-user` / `drill-grant` / `rewind/options`）各自的业务分支 | `❗缺` | `lib/index.js` 7% |
+| 13 条 `exact` 路由（`status` / `apply` / `revert` / `uninstall` / `update` / `rewind` / `override` / `own-servers` / `restart` / `hooks-deny` / `last-user` / `drill-grant` / `rewind/options`）各自的业务分支 | `❗缺` | `lib/index.js` 8% |
 | `/redteam/api` 桥只接受 POST、Origin 与 Host 一致 | `❗缺` | `lib/redteam/ui.js` 未纳入基线 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
@@ -105,12 +105,14 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| POC 库增删查（`pocSearch` / `pocSave` / `pocStats`） | `test-knowledge-dispatch.mjs` | `lib/redteam/store-core.js` 27% |
+| POC 库增删查（`pocSearch` / `pocSave` / `pocStats`） | `test-knowledge-dispatch.mjs` | `lib/redteam/store-core.js` 59% |
 | nuclei 模板索引缓存（首次建、命中、7 天过期、损坏重建） | `test-store-templates.mjs` | 同上 |
-| 计分口径（`scoreReport` 1080 行、`scoreChain` 182 行，含上方文档注释则更长） | `❗缺` | 同上 |
+| 计分口径三处一致：面板 / 报告 / 攻击链算出同一个总分（普通命中、同服务去重、自建账号、停用得分点、规则上限吃满、命中自带分值、G6 IPv6 ×3、G5 数据规模 ×2、混合 9 种场景） | `test-score-consistency.mjs` | `lib/redteam/store-core.js` 59% |
+| `applyScoreCaps` 纯函数：四种 `dedup_scope` + 规则上限的边界（降序累计、`cap<=0` 不封、`self_created` 不占位、无元数据退化） | `test-score-consistency.mjs` | `lib/redteam/score-rules.js` 98% |
+| 封顶文案（dedup / cap 两种措辞，含 `+50 分` 与 `+null` 边界） | `test-score-consistency.mjs` | 同上 |
 | 资产/漏洞/凭据/隧道/webshell 的 CRUD（约 30 个方法） | `❗缺` | 同上 |
 | 会话摘要、攻击图、报告导出、bundle 导入 | `❗缺` | 同上 |
-| SQLite + FTS5 不可用时的降级（`REDTEAM_NO_FTS5=1`） | `❗缺` | `lib/redteam/schema.js` 75% |
+| SQLite + FTS5 不可用时的降级（`REDTEAM_NO_FTS5=1`） | `❗缺` | `lib/redteam/schema.js` 93% |
 | 64 个 `redteam_*` 工具的参数校验 | `❗缺` | `lib/redteam/tools.js` 未纳入基线 |
 
 ---
@@ -162,7 +164,7 @@
 
 1. **13 条 `exact` 路由的业务分支仍零测试。** 17 条路由里，公共零件（Origin 判定、方法白名单、JSON 收发）已在 `lib/http.js` 由 32 条用例钉住，`rules` / `skills` 两个分发器已抽到 `lib/http-routes.js` 由 52 条用例钉住；剩下的洞是 13 条 `exact` 路由各自的参数校验与副作用——它们直接调 `core.*` / `update.*` / `uninstall.*`，改错的表现是「点了没反应」，目前只能靠人手点。`lib/index.js` 的 8% 覆盖率全部来自 import 时的模块初始化。
 2. **提示词注入的读盘侧仍无测试。** 决策树（`decideInject`）与缓存签名（`liveCacheSignature`）已由 31 + 37 条用例钉住，但真正决定「注入什么正文」的 `readInjectFallback` / `refreshHungOperator` / `ensureOperatorBody` 需要 `C:UsersAdministrator.dsh` 磁盘状态，目前只有间接覆盖：加密槽落盘、`prompt-inject.md` 与内存提交版合并、mtime 与版本号双判失效。改坏了的表现是「注入正文变成旧的或空的」，且不会报错。
-3. **演练台计分口径零测试。** `scoreReport` 1080 行，注释明确要求与 `listScorePoints` 共用 `applyScoreCaps`，否则「面板 50 分、报告 150 分」自相矛盾——但没有任何测试守着这个一致性。
+3. **演练台的计分口径已被钉住，但计分之外的演练台逻辑仍是空的。** `listScorePoints` / `scoreReport` / `scoreChain` 三处「必须算出同一个总分」的契约由 25 条用例守着（含条目级 `counted` / `capped`，因为总分一致抓不到条目级漂移）；`applyScoreCaps` 本身 98% 行覆盖。剩下没守的是资产/漏洞/凭据/隧道/webshell 的 CRUD、会话摘要、攻击图、报告导出、bundle 导入与 64 个工具的入参校验。
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。
 5. **桌面端安装目录探测**（注册表 / 快捷方式 / 便携 / 进程四种来源）零测试，只能在本机真机上试。
 6. **`lib/redteam/tools.js` 的 64 个工具**（1 个文件 2256 行）完全不 import，覆盖率不在报告里。
