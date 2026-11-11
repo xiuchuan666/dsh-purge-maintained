@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T11:46:27.908Z",
-  "commit": "ba6c38e",
+  "capturedAt": "2026-11-11T12:14:56.285Z",
+  "commit": "9ef55dd",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {

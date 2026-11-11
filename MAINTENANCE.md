@@ -226,7 +226,7 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安装，只会得到「全 no-file」的假绿。这两条是本机命令。
 
-`.github/workflows/release.yml` 也在发布前运行相同检查。现有上游仓库条件保持不变，因此维护仓库的提交不会触发上游 Release 发布。
+`.github/workflows/release.yml` 在发布前运行相同的 `npm run check`，但**不再由 push 触发**：本副本不发 GitHub Release（仓库私有、包标 `private`、分发只走本机 `npm pack` 产物），保留 `workflow_dispatch` 手动入口以便临时出包。仓库条件写成 `xiuchuan666/dsh-purge-maintained`，并有一条测试（`scripts/test-upstream-refs.mjs`）盯着它不要退回上游仓库名。
 
 包本身已标 `"private": true`，`npm publish` 会直接拒绝。对外发布渠道只有本地 `npm pack` 产物（`$DSH_HOME/plugins/*.tgz`）。
 

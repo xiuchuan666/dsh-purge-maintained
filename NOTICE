@@ -8,3 +8,14 @@ This product is licensed under the Apache License, Version 2.0.
 Derivative works must retain this NOTICE and attribution.
 
 Bundled skills under skills/redteam/ originate from the dsh-purge upstream project (YuJunZhiXue/dsh-purge), retrieved via the mirror mmparko/dsh-purge.
+
+---
+
+维护说明（本副本）
+
+上面三行署名与来源按 Apache-2.0 第 4(d) 条保留，不得删除。上游仓库
+`HunYiSage/dsh-purge` 已永久删库，本副本自 1.1.94 起由
+https://github.com/xiuchuan666/dsh-purge-maintained 接管维护：
+只服务本机自用，不对外分发，不对上游行为作任何担保。
+
+本副本的改动范围、回退方式与测试基线见 MAINTENANCE.md。
