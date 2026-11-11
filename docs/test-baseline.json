@@ -1,9 +1,25 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T06:33:38.248Z",
-  "commit": "467ec43",
+  "capturedAt": "2026-11-11T06:37:12.708Z",
+  "commit": "2e3f577",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
+    "lib/anchor.js": {
+      "lh": 73,
+      "lf": 132,
+      "fnh": 0,
+      "fnf": 4,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/apply-progress.js": {
+      "lh": 29,
+      "lf": 66,
+      "fnh": 0,
+      "fnf": 6,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/asset-table.js": {
       "lh": 169,
       "lf": 169,
@@ -28,6 +44,22 @@
       "brh": 33,
       "brf": 48
     },
+    "lib/capability-protocol.js": {
+      "lh": 29,
+      "lf": 32,
+      "fnh": 0,
+      "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/continue-retry.js": {
+      "lh": 85,
+      "lf": 364,
+      "fnh": 0,
+      "fnf": 20,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/core.js": {
       "lh": 894,
       "lf": 5268,
@@ -43,6 +75,14 @@
       "fnf": 91,
       "brh": 35,
       "brf": 56
+    },
+    "lib/drill-grant.js": {
+      "lh": 16,
+      "lf": 50,
+      "fnh": 0,
+      "fnf": 4,
+      "brh": 1,
+      "brf": 1
     },
     "lib/extract-asar.js": {
       "lh": 205,
@@ -73,6 +113,38 @@
       "lf": 26,
       "fnh": 0,
       "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/host.js": {
+      "lh": 18,
+      "lf": 28,
+      "fnh": 0,
+      "fnf": 5,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/identity.js": {
+      "lh": 216,
+      "lf": 1104,
+      "fnh": 0,
+      "fnf": 59,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/index.js": {
+      "lh": 215,
+      "lf": 2953,
+      "fnh": 1,
+      "fnf": 65,
+      "brh": 5,
+      "brf": 5
+    },
+    "lib/net-scope.js": {
+      "lh": 277,
+      "lf": 766,
+      "fnh": 0,
+      "fnf": 41,
       "brh": 1,
       "brf": 1
     },
@@ -140,11 +212,27 @@
       "brh": 1,
       "brf": 1
     },
+    "lib/preset-default.js": {
+      "lh": 35,
+      "lf": 205,
+      "fnh": 0,
+      "fnf": 13,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/profile-insert.js": {
       "lh": 108,
       "lf": 413,
       "fnh": 0,
       "fnf": 18,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/reapply.js": {
+      "lh": 78,
+      "lf": 388,
+      "fnh": 0,
+      "fnf": 27,
       "brh": 1,
       "brf": 1
     },
@@ -180,6 +268,14 @@
       "brh": 1,
       "brf": 1
     },
+    "lib/redteam/role-section.js": {
+      "lh": 37,
+      "lf": 178,
+      "fnh": 0,
+      "fnf": 12,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/redteam/schema.js": {
       "lh": 474,
       "lf": 630,
@@ -212,6 +308,46 @@
       "brh": 8,
       "brf": 13
     },
+    "lib/rewind.js": {
+      "lh": 68,
+      "lf": 644,
+      "fnh": 0,
+      "fnf": 47,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/rules.js": {
+      "lh": 119,
+      "lf": 560,
+      "fnh": 0,
+      "fnf": 41,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/settle-policy.js": {
+      "lh": 23,
+      "lf": 61,
+      "fnh": 0,
+      "fnf": 6,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/skills.js": {
+      "lh": 94,
+      "lf": 747,
+      "fnh": 0,
+      "fnf": 46,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/subagent-control.js": {
+      "lh": 19,
+      "lf": 67,
+      "fnh": 0,
+      "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/surface.js": {
       "lh": 22,
       "lf": 139,
@@ -236,6 +372,14 @@
       "brh": 1,
       "brf": 1
     },
+    "lib/uninstall.js": {
+      "lh": 32,
+      "lf": 310,
+      "fnh": 0,
+      "fnf": 17,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/update.js": {
       "lh": 485,
       "lf": 1156,
@@ -243,6 +387,14 @@
       "fnf": 97,
       "brh": 63,
       "brf": 162
+    },
+    "lib/web.js": {
+      "lh": 25,
+      "lf": 117,
+      "fnh": 0,
+      "fnf": 7,
+      "brh": 1,
+      "brf": 1
     },
     "lib/zip-extract.js": {
       "lh": 29,

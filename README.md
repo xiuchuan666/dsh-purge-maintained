@@ -12,7 +12,7 @@
 | 运行时依赖 | 零（只用 Node 内置模块） |
 | 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.1（另兼容 0.2.1-rc.5 / 0.2.1-rc.2） |
 | 补丁条数 | 86 条（提示词 27 / 代码 48 / 工具 8 / 兼容层 3） |
-| 回归测试 | 12 个，`npm run check` 一条命令跑完 |
+| 回归测试 | 15 个，`npm run check` 一条命令跑完 |
 | 维护仓库 | `xiuchuan666/dsh-purge-maintained`（私有） |
 
 ---
@@ -214,7 +214,7 @@ presets/redteam/     红队预设
 skills/redteam/      随包 23 个技能
 client.js            侧栏 Dock（成品文件，见下）
 cordis.patch.yml     插件声明
-scripts/             12 个测试 + 校验/构建/探测脚本
+scripts/             15 个测试 + 校验/构建/探测脚本
 docs/                设计文档、宿主基线快照、预览图
 ```
 
@@ -238,9 +238,11 @@ npm run check
 | `check:syntax` | 递归 `node --check` 全部 `bin/ lib/ scripts/ *.js`，最后 `import lib/index.js` 验模块图 |
 | `check:metadata` | 版本号是语义化版本、`release-notes.md` 首行等于 `# <version>`、`dshTargets` 含 `dshTarget`、86 条补丁 id 唯一 |
 | `check:client` | `client.js` 与 `docs/origin/client-1.1.94.js` 锚点哈希一致、DRILL 标记结构完整、演练台片段与 `lib/redteam/client.js` 同步 |
-| `test` | 12 个 `scripts/test-*.mjs` 依次跑，首个非零退出即失败 |
+| `test` | 15 个 `scripts/test-*.mjs`，`node --test` 跑，失败能定位到具体断言 |
 
-当前基线：`[syntax] 97 files` / `[metadata] patches=86 tests=12` / `[client] anchor OK` / `[test] PASS 12/12`。
+当前基线：`[syntax] 104 files` / `[metadata] patches=86 tests=15` / `[client] anchor OK` / `[test] PASS 15/15`（约 0.9 秒）。
+
+三条命令分三层：`npm test`（离线，约 1 秒）→ `npm run check`（加语法/元数据/产物链，约 3 秒）→ `npm run test:full`（加覆盖率棘轮基线，约 2 秒，需要 git 工作副本）。
 
 **新增测试的命名规范**：`scripts/test-<主题>.mjs`，会被 `discoverTests` 自动收进 `npm run check`，不需要改任何清单。CI 在 `.github/workflows/ci.yml`，push `main` 和 PR 都跑 `npm run check`。
 
@@ -279,13 +281,23 @@ node scripts/e2e-desktop.mjs --main "<纯净 main.js>"
 npm run host:status
 ```
 
-读 `docs/host-baseline.json`（86 条补丁状态 + 59 个目标文件指纹），跟当前宿主对比，输出三级判定：
+读 `docs/host-baseline.json`（86 条补丁状态 + 59 个目标文件指纹），跟当前宿主对比，**同时**扫一遍 `docs/host-contract.json`（我们调用的宿主服务/事件/导出），合并成三级判定：
 
 | verdict | 含义 | 退出码 |
 |---|---|---|
-| `ok` | 没变化 | 0 |
-| `review` | 宿主版本变了，或文件指纹变了，但补丁还能打 | 0 |
-| `broken` | 有补丁从「能打」变成「漂移」，或补丁消失 | 1 |
+| `ok` | 补丁与契约都没变 | 0 |
+| `review` | 宿主版本变了，或文件指纹变了，但补丁与契约都还站得住 | 0 |
+| `broken` | 有补丁从「能打」变成「漂移」/消失，**或**我们调的宿主 API 不见了 | 1 |
+
+两层是分开的，因为它们的盲区正好互补：补丁是文本替换，宿主把 `ctx.webServer` 改名成 `ctx.httpServer`，一段不含 `webServer` 字样的补丁照样能打上去、`verdict` 照样是 `ok`，插件却在启动时崩。所以只查补丁不够。
+
+单独查契约：
+
+```sh
+node scripts/host-contract.mjs --ai-base "<宿主>/@deepseek-ai"
+```
+
+扫描优先读 `<文件>.dshpurge.bak`（那是官方原文），否则读当前文件——否则会读到自己注入的代码，把「我们加的东西」当成「宿主承诺的契约」。这不是理论风险：`dsh-settings/lib/index.js` 比它的备份多出 5 个方法（`register` / `get` / `ensureLegacyDocument` / `persistLegacy` / `commitLegacy`，全部来自补丁 #42），而 `lib/preset-default.js:109` 恰好调了 `settings?.get?.()`。读备份才会明确告诉我们「宿主没有这个方法」。
 
 定位某条为什么废了：
 
