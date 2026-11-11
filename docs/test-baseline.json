@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T14:41:09.616Z",
-  "commit": "02d5e1d",
+  "capturedAt": "2026-11-11T14:50:09.087Z",
+  "commit": "629b3d3",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -29,12 +29,12 @@
       "brf": 1
     },
     "lib/bin-preflight.js": {
-      "lh": 23,
+      "lh": 83,
       "lf": 89,
-      "fnh": 1,
+      "fnh": 2,
       "fnf": 2,
-      "brh": 2,
-      "brf": 5
+      "brh": 31,
+      "brf": 38
     },
     "lib/bom-guard.js": {
       "lh": 148,
@@ -81,8 +81,8 @@
       "lf": 2272,
       "fnh": 73,
       "fnf": 107,
-      "brh": 311,
-      "brf": 419
+      "brh": 312,
+      "brf": 420
     },
     "lib/drill-grant.js": {
       "lh": 43,
@@ -101,12 +101,12 @@
       "brf": 50
     },
     "lib/hide-console.js": {
-      "lh": 163,
+      "lh": 183,
       "lf": 339,
-      "fnh": 15,
+      "fnh": 16,
       "fnf": 23,
-      "brh": 19,
-      "brf": 46
+      "brh": 43,
+      "brf": 65
     },
     "lib/hooks-deny.js": {
       "lh": 126,
@@ -237,12 +237,12 @@
       "brf": 5
     },
     "lib/phase1-keep.js": {
-      "lh": 8,
+      "lh": 21,
       "lf": 21,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 1,
-      "brh": 1,
-      "brf": 1
+      "brh": 5,
+      "brf": 5
     },
     "lib/preset-default.js": {
       "lh": 84,
@@ -269,12 +269,12 @@
       "brf": 129
     },
     "lib/redteam/atomic-write.js": {
-      "lh": 8,
+      "lh": 28,
       "lf": 28,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 1,
-      "brh": 1,
-      "brf": 1
+      "brh": 6,
+      "brf": 11
     },
     "lib/redteam/bridge.js": {
       "lh": 97,
@@ -413,12 +413,12 @@
       "brf": 204
     },
     "lib/settle-policy.js": {
-      "lh": 33,
+      "lh": 61,
       "lf": 61,
-      "fnh": 1,
-      "fnf": 6,
-      "brh": 5,
-      "brf": 6
+      "fnh": 8,
+      "fnf": 8,
+      "brh": 33,
+      "brf": 34
     },
     "lib/skills.js": {
       "lh": 540,
@@ -445,12 +445,12 @@
       "brf": 53
     },
     "lib/table-key.js": {
-      "lh": 15,
+      "lh": 27,
       "lf": 27,
-      "fnh": 2,
+      "fnh": 3,
       "fnf": 3,
-      "brh": 3,
-      "brf": 4
+      "brh": 6,
+      "brf": 6
     },
     "lib/table-read.js": {
       "lh": 16,
