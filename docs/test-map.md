@@ -56,9 +56,11 @@
 | `anchorMode` 只有 `auto` 与 `off`（不是 strict/fallback/always） | `test-plugin-surface.mjs`（现状锁定：`"bogus"` 原样透传） | `lib/anchor.js` 55% |
 | 规则集读写（`AGENTS.md` / `CLAUDE.md`，含备份与恢复） | `❗缺`（本轮只覆盖了策略与 cwd 勾选） | `lib/rules.js` 47% |
 | 工作区策略与 cwd 勾选的持久化（含跨目录穿越防护） | `test-prompt-inject.mjs`（8 条：默认 fallback / 非法值拒绝 / 损坏文件回落 / 跨目录不注入 / `cwd-rule` 头 / lastCwd 空值不覆盖） | `lib/rules.js` 47% |
-| `rewriteLiveAssembly` 的缓存签名（11 段，WeakMap） | `❗缺` | `lib/index.js` 7% |
+| `rewriteLiveAssembly` 的缓存签名（11 段） | `test-live-cache.mjs`（13 条签名覆盖面 + 命中规则 + 5 条生产接线） | `lib/live-cache.js` 100% |
+| 缓存命中规则（同对象换签名必须落空、非对象不缓存、空对象算有效结果） | `test-live-cache.mjs`（命中/落空/覆盖写入/原始值/非对象结果 共 8 条） | `lib/live-cache.js` 100% |
+| 会话签名 `sessionKeyOf`（id → sessionId → 空，cwd 参与，属性抛异常不冒泡） | `test-live-cache.mjs`（5 条） | `lib/live-cache.js` 100% |
 
-**本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住。剩下的洞是缓存签名（`lib/index.js` 的 `liveRewriteCache`）与规则集的备份恢复分支。
+**本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住；缓存签名与命中规则抽成 `lib/live-cache.js`（`liveCacheSignature` / `sessionKeyOf` / `createLiveCache`），由 `test-live-cache.mjs` 的 37 条用例钉住，且拆分前后 2304 组输入的签名逐字对拍一致（`.tmp-exp/sig-parity.mjs`，一次性）。剩下的洞是规则集的备份恢复分支。
 
 ---
 
@@ -152,7 +154,7 @@
 不是遗漏，是当前接受的风险，写出来免得下次以为是「测过了」：
 
 1. **`lib/index.js` 的 17 条路由只有公共零件被测，业务分支仍零测试。** 它承载界面上所有按钮，改错的表现是「点了没反应」，只能靠人手点。公共零件（Origin 判定、方法白名单、JSON 收发）已抽到 `lib/http.js` 并由 32 条用例钉住；剩下的洞是每条路由自己的参数校验与副作用。7% 覆盖率全部来自 import 时的模块初始化。
-2. **提示词注入决策树零测试。** 三种注入来源的优先级、`dropWorkspaceBaseline` 的三分支（strict/fallback/always）、`rewriteLiveAssembly` 的缓存签名，全靠人工看代码。
+2. **提示词注入的读盘侧仍无测试。** 决策树（`decideInject`）与缓存签名（`liveCacheSignature`）已由 31 + 37 条用例钉住，但真正决定「注入什么正文」的 `readInjectFallback` / `refreshHungOperator` / `ensureOperatorBody` 需要 `C:UsersAdministrator.dsh` 磁盘状态，目前只有间接覆盖：加密槽落盘、`prompt-inject.md` 与内存提交版合并、mtime 与版本号双判失效。改坏了的表现是「注入正文变成旧的或空的」，且不会报错。
 3. **演练台计分口径零测试。** `scoreReport` 1080 行，注释明确要求与 `listScorePoints` 共用 `applyScoreCaps`，否则「面板 50 分、报告 150 分」自相矛盾——但没有任何测试守着这个一致性。
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。
 5. **桌面端安装目录探测**（注册表 / 快捷方式 / 便携 / 进程四种来源）零测试，只能在本机真机上试。
