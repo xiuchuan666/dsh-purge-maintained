@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T12:51:23.254Z",
-  "commit": "4a55b98",
+  "capturedAt": "2026-11-11T13:10:22.472Z",
+  "commit": "c71609d",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -29,19 +29,19 @@
       "brf": 1
     },
     "lib/bin-preflight.js": {
-      "lh": 18,
+      "lh": 23,
       "lf": 89,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 2,
-      "brh": 1,
-      "brf": 1
+      "brh": 2,
+      "brf": 5
     },
     "lib/bom-guard.js": {
-      "lh": 146,
+      "lh": 148,
       "lf": 169,
       "fnh": 6,
       "fnf": 8,
-      "brh": 33,
+      "brh": 34,
       "brf": 48
     },
     "lib/capability-protocol.js": {
@@ -69,52 +69,52 @@
       "brf": 1
     },
     "lib/core.js": {
-      "lh": 1455,
+      "lh": 2116,
       "lf": 5268,
-      "fnh": 67,
-      "fnf": 280,
-      "brh": 276,
-      "brf": 344
+      "fnh": 143,
+      "fnf": 309,
+      "brh": 417,
+      "brf": 643
     },
     "lib/desktop.js": {
-      "lh": 1272,
+      "lh": 1279,
       "lf": 2272,
-      "fnh": 60,
+      "fnh": 62,
       "fnf": 105,
-      "brh": 238,
-      "brf": 331
+      "brh": 242,
+      "brf": 336
     },
     "lib/drill-grant.js": {
-      "lh": 40,
+      "lh": 43,
       "lf": 50,
-      "fnh": 3,
+      "fnh": 4,
       "fnf": 4,
-      "brh": 8,
-      "brf": 12
+      "brh": 9,
+      "brf": 14
     },
     "lib/extract-asar.js": {
       "lh": 208,
       "lf": 493,
-      "fnh": 17,
+      "fnh": 18,
       "fnf": 39,
-      "brh": 41,
-      "brf": 49
+      "brh": 42,
+      "brf": 50
     },
     "lib/hide-console.js": {
-      "lh": 106,
+      "lh": 163,
       "lf": 339,
-      "fnh": 9,
-      "fnf": 22,
-      "brh": 10,
-      "brf": 17
+      "fnh": 15,
+      "fnf": 23,
+      "brh": 19,
+      "brf": 46
     },
     "lib/hooks-deny.js": {
-      "lh": 113,
+      "lh": 126,
       "lf": 224,
-      "fnh": 0,
-      "fnf": 9,
-      "brh": 1,
-      "brf": 1
+      "fnh": 4,
+      "fnf": 10,
+      "brh": 5,
+      "brf": 9
     },
     "lib/host-clean.js": {
       "lh": 16,
@@ -245,20 +245,20 @@
       "brf": 1
     },
     "lib/preset-default.js": {
-      "lh": 35,
+      "lh": 84,
       "lf": 205,
-      "fnh": 0,
-      "fnf": 13,
-      "brh": 1,
-      "brf": 1
+      "fnh": 4,
+      "fnf": 14,
+      "brh": 8,
+      "brf": 35
     },
     "lib/profile-insert.js": {
-      "lh": 108,
+      "lh": 386,
       "lf": 413,
-      "fnh": 0,
-      "fnf": 18,
-      "brh": 1,
-      "brf": 1
+      "fnh": 20,
+      "fnf": 20,
+      "brh": 149,
+      "brf": 185
     },
     "lib/reapply.js": {
       "lh": 78,
@@ -469,20 +469,20 @@
       "brf": 32
     },
     "lib/uninstall.js": {
-      "lh": 32,
+      "lh": 258,
       "lf": 310,
-      "fnh": 0,
-      "fnf": 17,
-      "brh": 1,
-      "brf": 1
+      "fnh": 19,
+      "fnf": 23,
+      "brh": 71,
+      "brf": 103
     },
     "lib/update.js": {
-      "lh": 485,
+      "lh": 520,
       "lf": 1156,
-      "fnh": 43,
-      "fnf": 97,
-      "brh": 63,
-      "brf": 162
+      "fnh": 52,
+      "fnf": 98,
+      "brh": 129,
+      "brf": 212
     },
     "lib/web.js": {
       "lh": 25,
