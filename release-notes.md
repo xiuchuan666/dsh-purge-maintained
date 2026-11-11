@@ -16,6 +16,44 @@
 - **回归测试补强**：`scripts/test-package-integrity.mjs` 增加断言：`files` 含 `README.md` 且不含已删除的两份、磁盘上两份确实不存在、`private === true`、`publishConfig` 已移除、`dsh.install` 指向维护仓库。
 - 本阶段仍不改任何宿主补丁定义、提示词注入、桌面行为或 `client.js` 产物。
 
+## 追加：测试机制（node --test + 棘轮基线 + 宿主契约）
+
+### 测试命令分三层
+
+- `npm test`：`node --test "scripts/test-*.mjs"`，离线，约 1.2 秒，164 个用例。
+- `npm run check`：语法 + 元数据 + 前端产物链 + 测试，约 3 秒。
+- `npm run test:full`：加 lcov 覆盖率与棘轮基线比对，需要 git 工作副本（无 git 返回退出码 2 并说明原因）。
+
+`scripts/run-tests.mjs` 已删除：`node --test` 取代它，且原实现「一个文件一个退出码」的粒度问题一并解决——现在失败能定位到具体用例名。
+
+### 覆盖率用棘轮基线，不用百分比阈值
+
+`docs/test-baseline.json` 记录每个文件当前的行 / 函数 / 分支覆盖，只要求不跌破。理由：把阈值定在 17% 等于宣布 `lib/core.js` 烂着也算合格。涨上去之后用 `npm run test:baseline` 手动刷新。基线文件数 31 → 50（`lib/index.js` 有了第一条测试，连带 19 个传递依赖首次进入报告）。
+
+### 宿主契约：补丁之外的第二层判定
+
+`docs/host-contract.json` 记录我们实际依赖的宿主 API（8 个服务、9 个成员、7 个事件、1 个导出，共 25 项），`scripts/host-contract.mjs` 静态扫描宿主树比对，已接进 `npm run host:status`。补丁是文本替换，宿主把 `ctx.webServer` 改名成 `ctx.httpServer` 时不含该字样的补丁照样能打上去、verdict 照样 `ok`，但插件运行时崩——这是补丁基线看不到的盲区。
+
+扫描**优先读 `.dshpurge.bak`**（备份是官方原文）。依据：`dsh-settings/lib/index.js` 当前文件比 `.bak` 多出 5 个方法（`register` / `get` / `ensureLegacyDocument` / `persistLegacy` / `commitLegacy`），全部来自我们的补丁 #42 `SETTINGS_LEGACY_API`。读当前文件会把我们自己的注入当成宿主契约，形成自证式假绿。统计「含 dsh-purge 标记且有 bak」的 29 个文件，服务名一致 29 / 不一致 0 —— 服务名没被改过，但成员面会。
+
+契约粒度到成员，且允许「服务包 ≠ 成员实现包」：`ctx.subprocess` 由 `dsh-subprocess` 提供，但 `resolveExecutable` 的实现躺在 `dsh-subprocess-local/lib/index.js:1523`，靠 `memberProviders` 覆盖。
+
+### 测试迁移到 node:test
+
+16 个测试文件全部改用 `test()`，164 个用例。价值不是「更现代」，是**一次看到所有失败**：裸 `assert` 第一条红就抛出，同文件后面的断言永不执行。实测对照——同一文件故意坏两处，旧写法只报第一处，新写法同时报两处并各自带名。
+
+三个硬约定写进 [维护手册](MAINTENANCE.md)：每个 test 自带隔离（不依赖声明顺序）、`test.after()` 清理临时目录、改环境变量在 `finally` 里恢复。
+
+### 修掉一个真实覆盖损失
+
+`test-knowledge-dispatch.mjs` 改成每例独立 store 后，`lib/redteam/store-core.js` 掉了 8 行覆盖。不是测量误差：那 8 行是 `#nucleiIndex()` 的缓存命中分支（`store-core.js:4568-4576`），旧版三个操作共用 store、第二次调用自然命中缓存，新版每例各建临时目录、每例都是「第一次」调用。
+
+处理方式是**补测试而不是调低基线**：新增 `scripts/test-store-templates.mjs`（8 个 test），覆盖首次建索引、命中缓存（并断言缓存文件 mtime 不变——只看结果相等会漏掉「每次都重建」）、7 天过期重建、JSON 损坏重建、检索、空查询、`limit` 截断。
+
+### 顺带修掉一个产品侧浪费
+
+`checkUpdate()` 原先先打四个网络端点（实测 14.5 秒超时）再判断「在线更新已关闭」。既然 `ONLINE_UPDATES_ENABLED = false` 是常量，让 `listRemoteVersions()` 在离线时直接返回 `["", "", []]`——可观察结果完全一致，但面板点「检测更新」从等 14 秒变瞬时。注意门不能放 `checkUpdate()` 开头：`beta` 分支的 `{ok:true,error:"还没有测试版"}` 正常返回会被堵死，那是行为改变。
+
 # 1.1.93
 
 ## 中文

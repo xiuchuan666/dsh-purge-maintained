@@ -45,6 +45,36 @@ node scripts/e2e-desktop.mjs --main <纯净 resources/app/lib/main.js>
 - `e2e-apply` 把宿主树复制到临时目录，验证备份、两次应用、状态及逐字节回退。
 - `e2e-desktop` 只接受纯净桌面主进程文件；已打补丁的 `main.js` 不作为原始基线。
 
+## 测试地图：哪个能力坏了，看哪一行
+
+[测试地图](docs/test-map.md) 把每个能力对到具体守卫，按子系统分十节。改东西前先查两件事：
+
+1. 我要动的这块，有没有守卫？表里 `—` 或 `❗缺` 就是没有，改完只能靠手验。
+2. 我要加的能力，加完记得补一行，否则它从第一天起就是盲区。
+
+地图里 `❗缺` 的行是待办池。挑活的标准写在文件末尾：优先挑「改坏了没人能发现、且用户能感知」的——提示词注入与 HTTP 路由排在计分口径前面。
+
+### 写测试的约定（node:test）
+
+所有测试用 `node:test` 的 `test()` 而不是顶层裸 `assert`。理由不是「更现代」，是**一次看到所有失败**：裸 `assert` 第一条红就抛出，同一个文件里后面的断言永不执行，于是「修一条、再跑、又红一条」这样来回。实测对照过——同一个文件里故意坏两处，裸 `assert` 只报第一处，`node:test` 同时报两处并各自带用例名。
+
+```js
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+test("缓存命中时不再重建", () => {
+  // 每个 test 自带隔离：临时目录、临时 store、临时环境变量
+});
+```
+
+三条硬约定：
+
+- **每个 test 自带隔离。** 不要依赖同文件里前一个 test 留下的状态，即使 `node:test` 默认按声明顺序串行。将来一旦有人加 `--test-concurrency` 或调整顺序，依赖顺序的测试会变成假红，而假红会训练人忽略红字。
+- **`test.after()` 清理临时目录。** Windows 上目录被占用会静默残留，攒多了干扰下一次运行。
+- **改环境变量要在 `finally` 里恢复。** 例如 `USERPROFILE` / `HOME`——`os.homedir()` 每次调用都重新读，改了立即生效，忘了恢复会污染同进程后续所有用例。
+
+还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
+
 ## 宿主升级：先跑宿主基线
 
 ```bash
@@ -195,4 +225,4 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
-详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)，以及[测试机制设计](docs/superpowers/specs/2026-11-11-test-mechanism-design.md)。
+详细设计与本阶段边界见 [测试地图](docs/test-map.md)、[统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)，以及[测试机制设计](docs/superpowers/specs/2026-11-11-test-mechanism-design.md)。

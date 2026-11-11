@@ -41,3 +41,6 @@ default-prompt-inject.md
 
 # 覆盖率产物（npm run test:full 生成，不进仓库）
 /.tmp-coverage/
+
+# 临时实验目录（探测脚本、一次性改写脚本，不进仓库）
+/.tmp-exp/

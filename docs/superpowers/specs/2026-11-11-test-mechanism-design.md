@@ -237,3 +237,41 @@ test('bom: 覆盖写回后字节不再带 BOM', () => { ... })
 - 不为了覆盖率去写「调用一下就算覆盖」的空测试。
 - 不在 CI 里跑 `test:full` 的宿主契约部分（runner 没有宿主，会全 `missing` 假红）。契约只在开发者机器与本机 `host:status` 里跑。
 - 不动 `scripts/client-chain-lib.mjs`、`scripts/host-baseline-lib.mjs` 的现有算法。
+
+## 9. 实施记录
+
+六批全部落地。与最初设计的差异，逐条说明：
+
+| 批 | 设计 | 实际 | 差异原因 |
+| --- | --- | --- | --- |
+| 1 | 3 个 script | 同 | 无 |
+| 2 | 基线 + 守卫 + 测试 | 同 | 无 |
+| 3 | 契约 + CLI + 接入 + 测试 | 同 | 无 |
+| 4 | `test-plugin-surface.mjs` + 基线纳 `lib/index.js` | 同。基线文件数 31 → 50（`lib/index.js` 的 19 个传递依赖首次进入报告） | 设计时没料到 import `index.js` 会连带拉进半个 `lib/` |
+| 5 | 12 个脚本迁 `node:test` | **16 个**（含批 2~4 新增的 4 个） | 设计写的是「迁移时存在的 12 个」，实际迁移时又多了 4 个 |
+| 6 | `test-map.md` + `MAINTENANCE.md` 补章 | 同，另加 `README.md` 同步 | README 里的 `tests=15` / `PASS 15/15` 会随批 5 过期 |
+
+### 9.1 迁移过程中发现的两个真问题
+
+**一、`lib/index.js` 的第一条测试漏了「值」。** 批 4 写完 13 条断言全绿，但把 `DEFAULTS.enabled` 从 `true` 改成 `false` 仍然全绿——因为断言只查「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。已补逐项 `deepEqual` 18 个默认值。批 5 拆成 14 个 `test()` 时发现的。
+
+**二、`test-knowledge-dispatch.mjs` 改成每例独立 store 后，`store-core.js` 掉了 8 行覆盖。** 一开始以为是测量误差，连着跑三次都是同一个数。逐行比对 lcov 的 `DA:` 才知道是真损失：那 8 行是 `#nucleiIndex()` 的缓存命中分支（`lib/redteam/store-core.js:4568-4576`），旧版三个操作共用一个 store、一个目录，第二次调用自然命中缓存；新版每例各建临时目录，每例都是「第一次」调用，缓存分支永不执行。
+
+处理方式是**补测试而不是调低基线**：新增 `scripts/test-store-templates.mjs`（8 个 test），覆盖首次建索引、命中缓存（并断言缓存文件 mtime 不变——只看结果相等会漏掉「每次都重建」这种退化）、7 天过期重建、JSON 损坏重建、检索、空查询、`limit` 截断。
+
+顺带确认了一件事：**`BRF`（分支总数）不是纯源码静态量**，它随「实际执行到哪些代码」变化——V8 只为执行过的代码注册分支计数。所以「分支总数下降」不能直接推断成「代码分支变少了」。
+
+### 9.2 两个环境隔离教训（都踩过）
+
+1. **`nucleiTemplatesDir()` 会回退读 `~/.local/nuclei-templates`。** 本机恰好有这个目录，「没装模板」这条测试在本机红、在别人机器绿。修法是加 `withEmptyHome(fn)`，把 `USERPROFILE` 与 `HOME` 同时指向空临时目录（`os.homedir()` 每次都重新读 `USERPROFILE`，改了立即生效），`finally` 恢复。
+2. **断言必须查值，不只查形状。** 见 9.1 第一条。
+
+### 9.3 批 6 的数字全部实测
+
+`docs/test-map.md` 里每个数字都现场跑出来回填，过程中改掉三处凭记忆写错的：
+
+- 路由数：原写 16，实测 13 条 `exact` + 3 条 `prefix` + 演练台 `POST /redteam/api` = **17**。
+- `redteam_*` 工具数：原写 39，实测去重 **64**。
+- `scoreReport` 行数：原写 1085（含文档注释），实测方法体 **1080** 行；`scoreChain` **182** 行；`ASAR_SWAP_PS1` **108** 行。
+
+另外把 `scripts/` 相关的覆盖率数字全部改成 `—`：`coverage-suite.mjs` 的 `--test-coverage-include=lib/**` 根本不给 `scripts/` 生成 `SF:` 条目，写「94%」是抄了早先一次全量跑的旧数。

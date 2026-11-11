@@ -12,7 +12,7 @@
 | 运行时依赖 | 零（只用 Node 内置模块） |
 | 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.1（另兼容 0.2.1-rc.5 / 0.2.1-rc.2） |
 | 补丁条数 | 86 条（提示词 27 / 代码 48 / 工具 8 / 兼容层 3） |
-| 回归测试 | 15 个，`npm run check` 一条命令跑完 |
+| 回归测试 | 16 个文件 / 164 个用例，`npm run check` 一条命令跑完 |
 | 维护仓库 | `xiuchuan666/dsh-purge-maintained`（私有） |
 
 ---
@@ -214,7 +214,7 @@ presets/redteam/     红队预设
 skills/redteam/      随包 23 个技能
 client.js            侧栏 Dock（成品文件，见下）
 cordis.patch.yml     插件声明
-scripts/             15 个测试 + 校验/构建/探测脚本
+scripts/             16 个测试 + 校验/构建/探测脚本
 docs/                设计文档、宿主基线快照、预览图
 ```
 
@@ -238,13 +238,15 @@ npm run check
 | `check:syntax` | 递归 `node --check` 全部 `bin/ lib/ scripts/ *.js`，最后 `import lib/index.js` 验模块图 |
 | `check:metadata` | 版本号是语义化版本、`release-notes.md` 首行等于 `# <version>`、`dshTargets` 含 `dshTarget`、86 条补丁 id 唯一 |
 | `check:client` | `client.js` 与 `docs/origin/client-1.1.94.js` 锚点哈希一致、DRILL 标记结构完整、演练台片段与 `lib/redteam/client.js` 同步 |
-| `test` | 15 个 `scripts/test-*.mjs`，`node --test` 跑，失败能定位到具体断言 |
+| `test` | 16 个 `scripts/test-*.mjs`（164 个用例），`node --test` 跑，失败能定位到具体用例名 |
 
-当前基线：`[syntax] 104 files` / `[metadata] patches=86 tests=15` / `[client] anchor OK` / `[test] PASS 15/15`（约 0.9 秒）。
+当前基线：`[syntax] 105 files` / `[metadata] patches=86 tests=16` / `[client] anchor OK` / `[test] PASS 164/164`（约 1.2 秒）。
 
 三条命令分三层：`npm test`（离线，约 1 秒）→ `npm run check`（加语法/元数据/产物链，约 3 秒）→ `npm run test:full`（加覆盖率棘轮基线，约 2 秒，需要 git 工作副本）。
 
 **新增测试的命名规范**：`scripts/test-<主题>.mjs`，会被 `discoverTests` 自动收进 `npm run check`，不需要改任何清单。CI 在 `.github/workflows/ci.yml`，push `main` 和 PR 都跑 `npm run check`。
+
+**改东西之前先查 [测试地图](docs/test-map.md)**：每个能力对到具体守卫，`❗缺` 的行就是当前盲区。测试用 `node:test` 的 `test()` 而不是顶层裸 `assert` —— 裸 `assert` 第一条红就抛出，同文件后面永不执行；约定细节在 [维护手册](MAINTENANCE.md) 的「测试地图」一节。
 
 **三个需要宿主样本的脚本**（不进默认 check，因为 CI 上没有宿主）：
 
