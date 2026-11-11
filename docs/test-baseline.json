@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T11:28:38.504Z",
-  "commit": "c3ea7b5",
+  "capturedAt": "2026-11-11T11:34:53.295Z",
+  "commit": "e0f717f",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -275,6 +275,14 @@
       "fnf": 1,
       "brh": 1,
       "brf": 1
+    },
+    "lib/redteam/bridge.js": {
+      "lh": 97,
+      "lf": 97,
+      "fnh": 4,
+      "fnf": 4,
+      "brh": 46,
+      "brf": 47
     },
     "lib/redteam/ip-utils.js": {
       "lh": 79,
