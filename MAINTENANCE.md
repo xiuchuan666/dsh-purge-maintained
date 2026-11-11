@@ -85,6 +85,25 @@ npm run check           # 3. 全量校验（含片段同步检测）
 - `patch-client-dock.mjs` 重放到已补丁文件时会把全文件 CRLF 归一成 LF；`build-client.mjs` 不动主文件换行。两者的片段算法由 `scripts/client-chain-lib.mjs` 单一实现，校验器与测试共用，避免出现「校验器说同步、build 一跑却变」的分叉。
 - 换宿主大版本若 client.js 需要成批改锚点，先更新 `docs/origin/` 下的锚点与哈希记录，再动成品，保持「先锚后改」。
 
+## 补丁注册表（lib/patches/）
+
+宿主适配时最常改的是补丁字面量，它们已从 9000 行的 `core.js` 移到短文件：
+
+| 层 | 文件 | 行数 | 职责 |
+| --- | --- | --- | --- |
+| 模板 | `lib/patches/templates.mjs` | 91 | 提示词字面量、网络模板、替换链 helper |
+| 注册表 | `lib/patches/patch-registry.mjs` | 277 | `PATCHES`（10 条） |
+| 代码补丁 | `lib/patches/code-patches.mjs` | 43 | `CODE_PATCHES`（3 条） |
+| 引擎补丁 | `lib/patches/engine-patches.mjs` | 296 | `ENGINE_PATCHES`（8 条） |
+| 新工具补丁 | `lib/patches/new-tool-patches.mjs` | 3112 | `NEW_TOOL_PATCHES`（65 条） |
+| 组装 | `lib/patches/index.mjs` | 9 | 按原顺序拼 `ALL_PATCHES`（86 条） |
+
+改补丁只动 `lib/patches/` 里的数组文件；`core.js` 只保留 `import { ALL_PATCHES } from './patches/index.mjs'` 一行再原样导出。
+
+**顺序不可重排**：`PATCHES → CODE_PATCHES → ENGINE_PATCHES → NEW_TOOL_PATCHES` 的拼接顺序就是 apply 顺序，`{id:76}` 必须先于 `{id:70}`；`npm run check:metadata` 与 `scripts/test-patch-registry.mjs` 都会盯住。
+
+补丁内容有回归保护：`scripts/test-patch-registry.mjs` 把 `ALL_PATCHES` 与 `docs/origin/core-split-baseline-8066985/`（拆分前快照）做对象级对拍（含正则 flags、函数 replace、239 个 replacement），再用真实 `applyReplacementsToText` 跑 690 组输入。改错一个字面量这里会立刻失败。
+
 ## CI 与发布
 
 `.github/workflows/ci.yml` 在 `main` 推送、pull request 和手动触发时运行 `npm run check`。CI 使用 Node.js 24，不需要 `npm install`。
@@ -95,4 +114,4 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
-详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md) 与 [前端产物链设计](docs/maintenance-client-chain.md)。
+详细设计与本阶段边界见 [统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)。

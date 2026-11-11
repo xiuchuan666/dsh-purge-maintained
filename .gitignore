@@ -35,3 +35,6 @@ default-prompt-inject.md
 *.asar
 *.asar.bak
 *.bak
+
+# 拆分对照黄金基线（临时，不进仓库）
+/.tmp-split/
