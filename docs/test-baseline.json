@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T11:11:25.641Z",
-  "commit": "eb8681b",
+  "capturedAt": "2026-11-11T11:16:38.497Z",
+  "commit": "bfb09dc",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -69,12 +69,12 @@
       "brf": 1
     },
     "lib/core.js": {
-      "lh": 1447,
+      "lh": 1455,
       "lf": 5268,
-      "fnh": 66,
+      "fnh": 67,
       "fnf": 280,
-      "brh": 275,
-      "brf": 342
+      "brh": 276,
+      "brf": 344
     },
     "lib/desktop.js": {
       "lh": 1272,
@@ -95,10 +95,10 @@
     "lib/extract-asar.js": {
       "lh": 208,
       "lf": 493,
-      "fnh": 16,
+      "fnh": 17,
       "fnf": 39,
-      "brh": 40,
-      "brf": 48
+      "brh": 41,
+      "brf": 49
     },
     "lib/hide-console.js": {
       "lh": 106,
@@ -349,12 +349,12 @@
       "brf": 1
     },
     "lib/rules.js": {
-      "lh": 434,
+      "lh": 529,
       "lf": 560,
-      "fnh": 38,
-      "fnf": 47,
-      "brh": 75,
-      "brf": 134
+      "fnh": 45,
+      "fnf": 48,
+      "brh": 170,
+      "brf": 204
     },
     "lib/settle-policy.js": {
       "lh": 23,
