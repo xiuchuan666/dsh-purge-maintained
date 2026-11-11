@@ -119,7 +119,8 @@ test('第一次就成功时不记 warn，也不用备用名', (t) => {
   assert.equal(warnings.length, 0)
 })
 
-test('spec 里的其它字段原样传给宿主，只有 name 被换掉', () => {
+test('spec 里的其它字段原样传给宿主，只有 name 被换掉', (t) => {
+  t.mock.method(console, 'warn', () => {})   // 这条故意造撞名，warn 是预期输出，别污染测试日志
   const commands = fakeCommands({ taken: ['purge'] })
   const spec = { name: 'purge', description: 'd', input: { hint: 'h' }, handler: () => {} }
   tryRegisterCommand(commands, spec, ['purge-cmd'])

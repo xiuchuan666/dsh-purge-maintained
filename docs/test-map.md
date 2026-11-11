@@ -123,11 +123,18 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| `resources/runtime` 被清空后能原地补齐 | `test-runtime-heal.mjs` | `lib/desktop.js` 32% |
+| `resources/runtime` 被清空后能原地补齐 | `test-runtime-heal.mjs` | `lib/desktop.js` 56% |
 | 官方 CLI 启动器能从零生成 | `test-destructive-guards.mjs` | 同上 |
 | `resources/app` 不存在时绝不删掉 `prev`（唯一完整副本） | `test-destructive-guards.mjs` | 同上 |
 | 重启脚本 cmd/sh/ps1 三份模板 | `test-destructive-guards.mjs` | 同上 |
-| 找到桌面安装目录（注册表 / 快捷方式 / 便携 / 进程） | `❗缺` | `lib/desktop.js` 32% |
+| 安装根名只按尾部一段判，祖先目录叫 DeepSeek Harness 不算（npm 前缀 / DSH_HOME 父目录） | `test-desktop-locate.mjs` | 同上 |
+| exe 名字分类：社区桌面 / 官方宿主 / DSH NEXT / bot，以及「官方才解 asar」的差别 | `test-desktop-locate.mjs` | 同上 |
+| 从 `resources/app`、`app.asar.unpacked`、`Contents/Resources` 反推安装根 | `test-desktop-locate.mjs` | 同上 |
+| 从 execPath / resourcesPath / `host-process-entry` argv / 环境变量找安装根与 exe | `test-desktop-locate.mjs` | 同上 |
+| aiBase 判定（要求 `dsh-agent-instructions/lib`）与「装了两个客户端只认当前 exe」 | `test-desktop-locate.mjs` | 同上 |
+| 常见安装位置展开（LOCALAPPDATA / ProgramFiles / ProgramFiles(x86) / macOS / Linux） | `test-desktop-locate.mjs` | 同上 |
+| 封存运行时目录（`host-commands/bin`、五个换过名的产品目录） | `test-desktop-locate.mjs` | 同上 |
+| 注册表 / 快捷方式 / 进程三条来源的 powershell 脚本本身 | `❗缺` | 同上 |
 | asar 交换与「空闲时改名」状态机（`ASAR_SWAP_PS1` 108 行） | `❗缺` | 同上 |
 
 ---
@@ -168,7 +175,7 @@
 2. **提示词注入的读盘侧仍无测试。** 决策树（`decideInject`）与缓存签名（`liveCacheSignature`）已由 31 + 37 条用例钉住，但真正决定「注入什么正文」的 `readInjectFallback` / `refreshHungOperator` / `ensureOperatorBody` 需要 `C:UsersAdministrator.dsh` 磁盘状态，目前只有间接覆盖：加密槽落盘、`prompt-inject.md` 与内存提交版合并、mtime 与版本号双判失效。改坏了的表现是「注入正文变成旧的或空的」，且不会报错。
 3. **演练台的计分口径已被钉住，但计分之外的演练台逻辑仍是空的。** `listScorePoints` / `scoreReport` / `scoreChain` 三处「必须算出同一个总分」的契约由 25 条用例守着（含条目级 `counted` / `capped`，因为总分一致抓不到条目级漂移）；`applyScoreCaps` 本身 98% 行覆盖。剩下没守的是资产/漏洞/凭据/隧道/webshell 的 CRUD、会话摘要、攻击图、报告导出、bundle 导入与 64 个工具的入参校验。
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。
-5. **桌面端安装目录探测**（注册表 / 快捷方式 / 便携 / 进程四种来源）零测试，只能在本机真机上试。
+5. **桌面端安装目录探测的「廉价路径」已钉住，三条 powershell 来源仍未测。** 安装根名判定、exe 分类、结构反推、aiBase、常见位置展开、封存目录由 33 条用例守着（`test-desktop-locate.mjs`，`lib/desktop.js` 行覆盖 32% → 56%）；注册表（`REGISTRY_INSTALL_SCRIPT`）、进程（`PROCESS_EXE_SCRIPT`）、快捷方式（`SHORTCUT_EXE_SCRIPT`）三段 powershell 仍然只能在本机真机上试——它们要真的调 powershell.exe，fixture 造不出来。改坏的表现是「装了但探测不到」，`discover: true` 时才走到。
 6. **`lib/redteam/tools.js` 的 64 个工具**（1 个文件 2256 行）完全不 import，覆盖率不在报告里。
 
 ---
