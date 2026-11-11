@@ -75,6 +75,8 @@ test("缓存命中时不再重建", () => {
 - **`test.after()` 清理临时目录。** Windows 上目录被占用会静默残留，攒多了干扰下一次运行。
 - **改环境变量要在 `finally` 里恢复。** 例如 `USERPROFILE` / `HOME`——`os.homedir()` 每次调用都重新读，改了立即生效，忘了恢复会污染同进程后续所有用例。
 
+- **测试要在 Linux 上也能过。** CI 跑在 `ubuntu-latest`，而开发机是 Windows。最容易踩的是 `path.basename`：在 Linux 上它**不把反斜杠当分隔符**，所以 `'C:\\x\\DeepSeek Harness\\DeepSeek Harness.exe'` 整串会被当成一个文件名，断言「官方 exe 走 windows-official 分支」在 CI 上变成 `helper`。写路径常量一律用正斜杠（`C:/x/DeepSeek Harness/DeepSeek Harness.exe`）——被测代码里的 `path.basename` 在 Windows 上同样认正斜杠，两边结果一致。这条是真实事故：`580c273` 本地全绿、CI 红了一条。
+
 还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
 
 ### 现状锁定：把「我知道它不对，但现在不改」写进测试

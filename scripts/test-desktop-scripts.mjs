@@ -199,7 +199,9 @@ test('planOfficialRestart：logStarted 是 logState 的退化写法（老调用�
 })
 
 test('desktopRestartChoice：官方 Windows 包走 wscript 那套，密封 asar 走换包，其余按能力退化', () => {
-  const officialExe = 'C:\\Users\\x\\AppData\\Local\\Programs\\DeepSeek Harness\\DeepSeek Harness.exe'
+  /* 用正斜杠：CI 在 ubuntu 上跑，path.basename 不把反斜杠当分隔符，
+     反斜杠路径在那边会整串当一个文件名，这条断言就会变成「在 Linux 上测 Windows 路径」。 */
+  const officialExe = 'C:/Users/x/AppData/Local/Programs/DeepSeek Harness/DeepSeek Harness.exe'
   assert.equal(desktopRestartChoice({ platform: 'win32', exe: officialExe }), 'windows-official')
   assert.equal(desktopRestartChoice({ platform: 'linux', exe: officialExe }), 'helper')
   assert.equal(
@@ -212,7 +214,7 @@ test('desktopRestartChoice：官方 Windows 包走 wscript 那套，密封 asar 
 })
 
 test('desktopRestartChoice：openBrowser:false 一律 skip（启动自检不能把桌面进程杀掉）', () => {
-  const officialExe = 'C:\\x\\DeepSeek Harness\\DeepSeek Harness.exe'
+  const officialExe = 'C:/x/DeepSeek Harness/DeepSeek Harness.exe'
   assert.equal(desktopRestartChoice({ platform: 'win32', exe: officialExe, openBrowser: false }), 'skip')
   assert.equal(desktopRestartChoice({ platform: 'linux', hasRuntime: true, openBrowser: false }), 'skip')
 })
