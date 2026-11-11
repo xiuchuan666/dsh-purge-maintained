@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T10:40:47.956Z",
-  "commit": "0c21560",
+  "capturedAt": "2026-11-11T10:53:15.765Z",
+  "commit": "f1880a5",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -51,6 +51,14 @@
       "fnf": 1,
       "brh": 2,
       "brf": 3
+    },
+    "lib/commands.js": {
+      "lh": 99,
+      "lf": 99,
+      "fnh": 10,
+      "fnf": 10,
+      "brh": 36,
+      "brf": 39
     },
     "lib/continue-retry.js": {
       "lh": 85,
@@ -149,10 +157,10 @@
       "brf": 283
     },
     "lib/index.js": {
-      "lh": 205,
-      "lf": 2634,
+      "lh": 204,
+      "lf": 2487,
       "fnh": 1,
-      "fnf": 50,
+      "fnf": 48,
       "brh": 5,
       "brf": 5
     },
@@ -395,6 +403,14 @@
       "fnf": 1,
       "brh": 2,
       "brf": 3
+    },
+    "lib/tools.js": {
+      "lh": 118,
+      "lf": 118,
+      "fnh": 12,
+      "fnf": 12,
+      "brh": 31,
+      "brf": 32
     },
     "lib/uninstall.js": {
       "lh": 32,

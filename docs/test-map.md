@@ -72,8 +72,10 @@
 | 7 个 export 名字不能多不能少 | `test-plugin-surface.mjs` | 同上 |
 | `normalizeConfig()` 返回 18 键，且默认值逐项锁定 | `test-plugin-surface.mjs` | 同上 |
 | 12 个布尔键收敛 `"false"/"0"/"no"/"off"` | `test-plugin-surface.mjs` | 同上 |
-| 4 条聊天命令（`purge` / `rules` / `skills` / `rewind`）注册 succeeded 且备名可用 | `❗缺` | `lib/index.js` 8% |
-| 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`） | `❗缺` | `lib/index.js` 8% |
+| 4 条聊天命令（`purge` / `rules` / `skills` / `rewind`）注册成功、备用名退让、全撞名不抛 | `test-command-surface.mjs` | `lib/commands.js` 100% |
+| 4 条命令各自的入参契约（`purge` 透 rawInput+config+ctx；`rewind` 子代理直接回退、主代理只提示） | `test-command-surface.mjs` | 同上 |
+| 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`）的名字、空 parameters、output schema | `test-command-surface.mjs` | `lib/tools.js` 100% |
+| 三个工具的执行分支（无宿主直接报错、需确认时停手、applied/already/scrub 统计、回滚同时收 shim） | `test-command-surface.mjs` | 同上 |
 | 跨站准入：`Origin` / `Sec-Fetch-Site` / `Host` 三元组判定（DNS rebinding、sandbox iframe、同机异端口） | `test-http-guards.mjs` | `lib/http.js` 100% |
 | 方法白名单：405 + `Allow` 头 | `test-http-guards.mjs` | 同上 |
 | JSON 响应头统一（`no-store`，500 也不漏） | `test-http-guards.mjs` | 同上 |
