@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T12:14:56.285Z",
-  "commit": "9ef55dd",
+  "capturedAt": "2026-11-11T12:34:14.496Z",
+  "commit": "cdd79cf",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -284,6 +284,14 @@
       "brh": 46,
       "brf": 47
     },
+    "lib/redteam/evidence-ledger.mjs": {
+      "lh": 201,
+      "lf": 507,
+      "fnh": 0,
+      "fnf": 18,
+      "brh": 1,
+      "brf": 1
+    },
     "lib/redteam/ip-utils.js": {
       "lh": 79,
       "lf": 140,
@@ -293,12 +301,12 @@
       "brf": 12
     },
     "lib/redteam/platform-config.js": {
-      "lh": 192,
+      "lh": 368,
       "lf": 612,
-      "fnh": 6,
-      "fnf": 26,
-      "brh": 9,
-      "brf": 32
+      "fnh": 27,
+      "fnf": 36,
+      "brh": 46,
+      "brf": 105
     },
     "lib/redteam/report-replay.js": {
       "lh": 173,
@@ -332,6 +340,30 @@
       "brh": 171,
       "brf": 246
     },
+    "lib/redteam/settings.js": {
+      "lh": 58,
+      "lf": 78,
+      "fnh": 3,
+      "fnf": 7,
+      "brh": 4,
+      "brf": 13
+    },
+    "lib/redteam/skill-availability.js": {
+      "lh": 277,
+      "lf": 354,
+      "fnh": 18,
+      "fnf": 22,
+      "brh": 65,
+      "brf": 112
+    },
+    "lib/redteam/skill-fixes.js": {
+      "lh": 504,
+      "lf": 529,
+      "fnh": 9,
+      "fnf": 10,
+      "brh": 21,
+      "brf": 45
+    },
     "lib/redteam/store-core.js": {
       "lh": 3562,
       "lf": 5429,
@@ -339,6 +371,14 @@
       "fnf": 363,
       "brh": 706,
       "brf": 1192
+    },
+    "lib/redteam/tools.js": {
+      "lh": 1679,
+      "lf": 2268,
+      "fnh": 51,
+      "fnf": 193,
+      "brh": 130,
+      "brf": 219
     },
     "lib/redteam/validate.js": {
       "lh": 84,
