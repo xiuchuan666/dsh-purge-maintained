@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T09:15:34.417Z",
-  "commit": "01fcf18",
+  "capturedAt": "2026-11-11T10:27:26.544Z",
+  "commit": "824da44",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -61,12 +61,12 @@
       "brf": 1
     },
     "lib/core.js": {
-      "lh": 909,
+      "lh": 929,
       "lf": 5268,
-      "fnh": 21,
+      "fnh": 26,
       "fnf": 265,
-      "brh": 81,
-      "brf": 114
+      "brh": 89,
+      "brf": 129
     },
     "lib/desktop.js": {
       "lh": 724,
@@ -124,13 +124,21 @@
       "brh": 1,
       "brf": 1
     },
+    "lib/http-routes.js": {
+      "lh": 241,
+      "lf": 243,
+      "fnh": 15,
+      "fnf": 15,
+      "brh": 132,
+      "brf": 150
+    },
     "lib/http.js": {
       "lh": 105,
       "lf": 105,
       "fnh": 7,
       "fnf": 7,
-      "brh": 40,
-      "brf": 40
+      "brh": 41,
+      "brf": 41
     },
     "lib/identity.js": {
       "lh": 788,
@@ -141,10 +149,10 @@
       "brf": 283
     },
     "lib/index.js": {
-      "lh": 219,
-      "lf": 2873,
+      "lh": 205,
+      "lf": 2634,
       "fnh": 1,
-      "fnf": 58,
+      "fnf": 50,
       "brh": 5,
       "brf": 5
     },
@@ -333,12 +341,12 @@
       "brf": 1
     },
     "lib/rules.js": {
-      "lh": 262,
+      "lh": 434,
       "lf": 560,
-      "fnh": 16,
-      "fnf": 43,
-      "brh": 44,
-      "brf": 65
+      "fnh": 38,
+      "fnf": 47,
+      "brh": 75,
+      "brf": 134
     },
     "lib/settle-policy.js": {
       "lh": 23,
@@ -349,12 +357,12 @@
       "brf": 1
     },
     "lib/skills.js": {
-      "lh": 94,
+      "lh": 540,
       "lf": 747,
-      "fnh": 0,
-      "fnf": 46,
-      "brh": 1,
-      "brf": 1
+      "fnh": 45,
+      "fnf": 60,
+      "brh": 103,
+      "brf": 230
     },
     "lib/subagent-control.js": {
       "lh": 19,
@@ -373,20 +381,20 @@
       "brf": 1
     },
     "lib/table-key.js": {
-      "lh": 13,
+      "lh": 15,
       "lf": 27,
-      "fnh": 1,
+      "fnh": 2,
       "fnf": 3,
-      "brh": 2,
-      "brf": 2
+      "brh": 3,
+      "brf": 4
     },
     "lib/table-read.js": {
-      "lh": 6,
+      "lh": 16,
       "lf": 18,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 1,
-      "brh": 1,
-      "brf": 1
+      "brh": 2,
+      "brf": 3
     },
     "lib/uninstall.js": {
       "lh": 32,
@@ -413,12 +421,12 @@
       "brf": 1
     },
     "lib/zip-extract.js": {
-      "lh": 29,
+      "lh": 89,
       "lf": 186,
-      "fnh": 0,
-      "fnf": 11,
-      "brh": 1,
-      "brf": 1
+      "fnh": 6,
+      "fnf": 12,
+      "brh": 14,
+      "brf": 30
     }
   }
 }

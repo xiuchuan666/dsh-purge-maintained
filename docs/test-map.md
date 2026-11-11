@@ -78,8 +78,15 @@
 | 方法白名单：405 + `Allow` 头 | `test-http-guards.mjs` | 同上 |
 | JSON 响应头统一（`no-store`，500 也不漏） | `test-http-guards.mjs` | 同上 |
 | 请求体上限按累计字节算，超限即抛，非法上限回落 512KB | `test-http-guards.mjs` | 同上 |
-| 17 条路由各自的业务分支（参数校验、状态码、副作用） | `❗缺` | `lib/index.js` 7% |
+| `rules` 的 9 个 op（status / scan / toggle-cwd / set-policy / read / save / activate / delete / reset）参数校验与副作用 | `test-http-routes.mjs` | `lib/http-routes.js` 99% |
+| `skills` 的 5 个 op（status / read / save / delete / import）参数校验与 `import` 的服务端路径拒绝 | `test-http-routes.mjs` | 同上 |
+| `rules` / `skills` 两个分发器的 op 优先级（forcedOp > body.op > 尾段 > `?op=` > `?id=` 推断 > status）与 OPTIONS/405 | `test-http-routes.mjs` | 同上 |
+| `skills` 的 14MB 请求体上限（区别于默认 512KB） | `test-http-routes.mjs` | 同上 |
+| `registerRoute` 给 handler 套跨站守卫，注册失败只 warn 不炸 | `test-http-routes.mjs` | 同上 |
+| 13 条 `exact` 路由（`status` / `apply` / `revert` / `uninstall` / `update` / `rewind` / `override` / `own-servers` / `restart` / `hooks-deny` / `last-user` / `drill-grant` / `rewind/options`）各自的业务分支 | `❗缺` | `lib/index.js` 7% |
 | `/redteam/api` 桥只接受 POST、Origin 与 Host 一致 | `❗缺` | `lib/redteam/ui.js` 未纳入基线 |
+
+**本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
 ---
 
@@ -153,7 +160,7 @@
 
 不是遗漏，是当前接受的风险，写出来免得下次以为是「测过了」：
 
-1. **`lib/index.js` 的 17 条路由只有公共零件被测，业务分支仍零测试。** 它承载界面上所有按钮，改错的表现是「点了没反应」，只能靠人手点。公共零件（Origin 判定、方法白名单、JSON 收发）已抽到 `lib/http.js` 并由 32 条用例钉住；剩下的洞是每条路由自己的参数校验与副作用。7% 覆盖率全部来自 import 时的模块初始化。
+1. **13 条 `exact` 路由的业务分支仍零测试。** 17 条路由里，公共零件（Origin 判定、方法白名单、JSON 收发）已在 `lib/http.js` 由 32 条用例钉住，`rules` / `skills` 两个分发器已抽到 `lib/http-routes.js` 由 52 条用例钉住；剩下的洞是 13 条 `exact` 路由各自的参数校验与副作用——它们直接调 `core.*` / `update.*` / `uninstall.*`，改错的表现是「点了没反应」，目前只能靠人手点。`lib/index.js` 的 8% 覆盖率全部来自 import 时的模块初始化。
 2. **提示词注入的读盘侧仍无测试。** 决策树（`decideInject`）与缓存签名（`liveCacheSignature`）已由 31 + 37 条用例钉住，但真正决定「注入什么正文」的 `readInjectFallback` / `refreshHungOperator` / `ensureOperatorBody` 需要 `C:UsersAdministrator.dsh` 磁盘状态，目前只有间接覆盖：加密槽落盘、`prompt-inject.md` 与内存提交版合并、mtime 与版本号双判失效。改坏了的表现是「注入正文变成旧的或空的」，且不会报错。
 3. **演练台计分口径零测试。** `scoreReport` 1080 行，注释明确要求与 `listScorePoints` 共用 `applyScoreCaps`，否则「面板 50 分、报告 150 分」自相矛盾——但没有任何测试守着这个一致性。
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。
