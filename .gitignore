@@ -38,3 +38,6 @@ default-prompt-inject.md
 
 # 拆分对照黄金基线（临时，不进仓库）
 /.tmp-split/
+
+# 覆盖率产物（npm run test:full 生成，不进仓库）
+/.tmp-coverage/

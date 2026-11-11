@@ -1,0 +1,256 @@
+{
+  "schema": 1,
+  "capturedAt": "2026-11-11T03:52:39.140Z",
+  "commit": "df2d972",
+  "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
+  "files": {
+    "lib/asset-table.js": {
+      "lh": 169,
+      "lf": 169,
+      "fnh": 0,
+      "fnf": 0,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/bin-preflight.js": {
+      "lh": 18,
+      "lf": 89,
+      "fnh": 0,
+      "fnf": 2,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/bom-guard.js": {
+      "lh": 146,
+      "lf": 169,
+      "fnh": 6,
+      "fnf": 8,
+      "brh": 33,
+      "brf": 48
+    },
+    "lib/core.js": {
+      "lh": 894,
+      "lf": 5268,
+      "fnh": 20,
+      "fnf": 265,
+      "brh": 80,
+      "brf": 114
+    },
+    "lib/desktop.js": {
+      "lh": 724,
+      "lf": 2272,
+      "fnh": 12,
+      "fnf": 91,
+      "brh": 35,
+      "brf": 56
+    },
+    "lib/extract-asar.js": {
+      "lh": 205,
+      "lf": 493,
+      "fnh": 12,
+      "fnf": 39,
+      "brh": 29,
+      "brf": 39
+    },
+    "lib/hide-console.js": {
+      "lh": 106,
+      "lf": 339,
+      "fnh": 9,
+      "fnf": 22,
+      "brh": 10,
+      "brf": 17
+    },
+    "lib/hooks-deny.js": {
+      "lh": 113,
+      "lf": 224,
+      "fnh": 0,
+      "fnf": 9,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/host-clean.js": {
+      "lh": 16,
+      "lf": 26,
+      "fnh": 0,
+      "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/official-update.js": {
+      "lh": 50,
+      "lf": 70,
+      "fnh": 2,
+      "fnf": 7,
+      "brh": 17,
+      "brf": 24
+    },
+    "lib/patches/code-patches.mjs": {
+      "lh": 42,
+      "lf": 42,
+      "fnh": 0,
+      "fnf": 0,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/patches/engine-patches.mjs": {
+      "lh": 295,
+      "lf": 295,
+      "fnh": 0,
+      "fnf": 0,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/patches/index.mjs": {
+      "lh": 8,
+      "lf": 8,
+      "fnh": 0,
+      "fnf": 0,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/patches/new-tool-patches.mjs": {
+      "lh": 3111,
+      "lf": 3111,
+      "fnh": 0,
+      "fnf": 0,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/patches/patch-registry.mjs": {
+      "lh": 276,
+      "lf": 276,
+      "fnh": 0,
+      "fnf": 0,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/patches/templates.mjs": {
+      "lh": 90,
+      "lf": 90,
+      "fnh": 4,
+      "fnf": 4,
+      "brh": 5,
+      "brf": 5
+    },
+    "lib/phase1-keep.js": {
+      "lh": 8,
+      "lf": 21,
+      "fnh": 0,
+      "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/profile-insert.js": {
+      "lh": 108,
+      "lf": 413,
+      "fnh": 0,
+      "fnf": 18,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/redteam/atomic-write.js": {
+      "lh": 8,
+      "lf": 28,
+      "fnh": 0,
+      "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/redteam/ip-utils.js": {
+      "lh": 70,
+      "lf": 140,
+      "fnh": 2,
+      "fnf": 10,
+      "brh": 3,
+      "brf": 5
+    },
+    "lib/redteam/platform-config.js": {
+      "lh": 192,
+      "lf": 612,
+      "fnh": 6,
+      "fnf": 26,
+      "brh": 9,
+      "brf": 32
+    },
+    "lib/redteam/report-replay.js": {
+      "lh": 59,
+      "lf": 213,
+      "fnh": 0,
+      "fnf": 6,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/redteam/schema.js": {
+      "lh": 474,
+      "lf": 630,
+      "fnh": 5,
+      "fnf": 8,
+      "brh": 6,
+      "brf": 14
+    },
+    "lib/redteam/score-rules.js": {
+      "lh": 613,
+      "lf": 940,
+      "fnh": 1,
+      "fnf": 21,
+      "brh": 2,
+      "brf": 2
+    },
+    "lib/redteam/store-core.js": {
+      "lh": 1435,
+      "lf": 5429,
+      "fnh": 23,
+      "fnf": 130,
+      "brh": 57,
+      "brf": 131
+    },
+    "lib/redteam/validate.js": {
+      "lh": 64,
+      "lf": 88,
+      "fnh": 5,
+      "fnf": 7,
+      "brh": 8,
+      "brf": 13
+    },
+    "lib/surface.js": {
+      "lh": 22,
+      "lf": 139,
+      "fnh": 0,
+      "fnf": 10,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/table-key.js": {
+      "lh": 13,
+      "lf": 27,
+      "fnh": 1,
+      "fnf": 3,
+      "brh": 2,
+      "brf": 2
+    },
+    "lib/table-read.js": {
+      "lh": 6,
+      "lf": 18,
+      "fnh": 0,
+      "fnf": 1,
+      "brh": 1,
+      "brf": 1
+    },
+    "lib/update.js": {
+      "lh": 485,
+      "lf": 1156,
+      "fnh": 43,
+      "fnf": 97,
+      "brh": 63,
+      "brf": 162
+    },
+    "lib/zip-extract.js": {
+      "lh": 29,
+      "lf": 186,
+      "fnh": 0,
+      "fnf": 11,
+      "brh": 1,
+      "brf": 1
+    }
+  }
+}
