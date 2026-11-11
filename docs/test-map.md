@@ -92,7 +92,12 @@
 | `rules` / `skills` 两个分发器的 op 优先级（forcedOp > body.op > 尾段 > `?op=` > `?id=` 推断 > status）与 OPTIONS/405 | `test-http-routes.mjs` | 同上 |
 | `skills` 的 14MB 请求体上限（区别于默认 512KB） | `test-http-routes.mjs` | 同上 |
 | `registerRoute` 给 handler 套跨站守卫，注册失败只 warn 不炸 | `test-http-routes.mjs` | 同上 |
-| 13 条 `exact` 路由（`status` / `apply` / `revert` / `uninstall` / `update` / `rewind` / `override` / `own-servers` / `restart` / `hooks-deny` / `last-user` / `drill-grant` / `rewind/options`）各自的业务分支 | `❗缺` | `lib/index.js` 8% |
+| 13 条 `exact` 路由的注册面（路径、顺序、标签唯一、都是 `exact`） | `test-exact-routes.mjs`（1 条） | `lib/routes.js` 93% |
+| 只读路由的方法白名单与参数：`status` / `last-user` / `rewind/options` / `rewind` GET / `hooks-deny` GET | `test-exact-routes.mjs`（11 条） | `lib/routes.js` 93% |
+| `/status` 的四种形态：进度期回上次载荷、未就绪 503、就绪全字段、`gatherState` 抛错 500 | `test-exact-routes.mjs`（4 条） | `lib/routes.js` 93% |
+| `/apply` 的整条链：405、定位失败、无宿主、需提示词、成功时 10 步副作用顺序、`pattern_not_found` 仍可重启、`write_failed` 不重启 | `test-exact-routes.mjs`（8 条） | `lib/routes.js` 93% |
+| `/revert` / `/uninstall` / `/drill-grant` / `/override` / `/own-servers` 的守卫与副作用 | `test-exact-routes.mjs`（14 条） | `lib/routes.js` 93% |
+| `/restart` 的三道闸：清洗未完成、`clean:false`、密封包走 `restartSealedDesktopIfNeeded` | `test-exact-routes.mjs`（6 条） | `lib/routes.js` 93% |
 | `/redteam/api` 桥只接受 POST、Origin 与 Host 一致 | `❗缺` | `lib/redteam/ui.js` 未纳入基线 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
@@ -178,7 +183,7 @@
 
 不是遗漏，是当前接受的风险，写出来免得下次以为是「测过了」：
 
-1. **13 条 `exact` 路由的业务分支仍零测试。** 17 条路由里，公共零件（Origin 判定、方法白名单、JSON 收发）已在 `lib/http.js` 由 32 条用例钉住，`rules` / `skills` 两个分发器已抽到 `lib/http-routes.js` 由 52 条用例钉住；剩下的洞是 13 条 `exact` 路由各自的参数校验与副作用——它们直接调 `core.*` / `update.*` / `uninstall.*`，改错的表现是「点了没反应」，目前只能靠人手点。`lib/index.js` 的 8% 覆盖率全部来自 import 时的模块初始化。
+1. **`/redteam/api` 桥仍零测试。** 17 条路由里，13 条 `exact` 已抽到 `lib/routes.js` 并由 49 条用例钉住（含 `/apply` 的 10 步副作用顺序），`rules` / `skills` 两个分发器在 `lib/http-routes.js`，公共零件在 `lib/http.js`；剩下没测的是演练台那条 `POST /redteam/api`——它自己有独立的一套 Origin 判定（`lib/redteam/ui.js:1097`，不复用 `lib/http.js`），且只接受 POST。
 2. **提示词注入的读盘侧仍无测试。** 决策树（`decideInject`）与缓存签名（`liveCacheSignature`）已由 31 + 37 条用例钉住，但真正决定「注入什么正文」的 `readInjectFallback` / `refreshHungOperator` / `ensureOperatorBody` 需要 `$DSH_HOME` 下的磁盘状态，目前只有间接覆盖：加密槽落盘、`prompt-inject.md` 与内存提交版合并、mtime 与版本号双判失效。改坏了的表现是「注入正文变成旧的或空的」，且不会报错。
 3. **演练台的计分口径已被钉住，但计分之外的演练台逻辑仍是空的。** `listScorePoints` / `scoreReport` / `scoreChain` 三处「必须算出同一个总分」的契约由 25 条用例守着（含条目级 `counted` / `capped`，因为总分一致抓不到条目级漂移）；`applyScoreCaps` 本身 98% 行覆盖。剩下没守的是资产/漏洞/凭据/隧道/webshell 的 CRUD、会话摘要、攻击图、报告导出、bundle 导入与 64 个工具的入参校验。
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。

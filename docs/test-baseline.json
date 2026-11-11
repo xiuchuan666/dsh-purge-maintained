@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T11:16:38.497Z",
-  "commit": "bfb09dc",
+  "capturedAt": "2026-11-11T11:28:38.504Z",
+  "commit": "c3ea7b5",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -13,12 +13,12 @@
       "brf": 1
     },
     "lib/apply-progress.js": {
-      "lh": 29,
+      "lh": 66,
       "lf": 66,
-      "fnh": 0,
+      "fnh": 6,
       "fnf": 6,
-      "brh": 1,
-      "brf": 1
+      "brh": 7,
+      "brf": 8
     },
     "lib/asset-table.js": {
       "lh": 169,
@@ -85,12 +85,12 @@
       "brf": 331
     },
     "lib/drill-grant.js": {
-      "lh": 16,
+      "lh": 40,
       "lf": 50,
-      "fnh": 0,
+      "fnh": 3,
       "fnf": 4,
-      "brh": 1,
-      "brf": 1
+      "brh": 8,
+      "brf": 12
     },
     "lib/extract-asar.js": {
       "lh": 208,
@@ -157,8 +157,8 @@
       "brf": 283
     },
     "lib/index.js": {
-      "lh": 204,
-      "lf": 2487,
+      "lh": 206,
+      "lf": 1902,
       "fnh": 1,
       "fnf": 48,
       "brh": 5,
@@ -173,12 +173,12 @@
       "brf": 34
     },
     "lib/net-scope.js": {
-      "lh": 279,
+      "lh": 290,
       "lf": 766,
-      "fnh": 1,
+      "fnh": 4,
       "fnf": 41,
-      "brh": 2,
-      "brf": 2
+      "brh": 5,
+      "brf": 5
     },
     "lib/official-update.js": {
       "lh": 50,
@@ -348,6 +348,14 @@
       "brh": 1,
       "brf": 1
     },
+    "lib/routes.js": {
+      "lh": 643,
+      "lf": 690,
+      "fnh": 20,
+      "fnf": 23,
+      "brh": 178,
+      "brf": 236
+    },
     "lib/rules.js": {
       "lh": 529,
       "lf": 560,
@@ -357,12 +365,12 @@
       "brf": 204
     },
     "lib/settle-policy.js": {
-      "lh": 23,
+      "lh": 33,
       "lf": 61,
-      "fnh": 0,
+      "fnh": 1,
       "fnf": 6,
-      "brh": 1,
-      "brf": 1
+      "brh": 5,
+      "brf": 6
     },
     "lib/skills.js": {
       "lh": 540,
