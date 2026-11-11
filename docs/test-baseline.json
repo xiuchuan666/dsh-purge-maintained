@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-11T14:04:58.530Z",
-  "commit": "20cdcba",
+  "capturedAt": "2026-11-11T14:14:55.549Z",
+  "commit": "7c0b13f",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -69,20 +69,20 @@
       "brf": 1
     },
     "lib/core.js": {
-      "lh": 2116,
+      "lh": 2129,
       "lf": 5268,
-      "fnh": 143,
+      "fnh": 146,
       "fnf": 309,
-      "brh": 417,
-      "brf": 643
+      "brh": 439,
+      "brf": 662
     },
     "lib/desktop.js": {
-      "lh": 1382,
+      "lh": 1386,
       "lf": 2272,
-      "fnh": 72,
+      "fnh": 73,
       "fnf": 107,
-      "brh": 310,
-      "brf": 418
+      "brh": 312,
+      "brf": 420
     },
     "lib/drill-grant.js": {
       "lh": 43,
@@ -117,12 +117,12 @@
       "brf": 9
     },
     "lib/host-clean.js": {
-      "lh": 16,
+      "lh": 26,
       "lf": 26,
-      "fnh": 0,
-      "fnf": 1,
-      "brh": 1,
-      "brf": 1
+      "fnh": 3,
+      "fnf": 3,
+      "brh": 8,
+      "brf": 11
     },
     "lib/host.js": {
       "lh": 24,
@@ -261,12 +261,12 @@
       "brf": 185
     },
     "lib/reapply.js": {
-      "lh": 78,
+      "lh": 270,
       "lf": 388,
-      "fnh": 0,
-      "fnf": 27,
-      "brh": 1,
-      "brf": 1
+      "fnh": 28,
+      "fnf": 29,
+      "brh": 101,
+      "brf": 129
     },
     "lib/redteam/atomic-write.js": {
       "lh": 8,
