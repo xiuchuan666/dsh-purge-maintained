@@ -110,6 +110,17 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 `.github/workflows/release.yml` 也在发布前运行相同检查。现有上游仓库条件保持不变，因此维护仓库的提交不会触发上游 Release 发布。
 
+包本身已标 `"private": true`，`npm publish` 会直接拒绝。对外发布渠道只有本地 `npm pack` 产物（`$DSH_HOME/plugins/*.tgz`）。
+
+## 更新链路（已固定为离线）
+
+维护仓库是私有的，GitHub 的 `codeload` / `api` / `raw` / `jsdelivr` 对匿名请求全部 404。因此：
+
+- `lib/update.js` 里 `ONLINE_UPDATES_ENABLED = false`，`checkUpdate()` 与 `applyUpdate()` 直接返回明确错误，不把 404 吞成「已是最新」。
+- 启动路径恒不自动升级（`autoUpdateIfNeeded()` 返回 `skipped: "manual-only"`）。
+- 本机升级只走「改版本号 → `npm run check` → `npm pack` → 换 tgz → 重装 profile」这一条路，步骤见 [README](README.md) 的「更新策略」。
+- 不要为了「让面板更新能用」而把仓库改公开或往代码里塞 token：前者泄露全部维护内容，后者把长期凭据写进插件。
+
 ## 回退
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。

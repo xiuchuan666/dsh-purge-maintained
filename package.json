@@ -32,7 +32,6 @@
     "cordis.patch.yml",
     "screenshots.json",
     "README.md",
-    "README.zh-CN.md",
     "LICENSE",
     "NOTICE"
   ],
@@ -49,6 +48,7 @@
     "postinstall": "node scripts/ensure-profile-bundle.mjs"
   },
   "license": "Apache-2.0",
+  "private": true,
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -89,13 +89,10 @@
     },
     "install": {
       "preferred": "tarball",
-      "tarball": "https://codeload.github.com/HunYiSage/dsh-purge/tar.gz/refs/heads/master",
-      "zip": "https://codeload.github.com/HunYiSage/dsh-purge/zip/refs/heads/master",
-      "git": "https://github.com/HunYiSage/dsh-purge.git"
+      "tarball": "https://codeload.github.com/xiuchuan666/dsh-purge-maintained/tar.gz/refs/heads/main",
+      "zip": "https://codeload.github.com/xiuchuan666/dsh-purge-maintained/zip/refs/heads/main",
+      "git": "https://github.com/xiuchuan666/dsh-purge-maintained.git"
     }
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

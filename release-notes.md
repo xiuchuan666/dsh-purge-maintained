@@ -7,6 +7,15 @@
 - 本阶段不修改宿主补丁定义、提示词注入、桌面行为或前端构建产物。
 - 本地保留的 1.1.94 包原先仍携带 1.1.93 发布说明；本节仅记录维护性变化，以下为原 1.1.93 发布内容。
 
+## 本轮追加（文档与更新链路定案）
+
+- **README 合并为一份中文**：删除 `README.zh-CN.md` 与 `README.ja.md`，`README.md` 整体重写，按「安装（本机）→ 日常使用 → 配置项 → 维护 → 宿主升级 → 更新策略 → 排障」重排；清除过期版本号 1.1.90/1.1.93、`Node >=18` 徽章、上游 star/license 深链、`dsh://` 一键安装与 codeload 上游安装地址，以及冒充声明段落。
+- **`dsh.install` 改指维护仓库**：tarball / zip / git 三条 URL 由 `HunYiSage/dsh-purge`（已删库，匿名 404）改为 `xiuchuan666/dsh-purge-maintained` 的 `main`。已实测宿主与市场都不读这个字段，改动不影响安装行为，只影响市场清单展示。
+- **包改为不发布**：`package.json` 新增 `"private": true`，删除 `publishConfig.access`。`npm publish` 直接拒绝，避免误发到公共 npm。
+- **自更新器不再假绿**：`lib/update.js` 的 `REPO` 改为维护仓库、`STABLE_REF` 改为 `main`、`COPY_NAMES` 去掉 `README.zh-CN.md`；`describeLane` 的 `hasRemote` 不再把本地版本条目当成远端；新增 `ONLINE_UPDATES_ENABLED = false`，`checkUpdate()` / `applyUpdate()` 直接回明确错误，而不是把 404 吞成「已是最新」。本机更新走 `npm pack` + 装 tgz。
+- **回归测试补强**：`scripts/test-package-integrity.mjs` 增加断言：`files` 含 `README.md` 且不含已删除的两份、磁盘上两份确实不存在、`private === true`、`publishConfig` 已移除、`dsh.install` 指向维护仓库。
+- 本阶段仍不改任何宿主补丁定义、提示词注入、桌面行为或 `client.js` 产物。
+
 # 1.1.93
 
 ## 中文

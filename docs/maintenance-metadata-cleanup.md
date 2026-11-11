@@ -37,9 +37,12 @@
 ## 上游署名（不属于债）
 
 README 首屏写明 "Attribution required"，Apache-2.0 要求保留署名。
-README.md / README.zh-CN.md / README.ja.md / release-notes.md /
+README.md（现为唯一一份中文 README）/ release-notes.md /
 LICENSE-COMMERCIAL.md 里的上游引用（共 66+8+1 处）是署名与历史记录，
 **保留**。这不是没清干净，是本来就不该动。
+
+注：本轮（1.1.94 维护收尾）已把 `README.zh-CN.md` / `README.ja.md` 删除，只留重写后的单份中文
+`README.md`。删除的两份从未包含额外信息，只与 `README.md` 章节镜像；三语互链也随之移除。
 
 ## 方案对比
 
