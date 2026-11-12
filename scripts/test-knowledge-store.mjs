@@ -11,7 +11,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, parse } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
 
 /** 开一个用完即弃的 store（同步：这些方法都是同步的）。 */
@@ -96,8 +96,15 @@ test('path 指向的文件不存在时报错原文带上那个路径', () => wit
 }))
 
 test('path 落在允许根之外时拒绝，允许根之外的正文读不进来', () => withStore((store) => {
-  // 允许的根是 [root, tmpdir]：系统目录必须被拒。
-  throws(() => store.savePoc({ title: 'Abs', code: 'abs', path: 'C:/Windows/win.ini' }),
+  // 允许的根是 [root, tmpdir]。用「当前盘/文件系统根 + 一个不存在的文件名」造越界路径：
+  // 不能写死 'C:/Windows/win.ini' —— 在 Linux 上它不是绝对路径，会被拼到 root 底下，
+  // 于是报的是「文件不存在」而不是「越界」，CI 上就红这一条。
+  const outsideAbs = join(parse(process.cwd()).root, 'dsh-purge-outside-probe.txt')
+  throws(() => store.savePoc({ title: 'Abs', code: 'abs', path: outsideAbs }),
+    /path outside allowed roots/)
+  // 另一条越界形状：tmpdir 的上一级（同样是绝对路径，且不在允许根里）
+  const aboveTmp = join(tmpdir(), '..', 'dsh-purge-up.txt')
+  throws(() => store.savePoc({ title: 'Abs2', code: 'abs2', path: aboveTmp }),
     /path outside allowed roots/)
 }))
 
