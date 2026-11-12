@@ -205,12 +205,23 @@
 | cwd 钩子的装与拆：挂 `session/created` + `session/event` 两个、dispose 两个都摘掉并清 `__dshPurgeCwdCapture`、重复装只装一次 | `test-session-access.mjs`（3 条） | 同上 |
 | rewind 派生消息过滤的**现状**：钩子挂得上、dispose 摘得干净，但 `rewind.wrapSessionDeriveMessages` 在 `lib/rewind.js` 里**不存在**，整段是空转（被 try/catch 吞掉）——不顺手补实现，只钉住「加了函数这条会红」 | `test-session-access.mjs`（5 条） | 同上 |
 | 模块面与源码形状：8 个 export 名字固定（index.js 按名字 import）、三处 cleanup 都 `delete ctx.__dshPurge*`、cwd 走 `rules.writeLastCwd` 不自己拼路径 | `test-session-access.mjs`（3 条） | 同上 |
+| `/rules` 五个子命令的落盘：`create` 建出 `.md` + `.json` 且别名缺省回显成 id、`use` 写进 `AGENTS.md` 并重算注入、`delete` 真删、`reset` 走 restored 路（有备份时还原原文）| `test-chat-rules-skills.mjs`（6 条） | `lib/chat-rules-skills.js` 97% |
+| `/rules reset` 的另外两条路：激活前 AGENTS.md 不存在 → 无备份 → 内容与本条规则一致时**删掉文件**并报 `removed`；被人手改过 → 跳过并写进 `⚠ 跳过` 提示 | `test-chat-rules-skills.mjs`（2 条） | 同上 |
+| `/rules` 的参数校验与别名：缺 id 只回用法不建目录、非法 target 点名「只能是 AGENTS.md 或 CLAUDE.md」、`ls/s/list`、`use/activate/u`、`create/new/c`、`delete/rm/d`、`reset/restore/还原` 六组别名各自都真的走到对应分支（不是落到 default 的 help） | `test-chat-rules-skills.mjs`（8 条） | 同上 |
+| `/rules` 的两处现状锁定：`delete` 一个拼错的 id 也回 `✓ 已删除规则`（`rules.deleteRule` 吞 ENOENT，仍会重算一次注入）、`help`/`h`/未知子命令回同一份帮助 | `test-chat-rules-skills.mjs`（4 条） | 同上 |
+| `/rules` 版式：空库给一句「暂无规则」、当前规则打 `▶` 与 `★ 当前`、名字与 id 相同时不重复括号、大小走 `formatSize`、无激活时目标行写 `(无激活)` | `test-chat-rules-skills.mjs`（5 条） | 同上 |
+| `/skills` 的五个子命令：`create` 写出 `<id>/SKILL.md` 且描述缺省是 id、`import` 认文件夹并回显导入名、`delete` 删目录并把备份路径写成第二行（`$DSH_HOME` 展示形式，测试换回真目录校验存在性）、`ls/s/list` 与 `rm/d` 别名 | `test-chat-rules-skills.mjs`（10 条） | 同上 |
+| `/skills` 的拒绝与报错：非 kebab-case 点名示例、缺 id 回用法、`import` 缺路径/路径不存在、`delete` 不存在的 id 报「删除失败」、`help`/未知子命令回同一份帮助且不碰目录 | `test-chat-rules-skills.mjs`（5 条） | 同上 |
+| `/skills` 版式：空目录给一句「暂无用户 Skill」、正常条目带说明/大小/两个通道的调用方式、不可用打 `!` 并把 `error` 抄一行、两个通道都关掉时写「不可 /名称」「模型不可调」 | `test-chat-rules-skills.mjs`（4 条） | 同上 |
+| 两条命令共用同一套 deps 约定：家目录走 `(deps.core \|\| core).findDshHome()`（写死会让测试打真宿主）、三处注入重算全走 `callRefreshHungOperator`、缺 `refreshHungOperator` 时静默跳过（行为侧 + 源码形状各一条） | `test-chat-rules-skills.mjs`（4 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
 **2026-11-13 补**：状态页渲染（`fsExists` / `line` / `renderStatus`，92 行）也从 `lib/index.js` 抽到了 `lib/status-render.js`（99 行，3 个 export）。理由是它属于「改坏了用户立刻看得见但不会报错」的那一类：列宽错位、`skipped` 不点名、asar 密封不显形，全都只在人眼看状态页时才发现。抽取前后用 18 个 state 变体 + 11 个探针函数逐字节对拍（`renderStatus variants: checked 18, identical 18` / `fsExists/line probes identical: 11/11`），行为零变化。`lib/index.js` 1902 → 1809 行，被 40 条用例钉住，覆盖 98% 行。它那 206 → 203 的行命中下降已用 hunk 行号映射逐行证明是「搬走的行 + 删掉的 import」，幸存行零丢失（`mapped & verified 202, mismatches 0`）。
 
 **2026-11-13 再补**：会话权限钉死 + cwd 捕获 + rewind 派生过滤这 148 行从 `lib/index.js` 抽到了 `lib/session-access.js`（8 个 export）。挑它的理由是「坏了不报错」——权限芯片从完全访问掉成 workspace-write、工作目录没被记住，都只在用户手感里出现。抽取用锚点定位整段搬运，去掉 `export ` 前缀后与备份逐字比对 `diffs 0`，`lib/index.js` 1809 → 1665 行。新增 47 条用例（假 ctx + 临时 `DSH_HOME`，不碰真宿主），RED 演练 21 条注入 **21/21 全红**。`lib/index.js` 的行命中 203 → 198 已精确记账：被删掉的命中行 10 条、新 import 命中 5 条、幸存行命中 193→193 零丢失，`203 - 10 + 5 = 198`。
+
+**2026-11-13 三补**：`/rules` 与 `/skills` 两条聊天命令（211 行）从 `lib/index.js` 抽到了 `lib/chat-rules-skills.js`（230 行，5 个 export）。这两条命令会直接改 `AGENTS.md` / `CLAUDE.md` 与 `$DSH_HOME/skills`，判错的表现是「回了 success 但目标文件没变」「删错了同名规则」——都不报错。只动三处接线（家目录来源、三处 `refreshHungOperator` 改走 `callRefreshHungOperator(deps, dshHome)`、注入回调加函数类型守卫），其余逐行照抄（`block lines 211, diffs 0`），`lib/index.js` 1665 → 1459 行。新增 52 条用例（真 `lib/rules.js` + 真 `lib/skills.js`，只把 `DSH_HOME` 指到临时目录，测的是「命令 → 落盘」整条链），RED 演练 36 条注入 **36/36 全红**。`lib/index.js` 的行命中 198 → 196 已精确记账：被删掉的命中行 3 条（`1216` / `1308` / `1335`）、新 import 命中 1 条、幸存行零丢失（`mapped & verified 1453, mismatches 0`），`198 - 3 + 1 = 196`。
 
 ---
 
@@ -532,6 +543,7 @@
     宿主改了会话事件名（`session/created` / `session/event` 都不再触发）。
     **检测办法**：升级后手验两条 —— 发完第一条消息权限芯片还在不在「完全访问」；
     切目录后 `$DSH_HOME/dsh-purge/last-cwd.txt` 有没有跟着变。
+49. **`/rules` 与 `/skills` 的聊天层只钉住了「命令 → 落盘」，命令文本进不了真会话。** 52 条用例直接调 `handleRulesCommand(rawInput, deps)`，覆盖的是参数解析、id 校验与落到 `lib/rules.js` / `lib/skills.js` 的副作用；没覆盖的是宿主把 `/rules use abc` 从聊天框里切分出来交给注册器的那一步（`lib/commands.js` 只钉了注册面）。同理三处只能源码形状钉、不能行为钉：①`callRefreshHungOperator` 的 `typeof deps.refreshHungOperator !== "function"` 守卫——删掉后裸调用抛 TypeError 再被同一个 `catch` 吞掉，命令照样回 success；②`/skills create` 的 `|| id`——`saveSkill` 内部的 `|| (parsed.ok ? … : "")` 会再回落一次，落盘看不出差别；③`normalizeMeta` 对空 `name` 回落成 id，所以 `/rules create` 的 `args[2] || id` 只有回显能区分。另有一处**现状锁定**：`/rules delete` 拼错 id 也回 `✓ 已删除规则`（`deleteRule` 吞 ENOENT）——用户以为删了，实际什么都没发生，改坏的表现就是这一条。
 
 ## 维护约定
 

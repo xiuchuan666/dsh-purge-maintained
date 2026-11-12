@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T18:57:14.715Z",
-  "commit": "925deb5",
+  "capturedAt": "2026-11-12T19:20:32.444Z",
+  "commit": "8f784b1",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -51,6 +51,14 @@
       "fnf": 1,
       "brh": 2,
       "brf": 3
+    },
+    "lib/chat-rules-skills.js": {
+      "lh": 224,
+      "lf": 230,
+      "fnh": 6,
+      "fnf": 6,
+      "brh": 102,
+      "brf": 107
     },
     "lib/commands.js": {
       "lh": 99,
@@ -157,10 +165,10 @@
       "brf": 584
     },
     "lib/index.js": {
-      "lh": 198,
-      "lf": 1665,
+      "lh": 196,
+      "lf": 1459,
       "fnh": 1,
-      "fnf": 37,
+      "fnf": 33,
       "brh": 5,
       "brf": 5
     },
@@ -386,7 +394,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1256
+      "brf": 1259
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -465,8 +473,8 @@
       "lf": 560,
       "fnh": 45,
       "fnf": 48,
-      "brh": 170,
-      "brf": 204
+      "brh": 172,
+      "brf": 205
     },
     "lib/session-access.js": {
       "lh": 159,
@@ -485,12 +493,12 @@
       "brf": 34
     },
     "lib/skills.js": {
-      "lh": 682,
+      "lh": 684,
       "lf": 747,
       "fnh": 56,
       "fnf": 62,
-      "brh": 324,
-      "brf": 390
+      "brh": 328,
+      "brf": 392
     },
     "lib/status-render.js": {
       "lh": 97,
