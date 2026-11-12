@@ -292,6 +292,34 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 补丁内容有回归保护：`scripts/test-patch-registry.mjs` 把 `ALL_PATCHES` 与 `docs/origin/core-split-baseline-8066985/`（拆分前快照）做对象级对拍（含正则 flags、函数 replace、239 个 replacement），再用真实 `applyReplacementsToText` 跑 690 组输入。改错一个字面量这里会立刻失败。
 
+## 巨型文件拆分（先看这一节再动刀）
+
+`lib/redteam/store-core.js` 从 5429 行拆到 3832 行，方法是**只搬不改**：整块剪下来放进新文件，类里留一行转发。已拆出的两个模块：
+
+| 文件 | 行数 | 装什么 |
+| --- | --- | --- |
+| `lib/redteam/engagement-meta.js` | 155 | 叶子模块：`ROLE_TITLES` / `SEVERITIES` / `VULN_STATUSES` / `SCOPE_SQL` / `readMeta` / `writeMeta` / `POINT_STAGE_OVERRIDE` / `POINT_SHORT_NAME` / `scoreStageOf` / `LEGACY_STAGE_MAP` / `VALID_STAGE_CODES` |
+| `lib/redteam/score-report.js` | 1533 | 计分三件套：`hitTrace` / `scoreReport` / `scoreChain` / `representativeShots`，第一参一律是 store 实例 |
+
+`store-core.js` 继续把 `engagement-meta.js` 的 11 个名字再导出一次，所以对外 API 不变（实测导出键从 73 涨到 77，只增不减）。
+
+**为什么第一参传 store 而不是做成类方法**：`#hitTrace` / `#representativeShots` 是 ES private，类外写不出 `this.#x`。做法是把函数体里 `this.#hitTrace(` 换成 `hitTrace(store, `、`this.` 换成 `store.`（顺序不能反，否则 `this.#hitTrace` 先被 `this.` 规则吃掉一半），类里保留同名私有/公开方法做一行转发，调用点一处都不用动。搬运前先扫一遍确认 `bare this` 与 `arguments` 计数都是 0 —— 有任何一个，就不能这么搬。
+
+### 三条必须遵守的操作顺序
+
+1. **先自底向上删除，最后插 import。** 我第一次写反了：先 `splice` 插 18 行 import 块，然后按**原始行号**删 13 个区间 —— 插入点之后的所有索引整体偏移 18 行，删错位置，`node --check` 报的是一个看起来毫不相干的语法错误（把注释块里的中文当成了代码）。要么按行号降序删，要么把所有大于插入点的行号先 +18。
+2. **左移缩进时要跳过模板字符串内部的行。** 类方法搬出去要减 2 格缩进，但 SQL 多行模板与 markdown 片段里的缩进是内容的一部分。判据：累计一行里反引号的个数，奇数就翻转 `inTemplate`；`inTemplate` 为真且该行不含反引号时原样照抄。`score-report.js` 里有 9 处跨行模板，漏判一处就会改变生成的 SQL 文本。
+3. **搬完立刻做逐行对拍，不要只靠测试绿。** 做法：拿 `git show HEAD:<file>` 的原文，用同一套 splice 算法在内存里重跑一遍，与工作区文件逐行比对（`store-core.js` 得到 DIFF 0 / 3832 行）；新文件里的每个函数按花括号配平取出函数体，归一化（去 2 格缩进、`this.#x(` ↔ `x(store, `）后与旧版逐行比（四个函数 152/1048/178/44 行全部 diff 0）。测试绿只证明「行为没变」，对拍才证明「代码没被顺手改动」。
+
+### 拆分顺手挖出来的两类真 bug
+
+- **引用了没 import 的符号，被 `catch` 吞掉。** `lib/redteam/schema.js` 的 `migrate()` 里 `SCOPE_SQL` 与 `LEGACY_STAGE_MAP` 两处引用从未定义也从未 import，两段回填的 `ReferenceError` 被外层 `try { … } catch { /* 忽略 */ }` 吃掉 —— 老库的 `asset.scope` 内外网与 `attack_step.stage_code` 阶段映射**从上线起就没生效过**，且不报任何错。教训：`catch { }` 空吞的每一段，都值得单独造 fixture 跑一遍看结果。
+- **只在「刚补出列」时才跑的迁移，第二次打开会跳过。** `if (ensure('attack_step', 'stage_code', 'TEXT'))` 这个写法是对的（否则每次打开都把用户显式指定的阶段打回自动推导），但它也意味着「补列」与「回填」绑死在一起 —— 补列逻辑一旦因为别的原因早退，回填就永远不跑。`test-schema-migrate.mjs` 里两条用例分别钉住「列不存在时映射」「列已存在时不重跑」。
+
+### 拆完之后还剩下什么没拆
+
+`lib/core.js`（5268 行）与 `lib/redteam/tools.js`（2268 行）仍未拆。两者的共同点是「搬出去的每一块都要跨文件传一堆上下文」，收益不如 `store-core.js` 那么直接，优先级排在补测试之后。真要动，先按本节的三条顺序做，别省对拍。
+
 ## CI 与发布
 
 `.github/workflows/ci.yml` 在 `main` 推送、pull request 和手动触发时运行 `npm run check`。CI 使用 Node.js 24，不需要 `npm install`。

@@ -184,7 +184,7 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| POC 库落盘与净化：`code` 当目录名先净化（`../../x` 落回 `pocs/` 之内）、`filename` 里的分隔符换成 `-`、五种默认文件名、slug 保留中文并把 CVE 归一 | `test-knowledge-store.mjs` | `lib/redteam/store-core.js` 76% |
+| POC 库落盘与净化：`code` 当目录名先净化（`../../x` 落回 `pocs/` 之内）、`filename` 里的分隔符换成 `-`、五种默认文件名、slug 保留中文并把 CVE 归一 | `test-knowledge-store.mjs` | `lib/redteam/store-core.js` 88% |
 | POC 正文来源三路：`content` 优先、`path` 拷进 `pocs/` 且源文件留在原地、越界路径被 `assertPathWithin` 挡住、两者都没有时只登记元数据 | `test-knowledge-store.mjs` | 同上 |
 | POC 合并语义：同 `code` 再存一次是合并（不是插重复）、正文换新、`verified` / `verified_note` / `tags` 不被空值冲掉、创建时间不动 | `test-knowledge-store.mjs` | 同上 |
 | POC 检索：四键排序（已验证 → 复用次数 → 更新时间 → id）、FTS 按词切命中不了时退化成 LIKE、多值归类、`limit` 夹在 1000 以内且负数等于不限 | `test-knowledge-store.mjs` | 同上 |
@@ -192,19 +192,19 @@
 | POC 概览口径：14 条内置归类顺序固定且计数为 0 也列出、自定义归类追加在尾部、`total` / `verified` / `withContent` / `reused` 各自怎么数 | `test-knowledge-store.mjs` | 同上 |
 | 六个 `redteam_poc_*` 工具的 `execute` 真的读得到 `args`：返回值取自入参（`code` 由标题算出）、`hit_count` 递增、查不到时给出「先检索」的指引 | `test-redteam-tools.mjs` | `lib/redteam/tools.js` 74% |
 | nuclei 模板索引缓存（首次建、命中、7 天过期、损坏重建） | `test-store-templates.mjs` | 同上 |
-| 计分口径三处一致：面板 / 报告 / 攻击链算出同一个总分（普通命中、同服务去重、自建账号、停用得分点、规则上限吃满、命中自带分值、G6 IPv6 ×3、G5 数据规模 ×2、混合 9 种场景） | `test-score-consistency.mjs` | `lib/redteam/store-core.js` 66% |
+| 计分口径三处一致：面板 / 报告 / 攻击链算出同一个总分（普通命中、同服务去重、自建账号、停用得分点、规则上限吃满、命中自带分值、G6 IPv6 ×3、G5 数据规模 ×2、混合 9 种场景） | `test-score-consistency.mjs` | `lib/redteam/store-core.js` 88% |
 | `applyScoreCaps` 纯函数：四种 `dedup_scope` + 规则上限的边界（降序累计、`cap<=0` 不封、`self_created` 不占位、无元数据退化） | `test-score-consistency.mjs` | `lib/redteam/score-rules.js` 98% |
 | 封顶文案（dedup / cap 两种措辞，含 `+50 分` 与 `+null` 边界） | `test-score-consistency.mjs` | 同上 |
-| 目标归并 `targetKey`：URL 截到 scheme+host+port、非 URL 取首段、空值回落资产 IP | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 66% |
+| 目标归并 `targetKey`：URL 截到 scheme+host+port、非 URL 取首段、空值回落资产 IP | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 88% |
 | 写库前的枚举规范化：马类型/马状态认中文别名与大小写、认不出就抛错（不是静默存原文） | `test-redteam-crud.mjs` | `lib/redteam/validate.js` 95% |
-| 漏洞登记：非法 severity/status 静默回落、带 cve 与不带 cve 两种幂等键、`gained` 规范成一行、只在挂资产时写 observation | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 66% |
+| 漏洞登记：非法 severity/status 静默回落、带 cve 与不带 cve 两种幂等键、`gained` 规范成一行、只在挂资产时写 observation | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 88% |
 | 漏洞列表：六种筛选、严重度排序、`limit` 夹 1..1000、证据默认截 8000 字符、`evidenceLimit` 取全文 | `test-redteam-crud.mjs` | 同上 |
 | 漏洞更新：缺行返回 `updated:false`、非法值保留旧值、`vulnStats` 按站点归并 | `test-redteam-crud.mjs` | 同上 |
 | 凭据与访问会话：`host` 必填、明文四级别名优先级、冲突保留旧值但刷新 `found_at` | `test-redteam-crud.mjs` | 同上 |
 | WebShell：`url` 必填、同 `url+pass_key` 幂等、update 与 add 走同一套规范化、缺行报错 | `test-redteam-crud.mjs` | 同上 |
 | 隧道：`entry_kind` 是得分凭证（非法值抛错、`self-only` 标 `legit:false`、空值算待确认）、update 校验 status | `test-redteam-crud.mjs` | `lib/redteam/score-rules.js` 98% |
-| 资产测试状态与评估：`test`/`notes` 两种写法都追加、`blocked` 累加到第 3 次给转向提示、非法 `priority` 保留原值 | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 66% |
-| 会话总览：webshell 在线数、隧道 active 数、`self-only` 不算突破凭证、未声明 `entry_kind` 算待确认 | `test-redteam-report.mjs` | `lib/redteam/store-core.js` 74% |
+| 资产测试状态与评估：`test`/`notes` 两种写法都追加、`blocked` 累加到第 3 次给转向提示、非法 `priority` 保留原值 | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 88% |
+| 会话总览：webshell 在线数、隧道 active 数、`self-only` 不算突破凭证、未声明 `entry_kind` 算待确认 | `test-redteam-report.mjs` | `lib/redteam/store-core.js` 88% |
 | 攻击图谱：待确认漏洞不画成节点、有 access 才标 `meta.owned`、`summary` 与 `vulnStats` 是同一份口径 | `test-redteam-report.mjs` | 同上 |
 | 报告导出：只收「已证实/已利用 + 中危以上」、`all:true` 全收且不写脚注、按严重级排序、四章节标题固定、复现请求去 CR、修复建议序号连续、脚注只写一次 | `test-redteam-report.mjs` | 同上 |
 | bundle 导入：逐类计数、扫描记录字段完整、域名自动连资产、端口增量补 banner 且不插重复行、中途失败整体回滚不留孤儿 `scan_run` | `test-redteam-report.mjs` | 同上 |
@@ -221,6 +221,10 @@
 | 资产面工具的 `execute` 业务分支：`asset_add` 回「刚写入的那一条」+ 发现时间不变、`asset_query` 的 limit 夹 200 而 `total` 不受影响、`asset_graph` 与 `attack_path` 各自的节点上限（1000 / 1500）与超限回分段清单、`asset_timeline` 按天聚合、`asset_link` 回边数、`asset_test` 的测试记录追加而不覆盖 | `test-redteam-tool-branches.mjs` | `lib/redteam/tools.js` 93% |
 | 计分与攻击链工具的 `execute` 业务分支：`score_list` 的 `groups`（`items` 是档位数、`points` 是已得分，两者别搞反）、`score_hit` 的旧 code 迁移提示、`score_report` 的 `markdown:false` 精简分支、`attack_chain` 的非法 `stage_code` 回落 recon、`chain_add` 的 hints 三源 | `test-redteam-tool-branches.mjs` | 同上 |
 | 会话/证据/报告/知识库工具的 `execute` 业务分支：`sessions` 的边界突破口径、`session_check` 的在线数与可用数、`web_list` 的 URL 协议与端口拼接、`http_evidence_add` 真落库、`evidence_*` 四件套、`unknown_*` 三件套、`report` 与 `report_targets`、`poc_add` 的来源靶标名称补全 | `test-redteam-tool-branches.mjs` | 同上 |
+| 计分块的实现位置与转发：`scoreReport` / `scoreChain` / `#hitTrace` / `#representativeShots` 的实现在 `score-report.js`，类里只留一行转发；四个函数的函数体与拆分前逐行一致（152/1048/178/44 行 diff 0） | `test-score-consistency.mjs` / `test-redteam-report.mjs`（转发出错则三处总分不再相等） | `lib/redteam/score-report.js` 78% |
+| 靶标元数据的落盘与阶段口径：`readMeta` / `writeMeta` 的容错、`SCOPE_SQL` 的内外网判定、`POINT_SHORT_NAME` / `scoreStageOf` / `LEGACY_STAGE_MAP` 的取值 | `test-schema-migrate.mjs`（末条）+ `test-score-consistency.mjs` | `lib/redteam/engagement-meta.js` 99% |
+| 事实库迁移的两处回填真的生效：`asset.scope` 按 IP 归属判内外网（含 172.16–31 与 100.64–127 的边界）、`attack_step.stage_code` 按 `LEGACY_STAGE_MAP` 映射七个老阶段、已有值一律不覆盖、跑两遍结果全等 | `test-schema-migrate.mjs`（23 条） | `lib/redteam/schema.js` 98% |
+| 知识库迁移：补出五个新列与两个索引、老条目按关键词推归类（具体压过泛化）、已有归类不被改写、`POC_CATEGORIES` 的 code 唯一且以 `other` 收尾 | `test-schema-migrate.mjs`（7 条） | 同上 |
 
 ---
 
@@ -369,6 +373,8 @@
 31. **`lib/redteam/settings.js` 与 `lib/redteam/skill-availability.js` 各有几处现状锁定。** ①`readSettings` 用 `parsed && typeof parsed === "object"` 判，数组也会原样返回（`typeof [] === "object"`），只是上层读 `maxAgents` 读不到所以无影响 —— 用例里按现状锁定。②`clampMaxAgents(null)` 是 `Math.floor(Number(null)) === 0` 再夹成 **1**，不是回落默认 3；`maxAgentsOf` 的文件值要求 `> 0` 才认，所以写进去的 0 等于没写。③`expandSkillPath` 是纯字符串拼接、**不做 `path.normalize`**，Windows 上结果会混 `/` 与 `\`（`existsSync` 能认，比较字符串时不能），用例断言必须包一层 `path.normalize`。④`existsUnderAnyHome` 遍历全部候选 home 这件事只能读源码钉：真实场景要求文件在 `~/.dsh` 下而 `DSH_HOME` 指向别处，那要动真实家目录。⑤`bundledSkillSummaries` 恒扫仓库里的 `skills/redteam`（23 个 `.md`），所以 `redteam_preflight` 的「桌面端无 skills 服务」早退支在本仓不可达（见盲区 19）。
 
 32. **`lib/identity.js` 里有五处只能靠源码形状或「不可达」认定。** ①`injectMatchers` 里 `new RegExp` 的 `catch`（`:375-376`）走不到——每个字符都过 `replace(/[.*+?^${}()|[\]\\]/g, "\\$&")` 转义了，构造永不抛；②`withOwnServers` 的两条（`:852`、`:856-857`）依赖 `lib/net-scope.js:407` 的 `ownServerNote()`，它现在是 `return "";`（上游刻意留空），note 恒空所以永远走 `return text`；③`rewritePromptAssembly` 的「注入前 80 字符一段都不含 → 再前置一段 `dsh-purge`」兜底块（`:1090-1099`）在五种常规组合下都触发不到，因为 `leadWithInject` 总会先放一个 head，只能用源码形状断言钉住；④`foldInjectIntoPersona` 新造的 `deployment:persona-prefix` 会被随后的 `leadWithInject` 用全文精确匹配清空丢弃，对外不可见；⑤`insertNamedSection` 的落点（`capAt+1` / `purgeAt+1` / `0`）在 13 种组合下产出完全相同——card/role 段名固定、排序后落点一致，改了不会红。
+
+33. **`lib/redteam/store-core.js` 已拆出两个模块，但拆分的「等价性」只有一次性的对拍，没有常驻守卫。** 5429 行拆成 3832 行 + `score-report.js`（1533 行，计分三件套）+ `engagement-meta.js`（155 行，元数据与阶段口径），类里对四个方法只留一行转发，所以 `store.scoreReport(...)` 的调用点一处都没动。拆分当时用「`git show HEAD:` 取原文 → 同一套 splice 算法重跑一遍 → 与工作区逐行比对」证明 `store-core.js` 除搬走四块、换四个转发、插 import/再导出块之外零改动（DIFF 0 / 3832 行），`score-report.js` 里四个函数也逐行对拍过（152/1048/178/44 行 diff 0）。但这份对拍脚本在 `.tmp45/`，提交前就删了 —— 将来谁再动这三个文件，没有任何东西会告诉他「你把实现挪了却没改转发」。能兜住的是行为：`test-score-consistency.mjs` 的 25 条要求面板/报告/攻击链算出同一个总分，转发写错立刻红。**顺带修掉两处上游漏定义**：`schema.js` 的 `migrate()` 引用了 `SCOPE_SQL` 与 `LEGACY_STAGE_MAP` 却从未 import，两处回填的 `ReferenceError` 被外层 `try { … } catch { /* 忽略 */ }` 吞掉 —— 老库的 `asset.scope` 内外网与 `attack_step.stage_code` 阶段映射**从 1.1.94 上线起就没生效过**，且不报任何错。修法是从新的叶子模块 import，`test-schema-migrate.mjs` 用「造老库形状 → 跑 migrate → 断言回填结果」钉住，RED 演练 16 条注入全红。另有一条只能钉源码形状：`port` 回填里 `if (port !== null)` 这个守卫，因为 SELECT 已经过滤了 `port IS NULL`，写 NULL 与跳过在库里结果相同，行为断言区分不了。
 
 ---
 

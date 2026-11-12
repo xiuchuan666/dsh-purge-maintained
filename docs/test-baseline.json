@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T10:24:33.241Z",
-  "commit": "df748ed",
+  "capturedAt": "2026-11-12T11:27:46.419Z",
+  "commit": "1c1f8a9",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -284,6 +284,14 @@
       "brh": 46,
       "brf": 47
     },
+    "lib/redteam/engagement-meta.js": {
+      "lh": 154,
+      "lf": 155,
+      "fnh": 4,
+      "fnf": 4,
+      "brh": 21,
+      "brf": 25
+    },
     "lib/redteam/evidence-ledger.mjs": {
       "lh": 467,
       "lf": 507,
@@ -325,12 +333,20 @@
       "brf": 109
     },
     "lib/redteam/schema.js": {
-      "lh": 591,
-      "lf": 630,
-      "fnh": 11,
-      "fnf": 12,
-      "brh": 15,
-      "brf": 35
+      "lh": 621,
+      "lf": 634,
+      "fnh": 14,
+      "fnf": 14,
+      "brh": 56,
+      "brf": 74
+    },
+    "lib/redteam/score-report.js": {
+      "lh": 1192,
+      "lf": 1532,
+      "fnh": 101,
+      "fnf": 167,
+      "brh": 218,
+      "brf": 423
     },
     "lib/redteam/score-rules.js": {
       "lh": 923,
@@ -365,12 +381,12 @@
       "brf": 51
     },
     "lib/redteam/store-core.js": {
-      "lh": 4631,
-      "lf": 5429,
-      "fnh": 335,
-      "fnf": 425,
-      "brh": 1179,
-      "brf": 1698
+      "lh": 3372,
+      "lf": 3831,
+      "fnh": 233,
+      "fnf": 258,
+      "brh": 945,
+      "brf": 1259
     },
     "lib/redteam/tools.js": {
       "lh": 2114,
