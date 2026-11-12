@@ -11,10 +11,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply, inject, name } from '../lib/redteam/tools.js'
+import { RedteamStore } from '../lib/redteam/store-core.js'
 
 const HOST_PKG = 'C:/Users/Administrator/AppData/Local/Programs/DeepSeek Harness/resources/app/dsh/package.json'
 
@@ -384,6 +385,171 @@ test('preflight 在没有 skills 服务时也给出可读结论，而不是空�
   assert.equal(out.all_checked.registry_total, 23)
   assert.equal(out.all_checked.broken, 0)
   assert.equal(out.onboarding.complete, false)
+})
+
+/* ============================================================ 知识库（POC 复用） */
+//
+// 这一组曾经整块不可用：六个 `redteam_poc_*` 的 execute 签名漏了 `args`，
+// 函数体却读 `args.q` / `args.id` / `args.patch`，于是每次调用都是
+// `ReferenceError: args is not defined` 被 withStructuredErrors 收成 failed。
+// 断言必须落到**真实取值**上（code 由 title 算出、hit_count 递增、正文原样落盘）：
+// 只断言 `ok === true` 时，一个总是抛错的实现也可能因为别的分支返回 true 而漏过。
+
+/** 真库：知识库落在 `<root>/knowledge.db`，读写都不需要先绑靶标。 */
+function realStore(root) {
+  const store = new RedteamStore(root)
+  store.openEngagement('知识库测试', ['10.0.0.0/24'])
+  return store
+}
+
+const POC_ARGS = {
+  title: 'Weblogic T3 反序列化 CVE-2023-21839',
+  cve: 'CVE-2023-21839',
+  content: 'print(1)',
+  language: 'python',
+  category: 'deserialization',
+}
+
+test('poc_add：返回值全部取自入参（args 真的被读到了）', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      const out = parse(await byName.redteam_poc_add.execute(POC_ARGS, nextExec()))
+      assert.equal(out.ok, true)
+      // code 由 title 里的组件名 + 漏洞名 + CVE 编号算出，写死 args 的实现算不出来
+      assert.equal(out.code, 'weblogic-t3-反序列化-cve-2023-21839')
+      assert.equal(out.category, 'deserialization')
+      assert.equal(out.created, true)
+      assert.equal(out.verified, false)
+      assert.match(out.hint, /知识库共 1 条/)
+      // 正文真的落盘了，而不是只写了个路径
+      assert.equal(readFileSync(out.path, 'utf8'), 'print(1)')
+    } finally { store.close() }
+  })
+})
+
+test('poc_get：按 code 取回正文，按 id 取回同一条', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      const added = parse(await byName.redteam_poc_add.execute(POC_ARGS, nextExec()))
+      const byCode = parse(await byName.redteam_poc_get.execute({ code: added.code }, nextExec()))
+      assert.equal(byCode.ok, true)
+      assert.equal(byCode.code, added.code)
+      assert.equal(byCode.content, 'print(1)')
+      assert.equal(byCode.verified, 0)
+      const byId = parse(await byName.redteam_poc_get.execute({ id: byCode.id }, nextExec()))
+      assert.equal(byId.code, added.code)
+    } finally { store.close() }
+  })
+})
+
+test('poc_get：查不到时给出「先检索」的指引，而不是空对象', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      const out = parse(await byName.redteam_poc_get.execute({ code: 'no-such-poc' }, nextExec()))
+      assert.equal(out.ok, false)
+      assert.match(out.error, /知识库没有这一条/)
+      assert.match(out.error, /redteam_poc_search/)
+    } finally { store.close() }
+  })
+})
+
+test('poc_search：命中与未命中给两句不同的提示，条目带布尔化字段', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      await byName.redteam_poc_add.execute(POC_ARGS, nextExec())
+
+      const hit = parse(await byName.redteam_poc_search.execute({ q: 'Weblogic' }, nextExec()))
+      assert.equal(hit.ok, true)
+      assert.equal(hit.count, 1)
+      assert.match(hit.hint, /命中现成的/)
+      assert.equal(hit.items[0].code, 'weblogic-t3-反序列化-cve-2023-21839')
+      // 库里存的是 0/1，工具层必须翻成布尔，否则模型读到 "verified": 0 会当成字符串
+      assert.equal(hit.items[0].verified, false)
+      assert.equal(hit.items[0].has_content, true)
+      assert.equal(hit.knowledge_base.total, 1)
+
+      const miss = parse(await byName.redteam_poc_search.execute({ q: 'zzz-no-such-thing' }, nextExec()))
+      assert.equal(miss.count, 0)
+      assert.match(miss.hint, /知识库与本机模板库都没有/)
+      assert.match(miss.hint, /redteam_poc_add/)
+    } finally { store.close() }
+  })
+})
+
+test('poc_list：stats 反映真实计数，不是恒零', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      await byName.redteam_poc_add.execute(POC_ARGS, nextExec())
+      await byName.redteam_poc_add.execute({ title: 'Shiro 550 EXP', kind: 'exp', content: 'x' }, nextExec())
+      const out = parse(await byName.redteam_poc_list.execute({}, nextExec()))
+      assert.equal(out.ok, true)
+      assert.equal(out.count, 2)
+      assert.equal(out.stats.total, 2)
+      assert.deepEqual(out.stats.by_kind.map((k) => k.kind + ':' + k.n).sort(), ['exp:1', 'poc:1'])
+      assert.deepEqual(out.stats.by_source, [{ source: 'self', n: 2 }])
+    } finally { store.close() }
+  })
+})
+
+test('poc_update：便捷参数 verified / verified_note 会覆盖 patch', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      const added = parse(await byName.redteam_poc_add.execute(POC_ARGS, nextExec()))
+      const out = parse(await byName.redteam_poc_update.execute({
+        code: added.code,
+        patch: { verified: false, verified_note: '被 patch 写的' },
+        verified: true,
+        verified_note: '在 10.0.0.9 回显 id',
+      }, nextExec()))
+      assert.equal(out.ok, true)
+      assert.equal(out.verified, true)
+      assert.equal(out.verified_note, '在 10.0.0.9 回显 id')
+      // 落库要真的是 1，工具层翻布尔不能只是显示上的假象
+      assert.equal(store.getPoc(added.code).verified, 1)
+    } finally { store.close() }
+  })
+})
+
+test('poc_use：复用次数真的递增，used_on 落库', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      const added = parse(await byName.redteam_poc_add.execute(POC_ARGS, nextExec()))
+      const one = parse(await byName.redteam_poc_use.execute({ code: added.code, used_on: '10.0.0.9' }, nextExec()))
+      assert.equal(one.ok, true)
+      assert.equal(one.hit_count, 1)
+      const two = parse(await byName.redteam_poc_use.execute({ code: added.code, used_on: '10.0.0.10' }, nextExec()))
+      assert.equal(two.hit_count, 2)
+      const row = store.getPoc(added.code)
+      assert.equal(row.hit_count, 2)
+      assert.equal(row.used_on, '10.0.0.10')
+    } finally { store.close() }
+  })
+})
+
+test('poc_use：条目不存在时如实报错，不静默成功', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      const out = parse(await byName.redteam_poc_use.execute({ code: 'no-such-poc' }, nextExec()))
+      assert.equal(out.ok, false)
+      assert.match(out.error, /poc not found: no-such-poc/)
+    } finally { store.close() }
+  })
 })
 
 /* ============================================================ 现状锁定 */
