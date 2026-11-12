@@ -196,10 +196,21 @@
 | 状态页每一段的有无：插件根缺失打叉、多落点标 `+N`、桌面 runtime 折叠成一行、`runtime_payload` 四态、`no_resources` 分支、asar 密封显形、宿主未适配时警告、`shim_scope` 三种说明 | `test-status-render.mjs`（18 条） | 同上 |
 | 状态页的补丁汇总：`skipped` / `drifted` / `pending` 各自要不要在汇总行点名、明细行 `applied` 打勾而未知状态打中性点、未知 id 用 `patch-N` 兜底、`layer` 取 `提示词/Prompt` | `test-status-render.mjs`（9 条） | 同上 |
 | 状态页的列宽与结构：文件清单名字列 22 宽、明细名字列 30 宽 / id 列 2 宽（用字面量空格 + 正则钉，不用 `padEnd` 拼期望值）、段间空行、纯函数不改入参 | `test-status-render.mjs`（2 条） | 同上 |
+| 会话权限从哪取：直接挂载的 `permissionPresets` 优先于 `ctx.get`、只有 `set` 是函数才算服务、Cordis 的 Proxy 在两条路上都抛错时返回 null 而不是炸 | `test-session-access.mjs`（4 条） | `lib/session-access.js` 100% |
+| 子会话继承哪一档权限：agents 注册表 → sessions 存储 → `header.permissionPreset` 三级回落，父会话找不到就回落空串（不钉全开） | `test-session-access.mjs`（5 条） | 同上 |
+| 什么才算「新会话」可以钉全开：已经是 `danger-full-access`/`auto`/`custom` 的不动、`permission/preset` 事件多于一条（用户自己钉过）就不覆盖、非权限事件不挡 | `test-session-access.mjs`（5 条） | 同上 |
+| 钉权限的落地：新会话置 `danger-full-access`、子会话置父的预设且不重复 set、`set` 抛错只打一行 `[dsh-purge] full-access pin:` 不炸宿主、装的时候补钉已有会话 | `test-session-access.mjs`（6 条） | 同上 |
+| 权限钩子的装与拆：`session/created` 下一个微任务里钉、重复装拦在 `__dshPurgeFullPin` 上、dispose 解绑并清标记（漏清 = 热重载后永久失能）、`ctx.on` 抛错也继续装 | `test-session-access.mjs`（6 条） | 同上 |
+| 工作目录捕获：`header.cwd` 去空白后写 `last-cwd.txt`、同值不重复写盘（`session/event` 每事件都触发）、空值不覆盖旧目录、换目录跟着改、装时扫已有会话 | `test-session-access.mjs`（7 条） | 同上 |
+| cwd 钩子的装与拆：挂 `session/created` + `session/event` 两个、dispose 两个都摘掉并清 `__dshPurgeCwdCapture`、重复装只装一次 | `test-session-access.mjs`（3 条） | 同上 |
+| rewind 派生消息过滤的**现状**：钩子挂得上、dispose 摘得干净，但 `rewind.wrapSessionDeriveMessages` 在 `lib/rewind.js` 里**不存在**，整段是空转（被 try/catch 吞掉）——不顺手补实现，只钉住「加了函数这条会红」 | `test-session-access.mjs`（5 条） | 同上 |
+| 模块面与源码形状：8 个 export 名字固定（index.js 按名字 import）、三处 cleanup 都 `delete ctx.__dshPurge*`、cwd 走 `rules.writeLastCwd` 不自己拼路径 | `test-session-access.mjs`（3 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
 **2026-11-13 补**：状态页渲染（`fsExists` / `line` / `renderStatus`，92 行）也从 `lib/index.js` 抽到了 `lib/status-render.js`（99 行，3 个 export）。理由是它属于「改坏了用户立刻看得见但不会报错」的那一类：列宽错位、`skipped` 不点名、asar 密封不显形，全都只在人眼看状态页时才发现。抽取前后用 18 个 state 变体 + 11 个探针函数逐字节对拍（`renderStatus variants: checked 18, identical 18` / `fsExists/line probes identical: 11/11`），行为零变化。`lib/index.js` 1902 → 1809 行，被 40 条用例钉住，覆盖 98% 行。它那 206 → 203 的行命中下降已用 hunk 行号映射逐行证明是「搬走的行 + 删掉的 import」，幸存行零丢失（`mapped & verified 202, mismatches 0`）。
+
+**2026-11-13 再补**：会话权限钉死 + cwd 捕获 + rewind 派生过滤这 148 行从 `lib/index.js` 抽到了 `lib/session-access.js`（8 个 export）。挑它的理由是「坏了不报错」——权限芯片从完全访问掉成 workspace-write、工作目录没被记住，都只在用户手感里出现。抽取用锚点定位整段搬运，去掉 `export ` 前缀后与备份逐字比对 `diffs 0`，`lib/index.js` 1809 → 1665 行。新增 47 条用例（假 ctx + 临时 `DSH_HOME`，不碰真宿主），RED 演练 21 条注入 **21/21 全红**。`lib/index.js` 的行命中 203 → 198 已精确记账：被删掉的命中行 10 条、新 import 命中 5 条、幸存行命中 193→193 零丢失，`203 - 10 + 5 = 198`。
 
 ---
 
@@ -513,6 +524,14 @@
     列会对不齐（`提示词/Prompt` 是 11 个码元，比英文长）。测试只钉住「当前这些输入排出来是什么样」，
     一旦有人加中文名字的补丁，明细行会错位而测试仍是绿的。
     **检测办法**：改完补丁名之后扫一眼状态页，看 `[#NN]` 后面的名字列是否还齐。
+48. **会话权限与 cwd 捕获只钉住了「装了什么钩子、钩子里判什么」。**
+    这一层真正的外部效果是「权限芯片的表情」和「下次开新会话落在哪个目录」，两者都要真宿主、
+    真人操作才看得见。测试用假 ctx 能证明的是：父会话预设读得到、`permission/preset` 多于一条就不覆盖、
+    `header.cwd` 去空白后落了盘、dispose 把钩子和标记都清了。测不到的是：宿主改了 `permissionPresets`
+    的服务名或 `set` 的签名（那时整组静默失效 —— `permissionPresetsOf` 返回 null 就直接 return）、
+    宿主改了会话事件名（`session/created` / `session/event` 都不再触发）。
+    **检测办法**：升级后手验两条 —— 发完第一条消息权限芯片还在不在「完全访问」；
+    切目录后 `$DSH_HOME/dsh-purge/last-cwd.txt` 有没有跟着变。
 
 ## 维护约定
 

@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T18:40:51.800Z",
-  "commit": "825f6b3",
+  "capturedAt": "2026-11-12T18:57:14.715Z",
+  "commit": "925deb5",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -157,10 +157,10 @@
       "brf": 584
     },
     "lib/index.js": {
-      "lh": 203,
-      "lf": 1809,
+      "lh": 198,
+      "lf": 1665,
       "fnh": 1,
-      "fnf": 45,
+      "fnf": 37,
       "brh": 5,
       "brf": 5
     },
@@ -386,7 +386,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1255
+      "brf": 1256
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -467,6 +467,14 @@
       "fnf": 48,
       "brh": 170,
       "brf": 204
+    },
+    "lib/session-access.js": {
+      "lh": 159,
+      "lf": 159,
+      "fnh": 22,
+      "fnf": 22,
+      "brh": 112,
+      "brf": 133
     },
     "lib/settle-policy.js": {
       "lh": 61,
