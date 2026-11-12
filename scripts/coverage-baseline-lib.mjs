@@ -17,6 +17,28 @@ const METRICS = ['lh', 'lf', 'fnh', 'fnf', 'brh', 'brf']
 // 「原来跑到的行/函数/分支现在跑不到了」，那由 lh/fnh/brh 负责。
 const HIT_METRICS = new Set(['lh', 'fnh', 'brh'])
 
+// 少数文件的分支命中数取决于**跑测试那台机器的文件系统现状**，同一 commit
+// 在不同机器/不同残留状态下会漂几个分支，这种漂移不是「测试变差」。
+//
+// 实测（2026-11-12，lib/desktop.js）：同一 commit 连跑 4 次稳定在
+// fnh 72 / brh 310~311；把 %TEMP% 下遗留的 dsh-purge-*.ps1 与日志移走后
+// brh 310→311；换成空 HOME/USERPROFILE 跑则掉到 69/308。原因是这些函数
+// 的分支挂在 existsSync/readdir 的结果上（~/.dsh 在不在、TEMP 里有没有
+// 上次重启留下的脚本、npm 全局装没装 DSH）。
+//
+// 所以给这几格留容差：容差内的下跌仍然列进报告（看得见），但不算 FAIL。
+// 容差只给「确认过是环境依赖」的文件，加之前必须先在干净 worktree 里
+// 复现出同样的下跌，否则就是拿容差掩盖真倒退。
+export const ENV_TOLERANCE = {
+  'lib/desktop.js': { fnh: 2, brh: 4 },
+}
+
+/** 某个文件的某项指标允许的环境漂移量（默认 0）。 */
+export function toleranceOf(file, metric) {
+  const t = ENV_TOLERANCE[file]
+  return t && typeof t[metric] === 'number' ? t[metric] : 0
+}
+
 // 把 lcov 文本解析成 { 'lib/core.js': { lh, lf, fnh, fnf, brh, brf } }。
 // lcov 用 SF: 起段、end_of_record 收段；路径统一成正斜杠，Windows 反斜杠会
 // 让「基线里是 lib/core.js、实测是 lib\core.js」这种纯格式差异被误判成掉文件。
@@ -84,6 +106,7 @@ export function diffBaseline(baseline, coverage) {
   const missing = []
   const added = []
   const dropped = []
+  const tolerated = []
 
   for (const file of Object.keys(before).sort()) {
     const after = coverage[file]
@@ -96,14 +119,19 @@ export function diffBaseline(baseline, coverage) {
       const a = Number(after[metric] || 0)
       if (a === b) continue
       rows.push({ file, metric, before: b, after: a })
-      if (a < b && HIT_METRICS.has(metric)) dropped.push({ file, metric, before: b, after: a })
+      if (!HIT_METRICS.has(metric)) continue
+      if (a >= b) continue
+      const tol = toleranceOf(file, metric)
+      // 容差内：不算倒退，但 tolerated 里留痕，报告照列。
+      if (b - a <= tol) tolerated.push({ file, metric, before: b, after: a, tolerance: tol })
+      else dropped.push({ file, metric, before: b, after: a })
     }
   }
   for (const file of Object.keys(coverage).sort()) {
     if (!before[file]) added.push(file)
   }
 
-  return { ok: dropped.length === 0 && missing.length === 0, rows, missing, added, dropped }
+  return { ok: dropped.length === 0 && missing.length === 0, rows, missing, added, dropped, tolerated }
 }
 
 const METRIC_LABEL = {
@@ -123,6 +151,14 @@ export function renderReport(diff, { baselinePath = 'docs/test-baseline.json' } 
     const delta = row.after - row.before
     const sign = delta > 0 ? `+${delta}` : String(delta)
     lines.push(`  ${arrow} ${row.file} ${METRIC_LABEL[row.metric] || row.metric} ${row.before} → ${row.after} (${sign})`)
+  }
+  // 容差内的环境漂移：不算 FAIL，但要看得见——否则哪天真掉了 4 个分支
+  // 也会被容差吞掉，而没人知道曾经有这一行提示。
+  for (const row of diff.tolerated || []) {
+    lines.push(
+      `  ~ ${row.file} ${METRIC_LABEL[row.metric] || row.metric} ${row.before} → ${row.after} ` +
+        `(-${row.before - row.after}，在环境容差 ${row.tolerance} 内)`,
+    )
   }
   for (const file of diff.missing) {
     lines.push(`  ✖ ${file} 在基线里但本次没有覆盖率记录（文件被删或被 exclude 误伤）`)

@@ -17,6 +17,7 @@ import {
   buildBaseline,
   diffBaseline,
   renderReport,
+  toleranceOf,
 } from './coverage-baseline-lib.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -167,6 +168,64 @@ test('diffBaseline：本次新增文件 → 只提示，不红', () => {
   })
   assert.equal(added.ok, true)
   assert.deepEqual(added.added, ['lib/new.js'])
+})
+
+// ------------------------------------------------- 环境容差（ENV_TOLERANCE）
+// 背景：lib/desktop.js 的分支命中数取决于跑测试那台机器的文件系统现状
+// （~/.dsh 在不在、%TEMP% 里有没有上次重启留下的 .ps1、npm 全局装没装 DSH）。
+// 同一 commit 在干净 worktree 里也复现不出基线那几个分支，连跑 4 次稳定在
+// brh 310~311。给它留容差，但容差内的下跌必须**在报告里看得见**。
+
+const DESKTOP = { lh: 1386, lf: 2260, fnh: 72, fnf: 107, brh: 311, brf: 419 }
+const desktopBaseline = {
+  schema: BASELINE_SCHEMA,
+  files: { 'lib/desktop.js': { ...DESKTOP, fnh: 73, brh: 312, brf: 420 } },
+}
+
+test('toleranceOf：只对登记过的文件与指标给容差', () => {
+  assert.equal(toleranceOf('lib/desktop.js', 'fnh'), 2)
+  assert.equal(toleranceOf('lib/desktop.js', 'brh'), 4)
+  assert.equal(toleranceOf('lib/desktop.js', 'lh'), 0, '行命中没有登记，容差为 0')
+  assert.equal(toleranceOf('lib/core.js', 'brh'), 0, '没登记的文件一律 0')
+  assert.equal(toleranceOf('lib/desktop.js', 'nope'), 0, '不认识的指标 0')
+})
+
+test('diffBaseline：容差内的环境漂移不红，但要进 tolerated 留痕', () => {
+  const d = diffBaseline(desktopBaseline, { 'lib/desktop.js': DESKTOP })
+  assert.equal(d.ok, true, '容差内不该报 FAIL')
+  assert.deepEqual(d.dropped, [])
+  assert.deepEqual(d.tolerated, [
+    { file: 'lib/desktop.js', metric: 'fnh', before: 73, after: 72, tolerance: 2 },
+    { file: 'lib/desktop.js', metric: 'brh', before: 312, after: 311, tolerance: 4 },
+  ])
+})
+
+test('diffBaseline：超出容差仍然红（容差不是免死金牌）', () => {
+  const d = diffBaseline(desktopBaseline, { 'lib/desktop.js': { ...DESKTOP, brh: 307 } })
+  assert.equal(d.ok, false, '掉了 5 个分支，超出容差 4')
+  assert.deepEqual(d.dropped, [{ file: 'lib/desktop.js', metric: 'brh', before: 312, after: 307 }])
+  assert.deepEqual(d.tolerated, [
+    { file: 'lib/desktop.js', metric: 'fnh', before: 73, after: 72, tolerance: 2 },
+  ])
+})
+
+test('diffBaseline：没登记容差的文件掉一格照样红', () => {
+  const d = diffBaseline(baseline, { 'lib/core.js': { ...CORE, brh: 19 }, 'lib/gone.js': GONE })
+  assert.equal(d.ok, false)
+  assert.deepEqual(d.tolerated, [], 'lib/core.js 没有容差')
+})
+
+test('renderReport：容差行用 ~ 前缀并写明容差额度', () => {
+  const text = renderReport({
+    ok: true,
+    rows: [{ file: 'lib/desktop.js', metric: 'brh', before: 312, after: 311 }],
+    missing: [],
+    added: [],
+    dropped: [],
+    tolerated: [{ file: 'lib/desktop.js', metric: 'brh', before: 312, after: 311, tolerance: 4 }],
+  })
+  assert.match(text, /\[coverage\] PASS/)
+  assert.match(text, /~ lib\/desktop\.js 分支 312 → 311 \(-1，在环境容差 4 内\)/)
 })
 
 // ------------------------------------------------------------ renderReport

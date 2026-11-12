@@ -31,6 +31,31 @@ npm run check
 
 无 `.git` 的目录（例如 `npm pack` 解包出来的 tgz）跑 `test:full` 会返回退出码 2 并说明原因，不会误报覆盖率下降：`lib/update.js` 里 `gitHead` / `canGit` 的 catch 分支在无 git 时走不到，行数天然少十几行。这是环境差异，不是倒退。
 
+### 环境容差（ENV_TOLERANCE）
+
+有极少数文件的分支命中数取决于**跑测试那台机器的文件系统现状**，同一 commit 在不同机器 / 不同残留状态下会漂几个。
+这种漂移不是「测试变差」，所以给它们登记容差，而不是每次换机器就刷一遍基线。
+
+当前只登记了一格（`scripts/coverage-baseline-lib.mjs`）：
+
+```js
+export const ENV_TOLERANCE = {
+  'lib/desktop.js': { fnh: 2, brh: 4 },
+}
+```
+
+依据（2026-11-12 实测，commit `b18b3f4` 的干净 worktree）：`lib/desktop.js` 连跑 4 次稳定在 `fnh 72 / brh 310~311`；
+把 `%TEMP%` 下遗留的 `dsh-purge-asar-rename-when-idle-*.ps1` 与两个日志移走后 brh 从 310 变 311；
+换成空 `HOME` / `USERPROFILE` 跑则掉到 `69 / 308`。原因是这些分支挂在 `existsSync` / `readdir` 的结果上：
+`~/.dsh` 在不在、TEMP 里有没有上次重启留下的脚本、npm 全局装没装 DSH。
+
+规矩：
+
+- 容差内的下跌**仍然列进报告**，前缀是 `~`，例如 `~ lib/desktop.js 分支 312 → 311 (-1，在环境容差 4 内)`。看不到的容差等于没有。
+- 超出容差照样红。`test-coverage-baseline.mjs` 有一条「容差不是免死金牌」专门钉这个。
+- 加容差之前必须先在干净 worktree 里复现出同样的下跌，否则就是拿容差掩盖真倒退。
+- 容差只针对**命中数**（`lh` / `fnh` / `brh`），行数与总数的比较逻辑不受影响。
+
 ## 需要宿主样本的验证
 
 以下命令不属于默认 `check`，必须显式提供目标样本：
