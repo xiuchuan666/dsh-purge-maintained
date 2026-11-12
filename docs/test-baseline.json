@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T18:16:07.824Z",
-  "commit": "339ae47",
+  "capturedAt": "2026-11-12T18:40:51.800Z",
+  "commit": "825f6b3",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -69,12 +69,12 @@
       "brf": 210
     },
     "lib/core.js": {
-      "lh": 2567,
+      "lh": 2575,
       "lf": 5274,
-      "fnh": 181,
+      "fnh": 183,
       "fnf": 321,
-      "brh": 702,
-      "brf": 939
+      "brh": 706,
+      "brf": 948
     },
     "lib/desktop.js": {
       "lh": 1386,
@@ -157,10 +157,10 @@
       "brf": 584
     },
     "lib/index.js": {
-      "lh": 206,
-      "lf": 1902,
+      "lh": 203,
+      "lf": 1809,
       "fnh": 1,
-      "fnf": 48,
+      "fnf": 45,
       "brh": 5,
       "brf": 5
     },
@@ -386,7 +386,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1259
+      "brf": 1255
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -483,6 +483,14 @@
       "fnf": 62,
       "brh": 324,
       "brf": 390
+    },
+    "lib/status-render.js": {
+      "lh": 97,
+      "lf": 99,
+      "fnh": 5,
+      "fnf": 5,
+      "brh": 70,
+      "brf": 73
     },
     "lib/subagent-control.js": {
       "lh": 67,

@@ -140,7 +140,7 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| `name` / `inject` 能装配（写错 `pluginPackages` → 宿主退出码 1） | `test-plugin-surface.mjs` | `lib/index.js` 8% |
+| `name` / `inject` 能装配（写错 `pluginPackages` → 宿主退出码 1） | `test-plugin-surface.mjs` | `lib/index.js` 11% |
 | 7 个 export 名字不能多不能少 | `test-plugin-surface.mjs` | 同上 |
 | `normalizeConfig()` 返回 18 键，且默认值逐项锁定 | `test-plugin-surface.mjs` | 同上 |
 | 12 个布尔键收敛 `"false"/"0"/"no"/"off"` | `test-plugin-surface.mjs` | 同上 |
@@ -192,8 +192,14 @@
 | 桥的来源判定五种情形：cross-site / same-site 直拒、无 Origin 放行（curl）、`null` 只在本机放行、`app://` 只在本机放行、端口不同算跨源、非法 URL 拒 | `test-redteam-bridge.mjs`（7 条） | `lib/redteam/bridge.js` 100% |
 | 桥的 op 路由顺序：平台 → 代理 → 更新 → 技能 → 兜底，每层认领即短路 | `test-redteam-bridge.mjs`（5 条） | `lib/redteam/bridge.js` 100% |
 | 技能层的桌面端兜底：`skillCatalog`/`skillRead` 抛错时改读文件、兜底也失败要带原始错误、非技能 op 原样抛 | `test-redteam-bridge.mjs`（4 条） | `lib/redteam/bridge.js` 100% |
+| 状态页的三个零件：`line()` 的三种记号（`✓` / `✗` / 中性点）与 `undefined` 走默认值、`fsExists()` 的真假/数组/非字符串/含 `\0` 路径、`renderStatus()` 输出末尾不带多余换行 | `test-status-render.mjs`（11 条） | `lib/status-render.js` 98% |
+| 状态页每一段的有无：插件根缺失打叉、多落点标 `+N`、桌面 runtime 折叠成一行、`runtime_payload` 四态、`no_resources` 分支、asar 密封显形、宿主未适配时警告、`shim_scope` 三种说明 | `test-status-render.mjs`（18 条） | 同上 |
+| 状态页的补丁汇总：`skipped` / `drifted` / `pending` 各自要不要在汇总行点名、明细行 `applied` 打勾而未知状态打中性点、未知 id 用 `patch-N` 兜底、`layer` 取 `提示词/Prompt` | `test-status-render.mjs`（9 条） | 同上 |
+| 状态页的列宽与结构：文件清单名字列 22 宽、明细名字列 30 宽 / id 列 2 宽（用字面量空格 + 正则钉，不用 `padEnd` 拼期望值）、段间空行、纯函数不改入参 | `test-status-render.mjs`（2 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
+
+**2026-11-13 补**：状态页渲染（`fsExists` / `line` / `renderStatus`，92 行）也从 `lib/index.js` 抽到了 `lib/status-render.js`（99 行，3 个 export）。理由是它属于「改坏了用户立刻看得见但不会报错」的那一类：列宽错位、`skipped` 不点名、asar 密封不显形，全都只在人眼看状态页时才发现。抽取前后用 18 个 state 变体 + 11 个探针函数逐字节对拍（`renderStatus variants: checked 18, identical 18` / `fsExists/line probes identical: 11/11`），行为零变化。`lib/index.js` 1902 → 1809 行，被 40 条用例钉住，覆盖 98% 行。它那 206 → 203 的行命中下降已用 hunk 行号映射逐行证明是「搬走的行 + 删掉的 import」，幸存行零丢失（`mapped & verified 202, mismatches 0`）。
 
 ---
 
@@ -501,6 +507,13 @@
     于是折叠块原样留下、`personaPrefix` 与官方身份文案一起生效，用户会看到两套身份并存。
     表现为「注入看起来没生效」而不是报错。守卫只看这五类各自还能被认出来，测不出「官方又多了一类」。
     **检测办法**：升级后跑 `npm run host:status`，若 `cordis.patch.yml` 的 `personaPrefix` 没被清空，就是这一类。
+
+47. **状态页的列宽是「数字常量 + 空格」，不是按终端宽度算的。**
+    `renderStatus()` 里 22 / 30 / 2 三个宽度写死，中文字符按 UTF-16 长度算，所以 `layer` 是中文时
+    列会对不齐（`提示词/Prompt` 是 11 个码元，比英文长）。测试只钉住「当前这些输入排出来是什么样」，
+    一旦有人加中文名字的补丁，明细行会错位而测试仍是绿的。
+    **检测办法**：改完补丁名之后扫一眼状态页，看 `[#NN]` 后面的名字列是否还齐。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
