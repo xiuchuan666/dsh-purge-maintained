@@ -72,9 +72,13 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| 拆分后 86 条补丁与拆分前逐字节等价（含正则 flags、函数 replace） | `test-patch-registry.mjs` | `lib/patches/*` 六个文件 **100%** |
-| 应用顺序不可重排（`#76` 必须早于 `#70`） | `test-patch-registry.mjs` | 同上 |
-| 239 个 replacement 在真实引擎上跑出相同结果（690 组 LF/CRLF/YAML 对拍） | `test-patch-registry.mjs` | 同上 |
+| 86 条补丁与拆分前快照的关系：id 与顺序不变、除 `replacements` 外每个字段逐字段相等 | `test-patch-registry.mjs`（3 条） | `lib/patches/*` 六个文件 **100%** |
+| 既有 replacement 一字不改地排在前面，新形态只能追加在末尾；追加条数逐条等于登记值（`APPEND_ALLOWED`，多一条少一条都红） | `test-patch-registry.mjs`（`APPEND_ALLOWED` 6 条 + 形状 1 条） | 同上 |
+| 拆分前那 239 个 replacement 在真实引擎上仍跑出相同结果（690 组 LF/CRLF/YAML 对拍，按「前缀裁剪」比，追加条目不参与） | `test-patch-registry.mjs` | 同上 |
+| 0.2.2-rc.2 改过的六处锚点（`#13` 错误码 / `#18` 删 block 分支 / `#35` switch 重写 / `#62` `approvalDenial()` 两种排版 / `#56`+`#77` 被压成 minified）在真实 rc.2 窗口上打得动、打完幂等、marker 都在 | `test-patch-upgrade.mjs`（40 条，夹具来自 `patch-upgrade-fixtures.mjs` 的 7 段真实窗口） | `lib/patches/*` 同上 |
+| 旧 pattern 打不动 rc.2 窗口（防「新 pattern 其实是照抄旧 pattern」） | `test-patch-upgrade.mjs`（7 条，逐条用拆分前快照的旧补丁跑同一段窗口） | — |
+| minified 的 `client.js` 只能用块注释写 marker：单行 70 万字节里 `//` 会把后半行连同类定义一起注掉 | `test-patch-upgrade.mjs`（`#56`/`#77` 追加条目逐条查 `/*` 与 `//`） | — |
+| minified 追加条目一律带 `insertProbe`，且 probe 打完必须在、原文必须不在（`skipIfMarked` 只能防「marker 还在」那种重复，marker 被冲掉就得靠它） | `test-patch-upgrade.mjs`（2 条） | — |
 | 补丁 id 唯一、非空、是整数 | `check-metadata.mjs` / `test-verification.mjs` | — |
 | 状态汇总优先级（`pending` > `unmatched` > `drifted` > 全 skip > `applied`） | `test-display-targets.mjs`（6 条，含「漂移压过已完成」「全跳过不报 applied」「未知状态退化 skipped」） | `lib/core.js` 28% |
 | 显示分组（九个组、组内 lead 取最小 id、无组补丁自成一行、只适配桌面的补丁不进 web 面、`na` 与缺状态不进行） | `test-display-targets.mjs`（7 条，含「分组 id 必须真实存在且不跨组」） | `lib/core.js` 28% |
@@ -445,6 +449,11 @@
     所以它只验证文件层面的锚点，不验证构建产物（比如 `lib/bin-*.js` 那种带 hash 的 chunk 名）。
 
 ---
+
+
+40. **rc.2 之后的新形态只能靠夹具守，不能靠「推理」守**。`test-patch-upgrade.mjs` 的 7 段窗口是从一棵真实的 0.2.2-rc.2 安装树里切出来的，用 `scripts/gen-patch-upgrade-fixtures.mjs --preview` 重新生成。上游再升版本时，这七段会全部失配——这是设计意图（说明锚点又变了），不是测试坏了。重新切片之前不要为了让测试变绿去改 `before` 字段：那等于把「上游改了什么」这个事实抹掉。
+41. **`APPEND_ALLOWED` 是手写登记表，不是自动推导的**。给某条补丁追加 replacement 后忘了登记，`test-patch-registry.mjs` 会红（这是对的）；反过来，把 `APPEND_ALLOWED` 的值改大来「修好」测试，就绕过了「追加条数」这道唯一的数量守卫。真需要多追加时，连同一句说明一起改。
+42. **两套 minified 断言都只看形状，不看运行**。`isRewindMarker` / `rewindVisibleEntries` 的语义等价性是拿 rc.1 已打版与 rc.2 注入版各 `new Function` 装载、喂 14 组事件序列比出来的（临时脚本做过，未入库）。仓库里只有窗口级对拍：能证明「注入的代码就是我们写的那段」，不能证明「这段代码的行为和 rc.1 一致」。要补这一层，得把那段对拍脚本正式收进 `scripts/`，并准备一份 rc.1 已打版作为参照——那需要真宿主在场，CI 上跑不了。
 
 ## 维护约定
 
