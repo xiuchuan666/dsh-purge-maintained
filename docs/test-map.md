@@ -190,7 +190,7 @@
 | POC 检索：四键排序（已验证 → 复用次数 → 更新时间 → id）、FTS 按词切命中不了时退化成 LIKE、多值归类、`limit` 夹在 1000 以内且负数等于不限 | `test-knowledge-store.mjs` | 同上 |
 | POC 单条读写与删除：`getPoc` 认 id / code / 字符串 id、`updatePoc` 只在正文变了才重写文件、`deletePoc` 连落盘目录一起删并报删了几个文件 | `test-knowledge-store.mjs` | 同上 |
 | POC 概览口径：14 条内置归类顺序固定且计数为 0 也列出、自定义归类追加在尾部、`total` / `verified` / `withContent` / `reused` 各自怎么数 | `test-knowledge-store.mjs` | 同上 |
-| 六个 `redteam_poc_*` 工具的 `execute` 真的读得到 `args`：返回值取自入参（`code` 由标题算出）、`hit_count` 递增、查不到时给出「先检索」的指引 | `test-redteam-tools.mjs` | `lib/redteam/tools.js` 74% |
+| 六个 `redteam_poc_*` 工具的 `execute` 真的读得到 `args`：返回值取自入参（`code` 由标题算出）、`hit_count` 递增、查不到时给出「先检索」的指引 | `test-redteam-tools.mjs` | `lib/redteam/tools.js` 79% |
 | nuclei 模板索引缓存（首次建、命中、7 天过期、损坏重建） | `test-store-templates.mjs` | 同上 |
 | 计分口径三处一致：面板 / 报告 / 攻击链算出同一个总分（普通命中、同服务去重、自建账号、停用得分点、规则上限吃满、命中自带分值、G6 IPv6 ×3、G5 数据规模 ×2、混合 9 种场景） | `test-score-consistency.mjs` | `lib/redteam/store-core.js` 88% |
 | `applyScoreCaps` 纯函数：四种 `dedup_scope` + 规则上限的边界（降序累计、`cap<=0` 不封、`self_created` 不占位、无元数据退化） | `test-score-consistency.mjs` | `lib/redteam/score-rules.js` 98% |
@@ -211,7 +211,7 @@
 | 连通性探测：真起 HTTP/TCP 服务验 online/active 并回写库、连不上标 offline/down 且留 `check_note`、空 `listen` 与坏端口如实报错 | `test-redteam-report.mjs` | 同上 |
 | FTS5 缺席时的降级：两张虚拟表不建但普通表一张不少、资产六种检索面与 POC 三种检索面都还能命中 | `test-fts-fallback.mjs` | `lib/redteam/schema.js` 93% / `store-core.js` 76% |
 | 降级与原生两种模式的差异边界：中间子串 LIKE 能搜到而 FTS 前缀匹配搜不到（现状锁定），其余检索面对齐 | `test-fts-fallback.mjs` | 同上 |
-| 64 个 `redteam_*` 工具的参数面：宿主能编译成 JSON Schema、缺必填/类型错/枚举外被拒、数组与对象按元素判 | `test-redteam-tools.mjs` | `lib/redteam/tools.js` 74% |
+| 64 个 `redteam_*` 工具的参数面：宿主能编译成 JSON Schema、缺必填/类型错/枚举外被拒、数组与对象按元素判 | `test-redteam-tools.mjs` | `lib/redteam/tools.js` 79% |
 | 靶标绑定解析：单靶标自动绑定、显式优先、多靶标未绑定报错、全局当前靶标被别的会话占用时挡住 | `test-redteam-tools.mjs` | 同上 |
 | 并发闸门：上限读设置、占满拒绝、release 按最早一条释放、无会话上下文时如实说明 | `test-redteam-tools.mjs` | 同上 |
 | 工具错误结构化：`ctx.redteam` 缺失回「资产库不可用」、桩库缺方法原文照抄、参数类错误归 `bad_input` | `test-redteam-tools.mjs` | 同上 |
@@ -221,6 +221,12 @@
 | 资产面工具的 `execute` 业务分支：`asset_add` 回「刚写入的那一条」+ 发现时间不变、`asset_query` 的 limit 夹 200 而 `total` 不受影响、`asset_graph` 与 `attack_path` 各自的节点上限（1000 / 1500）与超限回分段清单、`asset_timeline` 按天聚合、`asset_link` 回边数、`asset_test` 的测试记录追加而不覆盖 | `test-redteam-tool-branches.mjs` | `lib/redteam/tools.js` 93% |
 | 计分与攻击链工具的 `execute` 业务分支：`score_list` 的 `groups`（`items` 是档位数、`points` 是已得分，两者别搞反）、`score_hit` 的旧 code 迁移提示、`score_report` 的 `markdown:false` 精简分支、`attack_chain` 的非法 `stage_code` 回落 recon、`chain_add` 的 hints 三源 | `test-redteam-tool-branches.mjs` | 同上 |
 | 会话/证据/报告/知识库工具的 `execute` 业务分支：`sessions` 的边界突破口径、`session_check` 的在线数与可用数、`web_list` 的 URL 协议与端口拼接、`http_evidence_add` 真落库、`evidence_*` 四件套、`unknown_*` 三件套、`report` 与 `report_targets`、`poc_add` 的来源靶标名称补全 | `test-redteam-tool-branches.mjs` | 同上 |
+| 工具定义按领域拆成五个组文件后仍注册满 64 个：`registerReconTools` 11 / `registerFindingTools` 22 / `registerScoringTools` 16 / `registerKnowledgeTools` 6 / `registerEvidenceTools` 9，`apply` 只剩编排（store 解析 + `ctx.effect` 自动释放 + 五行调用） | `test-redteam-tools.mjs` | `lib/redteam/tool-specs-*.js` 91–100% / `tools.js` 79% |
+| 组文件的 `deps` 不漏符号：`ledgerOf` / `unknownsOf` 两个工厂随证据组搬走后不再从 deps 注入（组内自带），`liveRunningChildren` 与 `bindings` / `reservations` / `bindingKeyOf` / `sessionInfoOf` / `resolveRootSession` / `capMap` / `BINDINGS_CAP` / `RESERVATIONS_CAP` / `ROLE_HINT` 必须逐个传进去，少一个就是 `ReferenceError` | `test-redteam-tools.mjs` | 同上 |
+| `poc_search` 的 `by_category` 只列有条目的归类：底层 `pocStats().byCategory` 恒是内置 14 项（含 n=0），工具层必须过滤，否则模型误判「库里有一堆分类」 | `test-redteam-tools.mjs` | `lib/redteam/tool-specs-knowledge.js` 100% |
+| 两个吃 `role` 的工具枚举都派生自 `ROLE_ORDER`（写死四值那次漏掉 `assess`，资产梳理子智能体永远拿不到角色稿）；`redteam_roles` 自己不吃参数 | `test-redteam-tools.mjs` | `lib/redteam/tool-specs-findings.js` 100% |
+| `score_report` 的 `limit` 真的传下去：造两条成果时 `limit:1` 只回一条，`summary` 与 `items` 同口径（现状：summary 也按截断后的 items 算） | `test-redteam-tool-branches.mjs` | `lib/redteam/tool-specs-scoring.js` 100% |
+| `unknown_resolve` 的 `disposition` 与 `unk_id` 都是宿主层必填；`evidence_*` 四件套在 `store.db` 缺失时抛「红队资产库不可用」而不是静默返回空账本 | `test-redteam-tools.mjs` | `lib/redteam/tool-specs-evidence.js` 100% |
 | 计分块的实现位置与转发：`scoreReport` / `scoreChain` / `#hitTrace` / `#representativeShots` 的实现在 `score-report.js`，类里只留一行转发；四个函数的函数体与拆分前逐行一致（152/1048/178/44 行 diff 0） | `test-score-consistency.mjs` / `test-redteam-report.mjs`（转发出错则三处总分不再相等） | `lib/redteam/score-report.js` 78% |
 | 靶标元数据的落盘与阶段口径：`readMeta` / `writeMeta` 的容错、`SCOPE_SQL` 的内外网判定、`POINT_SHORT_NAME` / `scoreStageOf` / `LEGACY_STAGE_MAP` 的取值 | `test-schema-migrate.mjs`（末条）+ `test-score-consistency.mjs` | `lib/redteam/engagement-meta.js` 99% |
 | 事实库迁移的两处回填真的生效：`asset.scope` 按 IP 归属判内外网（含 172.16–31 与 100.64–127 的边界）、`attack_step.stage_code` 按 `LEGACY_STAGE_MAP` 映射七个老阶段、已有值一律不覆盖、跑两遍结果全等 | `test-schema-migrate.mjs`（23 条） | `lib/redteam/schema.js` 98% |
@@ -380,6 +386,9 @@
 33. **`lib/redteam/store-core.js` 已拆出两个模块，但拆分的「等价性」只有一次性的对拍，没有常驻守卫。** 5429 行拆成 3832 行 + `score-report.js`（1533 行，计分三件套）+ `engagement-meta.js`（155 行，元数据与阶段口径），类里对四个方法只留一行转发，所以 `store.scoreReport(...)` 的调用点一处都没动。拆分当时用「`git show HEAD:` 取原文 → 同一套 splice 算法重跑一遍 → 与工作区逐行比对」证明 `store-core.js` 除搬走四块、换四个转发、插 import/再导出块之外零改动（DIFF 0 / 3832 行），`score-report.js` 里四个函数也逐行对拍过（152/1048/178/44 行 diff 0）。但这份对拍脚本在 `.tmp45/`，提交前就删了 —— 将来谁再动这三个文件，没有任何东西会告诉他「你把实现挪了却没改转发」。能兜住的是行为：`test-score-consistency.mjs` 的 25 条要求面板/报告/攻击链算出同一个总分，转发写错立刻红。**顺带修掉两处上游漏定义**：`schema.js` 的 `migrate()` 引用了 `SCOPE_SQL` 与 `LEGACY_STAGE_MAP` 却从未 import，两处回填的 `ReferenceError` 被外层 `try { … } catch { /* 忽略 */ }` 吞掉 —— 老库的 `asset.scope` 内外网与 `attack_step.stage_code` 阶段映射**从 1.1.94 上线起就没生效过**，且不报任何错。修法是从新的叶子模块 import，`test-schema-migrate.mjs` 用「造老库形状 → 跑 migrate → 断言回填结果」钉住，RED 演练 16 条注入全红。另有一条只能钉源码形状：`port` 回填里 `if (port !== null)` 这个守卫，因为 SELECT 已经过滤了 `port IS NULL`，写 NULL 与跳过在库里结果相同，行为断言区分不了。
 
 34. **行尾约定只能靠 `docs/eol-baseline.json` 现状锁定，没有「应该是什么」的独立判据。** `check:eol` 的三条规则全部相对基线判断：第 2 条要求「已入库文件的行尾不许变」，而基线本身就是 `--update` 从当前工作区生成的 —— 所以**只要有人跑一次 `--update`，任何行尾改动都会被当成新的正确状态**。这道守卫挡的是「无意中被 git 转换」，不是「故意改行尾」。能兜住的只有第 3 条（新文件必须符合同目录多数派）与第 1 条（文件内不许混行尾），这两条不依赖基线。另外：①`client.js` 与 `docs/origin/client-1.1.94.js` 是 5017 CRLF / 9381 LF 的混合文件，它们是上游产物的逐字节锚点（`check:client` 校验哈希），所以进 `MIXED_ALLOWED` 白名单、永远不报 —— 这意味着**这两份文件的行尾无法用任何自动手段保护**，只能靠「别手改 `docs/origin/`」这条约定。②`readBlobs` 用 `git cat-file --batch`，头部 `<sha> <type> <size>` **不含路径**，必须按输入顺序对上；第一版用 `parts.slice(3)` 取路径导致所有 blob 落到同一个键、检测静默失效（`check` 永远 PASS），是靠负向验证（临时开 `core.autocrlf=true` 造出「工作区 2 CRLF、blob 2 LF」）才抓出来的。③`--batch` 的缺失对象只输出两段 `<输入> missing`，要跳过，且内容必须按声明的 size 切、不能按行切。④`git ls-files` 只列已跟踪文件，未跟踪的新文件不在审计范围 —— 新增文件要先 `git add` 才会被查，所以「刚写完还没 add 的文件行尾不对」这件事要到下一轮才暴露。
+
+35. **`lib/redteam/tools.js` 按领域拆成五个 `tool-specs-*.js` 之后，「拆分等价性」同样只有一次性对拍。** 2269 → 474 行（`apply` 只剩编排），五个组文件共 1865 行；64 个工具块的原文逐行对拍过（recon 569 / findings 448 / scoring 380 / knowledge 180 / evidence 212，全部 diff 0），但这份对拍脚本没进仓库，下次再搬只能重写。守行为的是原有测试（注册面 64 个、参数面宿主编译、业务分支 41 条），它们只能证明「搬完行为没变」，不能证明「搬的时候一个字都没改」。
+   另外三处只能现状锁定：①`tool-specs-evidence.js` 里的 `ledgerOf` / `unknownsOf` 两个工厂是**组内自带**（只闭包 `store`），不从 `deps` 注入，所以「deps 漏传」这类错误在证据组不会暴露，只在 recon/findings/scoring/knowledge 组暴露；②`score_report` 的 `summary` 与 `items` 同口径（`limit:1` 时 `count` 也是 1），要改成全量口径得另算一遍，属产品决策；③`redteam_roles` 的 `parameters` 是空对象，它的角色列表来自 `ROLE_TITLES` 而非 `ROLE_ORDER`，两个来源顺序不同（`ROLE_TITLES` 含 `plan` 在首位）。
 
 ---
 

@@ -660,6 +660,28 @@ test('score_report 默认给 markdown，markdown=false 时给可筛的条目', a
   })
 })
 
+test('score_report 的 limit 真的传给 store.scoreReport（两条成果时只回一条）', async () => {
+  await withStore(async ({ store, call }) => {
+    /* 两条不同得分点，各自一条 hit：不传 limit 时两条都进报告，limit:1 时只剩第一条。
+       这里必须造两条 —— 只有一条时「传了 limit」与「没传」产出完全相同，测不出漏传。 */
+    await call('redteam_score_hit', { point_id: 2, evidence: '回显 uid=0', target: '10.0.0.5' })
+    await call('redteam_score_hit', { point_id: 3, evidence: 'root 登录成功', target: '10.0.0.6' })
+
+    const all = await call('redteam_score_report', { markdown: false })
+    assert.equal(all.summary.count, 2)
+    assert.deepEqual(all.items.map((x) => x.seq), [1, 2])
+
+    const one = await call('redteam_score_report', { markdown: false, limit: 1 })
+    assert.equal(one.items.length, 1, 'limit:1 必须真的截断')
+    assert.equal(one.items[0].seq, 1)
+    assert.equal(one.items[0].point, all.items[0].point)
+    /* summary 是**按 limit 之后的 items 算**（实测现状）：limit:1 时 count 也是 1。
+       想让 summary 保持全量口径得另算一遍，属产品决策，这里只锁现状。 */
+    assert.equal(one.summary.count, 1, 'summary 与 items 同口径，都受 limit 约束')
+    assert.equal(one.summary.points, all.items[0].points)
+  })
+})
+
 /* ==================================================== 攻击链与攻击文件 */
 
 test('chain_add 的 hints 三源：缺 tool / 缺 result / 得分提示', async () => {
@@ -939,7 +961,7 @@ test('preflight 的「桌面端无 skills inject」早退支靠源码形状钉�
      本包自带 skills/redteam 的 23 个 .md，任何安装形态下都不为空，所以
      公开路径上走不到。它仍然重要（桌面端没有 skills inject 时整条 preflight
      会报废），用形状断言钉住守卫与返回体。 */
-  const src = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  const src = readFileSync(new URL('../lib/redteam/tool-specs-recon.js', import.meta.url), 'utf8')
   assert.match(src, /if \(skillsMissing && bundledSkills\.length === 0\) \{/)
   assert.match(src, /skills_root_hint: '宿主 skills 服务不可用：已跳过技能正文体检，仅返回平台工具探测。/)
   assert.match(src, /ok: missing\.length === 0 && toolMissing\.length === 0,/)

@@ -297,10 +297,17 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 `lib/redteam/store-core.js` 从 5429 行拆到 3832 行，方法是**只搬不改**：整块剪下来放进新文件，类里留一行转发。已拆出的两个模块：
 
+`lib/redteam/tools.js` 从 2269 行拆到 474 行，方法相同但粒度不同：64 个 `ctx.tools.register(...)` 块按领域切成五组，每组一个 `register<X>Tools(deps)`，`apply(ctx)` 只剩编排（解析 store、挂 `ctx.effect` 自动释放并发名额、五行调用）。工具块本身**一字未改**（2 格缩进原样保留），所以逐行对拍能过。
+
 | 文件 | 行数 | 装什么 |
 | --- | --- | --- |
 | `lib/redteam/engagement-meta.js` | 155 | 叶子模块：`ROLE_TITLES` / `SEVERITIES` / `VULN_STATUSES` / `SCOPE_SQL` / `readMeta` / `writeMeta` / `POINT_STAGE_OVERRIDE` / `POINT_SHORT_NAME` / `scoreStageOf` / `LEGACY_STAGE_MAP` / `VALID_STAGE_CODES` |
 | `lib/redteam/score-report.js` | 1533 | 计分三件套：`hitTrace` / `scoreReport` / `scoreChain` / `representativeShots`，第一参一律是 store 实例 |
+| `lib/redteam/tool-specs-recon.js` | 585 | 11 个工具：靶标开关、资产与端口、攻击图谱、preflight |
+| `lib/redteam/tool-specs-findings.js` | 461 | 22 个工具：角色稿、漏洞、凭据、权限、webshell、隧道、截图 |
+| `lib/redteam/tool-specs-scoring.js` | 393 | 16 个工具：得分点、命中、链路、报告、攻击文件 |
+| `lib/redteam/tool-specs-knowledge.js` | 192 | 6 个工具：POC 知识库的增删查用 |
+| `lib/redteam/tool-specs-evidence.js` | 234 | 9 个工具：证据账本、未知项、资产时间线 |
 
 `store-core.js` 继续把 `engagement-meta.js` 的 11 个名字再导出一次，所以对外 API 不变（实测导出键从 73 涨到 77，只增不减）。
 
@@ -312,6 +319,12 @@ npm run check           # 3. 全量校验（含片段同步检测）
 2. **左移缩进时要跳过模板字符串内部的行。** 类方法搬出去要减 2 格缩进，但 SQL 多行模板与 markdown 片段里的缩进是内容的一部分。判据：累计一行里反引号的个数，奇数就翻转 `inTemplate`；`inTemplate` 为真且该行不含反引号时原样照抄。`score-report.js` 里有 9 处跨行模板，漏判一处就会改变生成的 SQL 文本。
 3. **搬完立刻做逐行对拍，不要只靠测试绿。** 做法：拿 `git show HEAD:<file>` 的原文，用同一套 splice 算法在内存里重跑一遍，与工作区文件逐行比对（`store-core.js` 得到 DIFF 0 / 3832 行）；新文件里的每个函数按花括号配平取出函数体，归一化（去 2 格缩进、`this.#x(` ↔ `x(store, `）后与旧版逐行比（四个函数 152/1048/178/44 行全部 diff 0）。测试绿只证明「行为没变」，对拍才证明「代码没被顺手改动」。
 
+### 切块脚本本身的三条实测规则
+
+1. **不能假设「第 i 个 start 配第 i 个 end」后中间只有空行。** `tools.js` 的 64 个注册块之间还夹着一条分隔注释（`/* ==== 资产发现时间线 */`）与两个局部工厂（`ledgerOf` / `unknownsOf`）。第一版脚本按 `starts[i]` 到 `ends[i]` 切，第 0 组就报 `head not a register call: "    name: 'redteam_engagement_open',"` —— 因为配对从第一个非注册行开始就错位了。正确做法：先扫 `^ {4}name: '([a-z0-9_]+)',$` 得到 64 个名字，用名字反查每块的 start/end，再把非注册行单独处理。
+2. **`deps` 必须逐个核对，少一个就是运行期 `ReferenceError`。** 这一批踩了两次：`ledgerOf` / `unknownsOf`（随证据组搬走的局部工厂）与 `liveRunningChildren`（模块级 async 函数，`tools.js:327`）。做法是把 `apply` 里所有被工具块引用的标识符列出来，减去「组内自己定义的」，剩下的全进 `deps`；`bindings` / `reservations` / `bindingKeyOf` / `sessionInfoOf` / `resolveRootSession` / `capMap` / `BINDINGS_CAP` / `RESERVATIONS_CAP` / `ROLE_HINT` 这些也都要传，它们是模块级的 `Map` 与常量，不传就是 `undefined`。
+3. **生成的文件要转成与同目录一致的行尾。** 源文件 `lib/redteam/tools.js` 是 LF（`lib/` 下四个 LF 例外之一），但同目录其余 `.js` 全是 CRLF。生成的五个组文件如果照抄 LF，`npm run check:eol` 会因为「新文件与同目录多数派不一致」直接红。
+
 ### 拆分顺手挖出来的两类真 bug
 
 - **引用了没 import 的符号，被 `catch` 吞掉。** `lib/redteam/schema.js` 的 `migrate()` 里 `SCOPE_SQL` 与 `LEGACY_STAGE_MAP` 两处引用从未定义也从未 import，两段回填的 `ReferenceError` 被外层 `try { … } catch { /* 忽略 */ }` 吃掉 —— 老库的 `asset.scope` 内外网与 `attack_step.stage_code` 阶段映射**从上线起就没生效过**，且不报任何错。教训：`catch { }` 空吞的每一段，都值得单独造 fixture 跑一遍看结果。
@@ -319,7 +332,7 @@ npm run check           # 3. 全量校验（含片段同步检测）
 
 ### 拆完之后还剩下什么没拆
 
-`lib/core.js`（5268 行）与 `lib/redteam/tools.js`（2268 行）仍未拆。两者的共同点是「搬出去的每一块都要跨文件传一堆上下文」，收益不如 `store-core.js` 那么直接，优先级排在补测试之后。真要动，先按本节的三条顺序做，别省对拍。
+`lib/core.js`（5268 行）仍未拆。它是补丁引擎本身（`ALL_PATCHES` 的 apply 编排、asar 换包、shim 安装），几乎每个函数都要跨文件传一堆宿主上下文，收益不如 `store-core.js` 与 `tools.js` 那么直接，优先级排在补测试之后。真要动，先按本节的三条顺序做，别省对拍。
 
 ## 行尾约定
 

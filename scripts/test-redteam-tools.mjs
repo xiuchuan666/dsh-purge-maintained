@@ -15,7 +15,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply, inject, name } from '../lib/redteam/tools.js'
-import { RedteamStore } from '../lib/redteam/store-core.js'
+import { ROLE_ORDER, RedteamStore } from '../lib/redteam/store-core.js'
 
 const HOST_PKG = 'C:/Users/Administrator/AppData/Local/Programs/DeepSeek Harness/resources/app/dsh/package.json'
 
@@ -563,4 +563,60 @@ test('现状锁定：engagement_open 缺 target 时不在 execute 层拦截（�
   // 把校验挪进 execute 会让「宿主已校验」和「工具再校验」两份规则漂移，属产品决策。
   assert.equal(out.ok, true)
   assert.equal(out.engagement.id, 'eng-undefined')
+})
+
+/* ============================================================ 拆分后补漏（批46） */
+
+test('poc_search 的 by_category 只列有条目的归类，0 条的 13 个不出现', async () => {
+  await withRoot(async (root) => {
+    const store = realStore(root)
+    try {
+      const { byName } = build(store)
+      await byName.redteam_poc_add.execute(POC_ARGS, nextExec())
+      const out = parse(await byName.redteam_poc_search.execute({ q: 'Weblogic' }, nextExec()))
+      /* pocStats().byCategory 恒是内置 14 项（含 n=0 的），工具层必须过滤掉 0 条的那些，
+         否则模型读到「rce 0 / sqli 0 / xxe 0 …」会误判库里有一堆分类。 */
+      assert.equal(out.knowledge_base.by_category.length, 1)
+      assert.match(out.knowledge_base.by_category[0], /^反序列化 1（已验证 0）$/)
+      assert.equal(store.pocStats().byCategory.length, 14, '底层仍是完整 14 项，过滤只发生在工具层')
+      assert.equal(store.pocStats().byCategory.filter((c) => c.n > 0).length, 1)
+    } finally { store.close() }
+  })
+})
+
+test('roles 的 role 枚举与 ROLE_ORDER 完全相等（不是写死的子集）', async (t) => {
+  if (HOST === null) return t.skip('本机没有宿主包 @deepseek-ai/dsh-tools')
+  const { byName } = build(baseStore())
+  /* 写死 ['recon','vuln-scan','exploit','internal'] 曾漏掉 assess，
+     导致资产梳理子智能体永远拿不到角色提示词。这条钉住「派生自 ROLE_ORDER」。 */
+  /* 两个吃 role 的工具都必须派生自 ROLE_ORDER；redteam_roles 自己不吃参数（它列的是全表）。 */
+  assert.deepEqual(byName.redteam_role_prompt.parameters.role.enum, ROLE_ORDER)
+  assert.deepEqual(byName.redteam_role_prompt_reset.parameters.role.enum, ROLE_ORDER)
+  assert.equal(ROLE_ORDER.includes('assess'), true, '写死四值那次漏的就是 assess')
+  assert.equal(Object.keys(byName.redteam_roles.parameters).length, 0, 'redteam_roles 不吃参数')
+  const schema = HOST.parameterSchemaSpecToJsonSchema(byName.redteam_role_prompt.parameters)
+  assert.deepEqual(schema.properties.role.enum, ROLE_ORDER)
+})
+
+test('unknown_resolve 的 disposition 是必填（宿主层挡住，不是靠 execute 兜底）', async (t) => {
+  if (HOST === null) return t.skip('本机没有宿主包 @deepseek-ai/dsh-tools')
+  const { byName } = build(baseStore())
+  const spec = byName.redteam_unknown_resolve
+  assert.deepEqual(HOST.validateArgs(spec.parameters, { unk_id: 'unk_x' }),
+    ['missing required property "disposition"'])
+  assert.deepEqual(HOST.validateArgs(spec.parameters, {}),
+    ['missing required property "unk_id"', 'missing required property "disposition"'])
+  assert.deepEqual(HOST.validateArgs(spec.parameters, { unk_id: 'unk_x', disposition: 'resolved' }), [])
+})
+
+test('evidence 系列在 store.db 缺失时如实报错，不静默返回空账本', async () => {
+  /* baseStore 没有 db()：ledgerOf/unknownsOf 必须抛「红队资产库不可用」，
+     而不是 new EvidenceLedger(undefined) 之后静默返回空列表。 */
+  const { byName } = build(baseStore())
+  for (const tool of ['redteam_evidence_record', 'redteam_evidence_verify', 'redteam_evidence_list', 'redteam_unverified_count']) {
+    const out = parse(await byName[tool].execute({ operation: 'o', result: {} }, nextExec()))
+    assert.equal(out.ok, false, tool)
+    assert.match(out.error, /红队资产库不可用/, tool)
+    assert.equal(out.error_kind, 'failed', tool)
+  }
 })
