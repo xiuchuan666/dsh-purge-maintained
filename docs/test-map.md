@@ -214,6 +214,15 @@
 | `/skills` 的拒绝与报错：非 kebab-case 点名示例、缺 id 回用法、`import` 缺路径/路径不存在、`delete` 不存在的 id 报「删除失败」、`help`/未知子命令回同一份帮助且不碰目录 | `test-chat-rules-skills.mjs`（5 条） | 同上 |
 | `/skills` 版式：空目录给一句「暂无用户 Skill」、正常条目带说明/大小/两个通道的调用方式、不可用打 `!` 并把 `error` 抄一行、两个通道都关掉时写「不可 /名称」「模型不可调」 | `test-chat-rules-skills.mjs`（4 条） | 同上 |
 | 两条命令共用同一套 deps 约定：家目录走 `(deps.core \|\| core).findDshHome()`（写死会让测试打真宿主）、三处注入重算全走 `callRefreshHungOperator`、缺 `refreshHungOperator` 时静默跳过（行为侧 + 源码形状各一条） | `test-chat-rules-skills.mjs`（4 条） | 同上 |
+| `/purge status` 与别名：无参数默认 status，`status` / `s` / `S` 都走同一分支，排版交给 `renderStatus`（不自己拼） | `test-chat-purge.mjs`（3 条） | `lib/chat-purge.js` 100% |
+| `/purge apply` 的主线：按 `applyRuntimeEnv → clearDesktopLocateCache → gatherState` 顺序进场、宿主行 + 补丁行 + shim 行 + `cmd-flash=` 一行一行拼出来、`preserveClientBundles:false + forApply:true` 精确 deepEqual（开了 preserve 就等于 client.js 上的补丁只统计不写盘） | `test-chat-purge.mjs`（3 条） | 同上 |
+| `/purge apply` 的四种状态记号：`applied`→`✓ 已清洗`、`already`→`- 已是最新`、`missing_file`→`⚠ 文件缺失`、其它→`✗ ${status}` 带原文 | `test-chat-purge.mjs`（1 条） | 同上 |
+| `/purge apply` 的三个早退：解析宿主抛错回 `error` 且抄 `message`、拿不到 `aiBase` 回 `missingAiBaseMessage()`、空提示词闸门挡住时既不打补丁也不重算注入 | `test-chat-purge.mjs`（3 条） | 同上 |
+| `/purge apply` 的收尾四分支：`planned.clean===false`→「清洗没有写进当前宿主，已取消重启」、`restarting===false && error`→原文、`restarting:true`→「正在重启」、`!complete`→「清洗没有完成」、其余→「补丁已经在宿主里」（漏一支就会把「没重启」说成「已就绪」） | `test-chat-purge.mjs`（1 条，四态顺序断言） | 同上 |
+| `/purge apply` 的重启判据：`promptReady` 只认「失败项全是 `pattern_not_found`」（混进 `drifted` 就不算）、`hostWritten` 也认 `hostCleanMarkersPresent`、`hookDenyRestoreFailed` 非空时 `complete` 必须为 false、要重启时先 `markSettleRestart()`、`ctx` 原样透给 `scheduleApplyRestart` | `test-chat-purge.mjs`（5 条） | 同上 |
+| `/purge apply` 的两个附带效果：解包出 asar 时写 unpacked 戳、有被 scrub 的 bin bak 时多一段 `Desktop in-bin .bak scrub` | `test-chat-purge.mjs`（2 条） | 同上 |
+| `/purge revert` / `uninstall`：还原逐行 `✓ 已还原` + `⚠ 还原失败 p: e`、没有备份时补一句 `no patch backup`、没有 `ai_base` 时整段跳过；卸载的两种开场白（检测到/未检测到）+ override 删除行 + profile 移除行 + `ok:false` 时回 `error` | `test-chat-purge.mjs`（5 条） | 同上 |
+| `/purge edit` 与 `/purge help`：注入文件不存在时先 `installOverride` 再打开并说明「新建」、打不开回 `error`（旧实现在这里假报 success）、`editOverride` 的 `error` 原样带出；`help`/`h`/未知子命令同一份帮助且列全六条 + `/rules` `/skills`，子命令大小写不敏感，`config` 参数当前不影响输出 | `test-chat-purge.mjs`（6 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -222,6 +231,8 @@
 **2026-11-13 再补**：会话权限钉死 + cwd 捕获 + rewind 派生过滤这 148 行从 `lib/index.js` 抽到了 `lib/session-access.js`（8 个 export）。挑它的理由是「坏了不报错」——权限芯片从完全访问掉成 workspace-write、工作目录没被记住，都只在用户手感里出现。抽取用锚点定位整段搬运，去掉 `export ` 前缀后与备份逐字比对 `diffs 0`，`lib/index.js` 1809 → 1665 行。新增 47 条用例（假 ctx + 临时 `DSH_HOME`，不碰真宿主），RED 演练 21 条注入 **21/21 全红**。`lib/index.js` 的行命中 203 → 198 已精确记账：被删掉的命中行 10 条、新 import 命中 5 条、幸存行命中 193→193 零丢失，`203 - 10 + 5 = 198`。
 
 **2026-11-13 三补**：`/rules` 与 `/skills` 两条聊天命令（211 行）从 `lib/index.js` 抽到了 `lib/chat-rules-skills.js`（230 行，5 个 export）。这两条命令会直接改 `AGENTS.md` / `CLAUDE.md` 与 `$DSH_HOME/skills`，判错的表现是「回了 success 但目标文件没变」「删错了同名规则」——都不报错。只动三处接线（家目录来源、三处 `refreshHungOperator` 改走 `callRefreshHungOperator(deps, dshHome)`、注入回调加函数类型守卫），其余逐行照抄（`block lines 211, diffs 0`），`lib/index.js` 1665 → 1459 行。新增 52 条用例（真 `lib/rules.js` + 真 `lib/skills.js`，只把 `DSH_HOME` 指到临时目录，测的是「命令 → 落盘」整条链），RED 演练 36 条注入 **36/36 全红**。`lib/index.js` 的行命中 198 → 196 已精确记账：被删掉的命中行 3 条（`1216` / `1308` / `1335`）、新 import 命中 1 条、幸存行零丢失（`mapped & verified 1453, mismatches 0`），`198 - 3 + 1 = 196`。
+
+**2026-11-13 四补**：`/purge` 的六个分支（155 行）从 `lib/index.js` 抽到了 `lib/chat-purge.js`（169 行，1 个 export）。这是唯一一条「一条命令写穿宿主」的入口：apply 会改宿主包、打 shim、写 override 并请求重启，判错的表现是「回了 ✓ 已清洗但宿主没变」或者「清洗没完成却重启了」——两种都不报错，只在用户下次启动时才发现。八个依赖（`core` / `uninstaller` / `reapply` / `renderStatus` / `rejectIfNeedPrompt` / `refreshHungOperator` / `applyShouldRestart` / `scheduleApplyRestart`）全部按 deps 传入，其中 `scheduleApplyRestart` 是 `lib/index.js` 的模块私有函数（自己又依赖 `hostctl` 与 `core.restartSealedDesktopIfNeeded`），硬搬会把整个 index.js 拖进测试。函数体 154 行逐字照抄（`old body lines 154 / new body lines 154 / diffs 0`），`lib/index.js` 1459 → 1307 行。新增 30 条用例（假 `core` + 假 deps，纯内存、不碰宿主机），RED 演练 32 条注入 **32/32 全红**。这次 `lib/index.js` 的行命中 196 → 196 **完全没动**——被搬走的 155 行原本就是零命中段，所以不需要 hunk 记账。
 
 ---
 
@@ -544,6 +555,8 @@
     **检测办法**：升级后手验两条 —— 发完第一条消息权限芯片还在不在「完全访问」；
     切目录后 `$DSH_HOME/dsh-purge/last-cwd.txt` 有没有跟着变。
 49. **`/rules` 与 `/skills` 的聊天层只钉住了「命令 → 落盘」，命令文本进不了真会话。** 52 条用例直接调 `handleRulesCommand(rawInput, deps)`，覆盖的是参数解析、id 校验与落到 `lib/rules.js` / `lib/skills.js` 的副作用；没覆盖的是宿主把 `/rules use abc` 从聊天框里切分出来交给注册器的那一步（`lib/commands.js` 只钉了注册面）。同理三处只能源码形状钉、不能行为钉：①`callRefreshHungOperator` 的 `typeof deps.refreshHungOperator !== "function"` 守卫——删掉后裸调用抛 TypeError 再被同一个 `catch` 吞掉，命令照样回 success；②`/skills create` 的 `|| id`——`saveSkill` 内部的 `|| (parsed.ok ? … : "")` 会再回落一次，落盘看不出差别；③`normalizeMeta` 对空 `name` 回落成 id，所以 `/rules create` 的 `args[2] || id` 只有回显能区分。另有一处**现状锁定**：`/rules delete` 拼错 id 也回 `✓ 已删除规则`（`deleteRule` 吞 ENOENT）——用户以为删了，实际什么都没发生，改坏的表现就是这一条。
+
+50. **`/purge apply` 只钉了「怎么报告」，没钉「真写进宿主」**。`test-chat-purge.mjs` 用假 `core` 断言调用顺序、四种补丁记号、五种收尾文案与重启判据，但 `applyPatchesAllHosts` / `patchAllShims` / `silenceCmdFlash` 本身一行都没执行。也就是说：把 apply 的报告写错会被测试抓住，把宿主机真的改坏不会。这一层的真实守卫只有「跑一次 `npm run host:status` 看 verdict」和「升级前跑 `npm run host:preview`」，两条都要对着真安装目录。检测办法：改了 apply 分支之后必须实跑一次 `/purge apply` 再看状态页的补丁明细，不能只看测试绿。
 
 ## 维护约定
 

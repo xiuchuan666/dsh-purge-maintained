@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T19:20:32.444Z",
-  "commit": "8f784b1",
+  "capturedAt": "2026-11-12T19:35:21.008Z",
+  "commit": "71f3fca",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -51,6 +51,14 @@
       "fnf": 1,
       "brh": 2,
       "brf": 3
+    },
+    "lib/chat-purge.js": {
+      "lh": 169,
+      "lf": 169,
+      "fnh": 4,
+      "fnf": 4,
+      "brh": 90,
+      "brf": 95
     },
     "lib/chat-rules-skills.js": {
       "lh": 224,
@@ -166,9 +174,9 @@
     },
     "lib/index.js": {
       "lh": 196,
-      "lf": 1459,
+      "lf": 1307,
       "fnh": 1,
-      "fnf": 33,
+      "fnf": 32,
       "brh": 5,
       "brf": 5
     },
@@ -394,7 +402,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1259
+      "brf": 1256
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
