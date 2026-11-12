@@ -30,6 +30,9 @@
 | 找不到宿主根时单列 `unknown-base`，绝不判成补丁丢失（#59） | 同上 | 同上 |
 | 补丁从 `settled` 掉成 `would-apply`（=没打）必须算失效，79 条全掉要一条不漏 | `test-host-baseline.mjs`（`diffSnapshots` 6 条） | 同上 |
 | 两类失效分行显示：「重打即可」与「要改 pattern」，修法不同不能混 | `test-host-baseline.mjs`（`renderDiff` 2 条） | 同上 |
+| 旁路副本上重打 86 条补丁，结果与 `docs/host-baseline.json` 逐字节一致（59 个文件） | `npm run host:sandbox`（`scripts/sandbox-apply.mjs`） | `scripts/` 不计覆盖率 |
+| 包清单从 `targetFiles()` 推出来，不写死包名 —— 宿主加包/改路径时自动跟上 | `test-sandbox-apply.mjs`（`packagesFromTargetFiles` 7 条） | 同上 |
+| 沙盒目录必须在仓库内、且不与真宿主/`$DSH_HOME` 重叠（「旁路」不能是假的） | `test-sandbox-apply.mjs`（`isSafeSandboxDir` 6 条） | 同上 |
 | 「要不要重打补丁」的判据：戳、版本、rev 三者对齐，空 sha 不算对齐，占位戳只认版本 | `test-reapply-settle.mjs`（9 条） | `lib/reapply.js` 70% |
 | 空 sha 的旧戳什么时候允许就地补成非空（密封包不补、缺标记不补） | `test-reapply-settle.mjs`（3 条） | 同上 |
 | `installed-rev` 的三个来源与占位戳刷新（显式值 > 已有 rev > 戳里的 sha > `apply:<version>`） | `test-reapply-settle.mjs`（7 条） | 同上 |
@@ -401,6 +404,18 @@
     如果哪天这个文件的补丁被单独回滚、其它 58 个文件仍是打过补丁的，
     这里会误报成 `stamp-lies`。要根治得让 86 条补丁各自留标记，代价是补丁正文变长，暂不做。
     `reapply.js` 的 `patchesMatchInstallStrict()` 走的是同一套标记，所以两处会一起误报、不会互相矛盾。
+
+37. **旁路沙盒证明的是「补丁引擎在干净树上能打出与基线一致的字节」，不是「真宿主现在是对的」。**
+    `scripts/sandbox-apply.mjs` 只复制 42 个包 / 709 个文件 / 6.4MB 到 `.tmp-sandbox/`，
+    在副本上跑 `applyPatches` 再与 `docs/host-baseline.json` 逐文件对拍；
+    2026-11-12 实测首次 `applied 63 / already 5 / missing_file 10 / skipped 1 / na 7`，
+    59 个文件全部一致、第二次重打全 `already` —— 这同时说明真宿主那份树确实是被换回原版了。
+    它测不到的三件事：①真宿主上 `allowTargetPathForAiBase` 的 zone 判定（副本落在仓库里，
+    走的是 `shared` 分支，与 `resources/app` 的 `desktop-install` 分支不是同一条）；
+    ②`silenceCmdFlash` / `patchAllShims` 这些会改 npm 全局的步骤（脚本里没调）；
+    ③桌面壳文件（`desktop-shell` 那 7 条 patch 在副本里恒 `na`，因为副本没有 Electron 外壳）。
+    另外 `missing_file` 的 10 条在副本与真宿主上都会出现，是「目标文件本来就不在这台机器上」
+    （`pi-ai-*`、`hooks-*`、`preset-unrestricted` 等），不是回归。
 
 ---
 

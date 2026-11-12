@@ -46,6 +46,7 @@
     "check:client": "node scripts/check-client.mjs",
     "host:status": "node scripts/host-baseline.mjs",
     "host:capture": "node scripts/host-baseline.mjs --capture",
+    "host:sandbox": "node scripts/sandbox-apply.mjs",
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "build:client": "node scripts/build-client.mjs",
     "postinstall": "node scripts/ensure-profile-bundle.mjs"

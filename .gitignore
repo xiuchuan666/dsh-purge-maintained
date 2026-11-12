@@ -44,3 +44,6 @@ default-prompt-inject.md
 
 # 临时实验目录（探测脚本、一次性改写脚本，不进仓库）
 /.tmp-exp/
+
+# 沙盒副本（scripts/sandbox-apply.mjs 复制出来的宿主副本，6.4MB，每次重建）
+/.tmp-sandbox/
