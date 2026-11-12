@@ -466,6 +466,16 @@
     `approvalCancelled` 这个字段名本身含 cancelled，十六条 replacement 会被全部误判。
     **仍然测不到的**：rc.2 上真跑一次「用户点取消」，需要交互式审批界面，CI 里没有。
 
+44. **`markers` 命中就算 `applied`，理论上会掩盖「只打上一半」的补丁，但当前真宿主上零实例。**
+    `patchApplied`（`lib/core.js:3641`）在补丁有 `markers` 时只看标记在不在（`markersAny` 决定「任一」还是「全部」），
+    根本不看 `replacements` 里还剩几条 pattern 没打。实测 #62 在 rc.1 原文上：只打 `if (exec.agent === void 0) return {` 那一条，
+    文件里就出现了 `[dsh-purge] no agent → allow`，判定立刻变 `applied`，而另外两条分支还没动；把 `markers` 去掉再判同一份文本是 `pending`。
+    量过影响面：真宿主桌面树判 `applied` 的文件条目 106 个，其中「pattern 还有剩却已 applied」只有 1 个（`#42 settings`），
+    而那 4 条 pattern 是**插入型幂等锚点**（`replace` 原样包含 `pattern`，打完 pattern 仍在原位，只是旁边多了新代码），单独打它们 `changed=false` —— 是假阳性。
+    换硬判据复核：把每个文件上的全部补丁从 `.dshpurge.bak` 按 `ALL_PATCHES` 顺序重放，60 个可比文件里「重放 ≠ 当前文件」为 0，即真宿主没有任何文件停在中途。
+    **结论是刻意不改判定层**：改它要同时动 `rollupPatchStatus` / `patchStatusReady` / `isPatchResultSoftOk` / `applyPatches` / `verify-target.mjs` / `host-preview-lib.mjs` 六处，
+    而收益是零实证问题；这个取舍写在这里，避免以后重新发现同一点又去动它。真要加固，先把 `#42` 那种插入型锚点在测试里写清楚，而不是改判定。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
