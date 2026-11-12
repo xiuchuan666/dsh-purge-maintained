@@ -74,11 +74,11 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| 注入决策树（strict / fallback / always 三种工作区策略） | `test-prompt-inject.mjs`（`decideInject` 6 条：strict 无注入也剥 / fallback 有注入才剥 / always 保留 / 停用一律不剥 / 未知策略按 always） | `lib/identity.js` 69% |
-| `prompt-inject.md` 非空时优先于工作区 md | `test-prompt-inject.mjs`（5 条：优先级 / cwd 回落 / 纯空白视为空 / 都不拼接 / 都空给空串） | `lib/identity.js` 69% |
-| 两种都没有时回落到插件内的加密 slot 默认 | `test-prompt-inject.mjs`（`inject === ""` + `source === "none"`，下游 `rewritePromptAssembly` 的回落另有 3 条） | `lib/identity.js` 69% |
-| 装配结果段序（注入在最前、capabilities 其次、persona 收尾、anchor 最后） | `test-prompt-inject.mjs`（8 条，含不原地改写传入对象、`null`/`{}` 原样返回） | `lib/identity.js` 69% |
-| `stripChatmlTags` 只剥三种形态（完整 `im_start system:`、`project_instructions`、`im_end`） | `test-prompt-inject.mjs`（含一条现状锁定：裸 `<\|im_start\|>` 不剥） | `lib/identity.js` 69% |
+| 注入决策树（strict / fallback / always 三种工作区策略） | `test-prompt-inject.mjs`（`decideInject` 6 条：strict 无注入也剥 / fallback 有注入才剥 / always 保留 / 停用一律不剥 / 未知策略按 always） | `lib/identity.js` 99% |
+| `prompt-inject.md` 非空时优先于工作区 md | `test-prompt-inject.mjs`（5 条：优先级 / cwd 回落 / 纯空白视为空 / 都不拼接 / 都空给空串） | `lib/identity.js` 99% |
+| 两种都没有时回落到插件内的加密 slot 默认 | `test-prompt-inject.mjs`（`inject === ""` + `source === "none"`，下游 `rewritePromptAssembly` 的回落另有 3 条） | `lib/identity.js` 99% |
+| 装配结果段序（注入在最前、capabilities 其次、persona 收尾、anchor 最后） | `test-prompt-inject.mjs`（8 条，含不原地改写传入对象、`null`/`{}` 原样返回） | `lib/identity.js` 99% |
+| `stripChatmlTags` 只剥三种形态（完整 `im_start system:`、`project_instructions`、`im_end`） | `test-prompt-inject.mjs`（含一条现状锁定：裸 `<\|im_start\|>` 不剥） | `lib/identity.js` 99% |
 | `anchorMode` 只有 `auto` 与 `off`（不是 strict/fallback/always） | `test-plugin-surface.mjs`（现状锁定：`"bogus"` 原样透传）+ `test-anchor.mjs`（开关只认严格 `false` 与 `"off"`） | `lib/anchor.js` 100% |
 | 尾部锚点的顺序夹在宿主 WEB_SURFACE(10100) 与 `lib/identity.js` 的 DEPLOYMENT_PERSONA_SUFFIX(10200) 之间；子锚点排在 delegation(120) 之后 | `test-anchor.mjs`（4 条，含一条读 `lib/identity.js` 源码核对 10200 仍然更大） | `lib/anchor.js` 100% |
 | 锚点正文每轮重新求值（写成常量字符串就只出现一次、之后被历史埋掉） | `test-anchor.mjs`（3 条：section/context 的 text 是函数、改配置当场生效） | 同上 |
@@ -94,8 +94,17 @@
 | `rewriteLiveAssembly` 的缓存签名（11 段） | `test-live-cache.mjs`（13 条签名覆盖面 + 命中规则 + 5 条生产接线） | `lib/live-cache.js` 100% |
 | 缓存命中规则（同对象换签名必须落空、非对象不缓存、空对象算有效结果） | `test-live-cache.mjs`（命中/落空/覆盖写入/原始值/非对象结果 共 8 条） | `lib/live-cache.js` 100% |
 | 会话签名 `sessionKeyOf`（id → sessionId → 空，cwd 参与，属性抛异常不冒泡） | `test-live-cache.mjs`（5 条） | `lib/live-cache.js` 100% |
+| 装配主链路 `rewritePromptAssembly`（段序、置顶注入、persona 折入、红队卡/角色稿、锚点、cwd 清洗、不原地改写） | `test-identity-assembly.mjs`（141 条，含输入对象不被改、`null`/`{}` 原样返回、`contexts` 通道两种形态） | `lib/identity.js` 99% |
+| 官方身份覆盖 `overlayOfficialIdentity`（`harness:identity` 整段丢、官方 persona 清空、suffix 换成我们的工作目录句、没有 suffix 就补一段） | `test-identity-assembly.mjs`（同一批 141 条里的第四节与第十三节） | 同上 |
+| 身份指纹清洗 `stripHarnessPersona`（DeepSeek 自我指认、旧身份锁、拒答/权限话术改写、连续空格压平） | `test-identity-assembly.mjs`（含一条现状锁定：带空格的「我是 DeepSeek 的 AI 助手」不在指纹里，原样保留） | 同上 |
+| 红队操作稿 `redteamProcedure` / `redteamOpsBody`（`## 运行环境前提` 起截、旧标题换硬约束、旧前导说明换新版、无正文补 note） | `test-identity-assembly.mjs`（第五节） | 同上 |
+| 预设识别与继承（`isRedteamPresetId` 否定词、`sessionAgentPreset` 六层来源、`isRedteamSession`、`sessionForInject` 沿父链走到主会话） | `test-identity-assembly.mjs`（第六、七节） | 同上 |
+| 极简预设改写（`adaptInjectForMinimalPreset` / `stripStrictToolBlock` 摘 STRICT 块、没有「# 全局作业」时从下一条装饰线截断） | `test-identity-assembly.mjs`（第八节） | 同上 |
+| `assemble` 守卫 `installAssembleGuard` / `clearAssembleGuard`（五条异常兜底：描述符读不到、读 assemble 抛、已挂 slot、宿主已包过一层、defineProperty 挂不上；dispose 必须是 noop） | `test-identity-assembly.mjs`（第十节 11 条 + 第十三节的 accessor 断言） | 同上 |
+| cwd 占位符三态（`interpolate:false` 换字面 / 有 `variables.cwd` 保留 `{{cwd}}` / 都没有换 `the current workspace`） | `test-identity-assembly.mjs`（第三节） | 同上 |
+| 注入指纹抠除（`injectNeedles` 的 OWN SERVERS 前缀、`injectMatchers` 超 4096 字符按空行切段、`leadWithInject` 精确+宽松两路抠掉旧副本） | `test-identity-assembly.mjs`（第五节 + 第十三节的单行 5000 字符注入） | 同上 |
 
-**本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住；缓存签名与命中规则抽成 `lib/live-cache.js`（`liveCacheSignature` / `sessionKeyOf` / `createLiveCache`），由 `test-live-cache.mjs` 的 37 条用例钉住，且拆分前后 2304 组输入的签名逐字对拍一致（`.tmp-exp/sig-parity.mjs`，一次性）。规则集读写（含备份与恢复的三条分支）已由 `test-rules-store.mjs` 的 30 条用例钉住——这组最怕的是「用户手写的 AGENTS.md 被另一条规则的内容悄悄盖掉」，因此备份/恢复的每个分支都单独立了用例。
+**本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住；缓存签名与命中规则抽成 `lib/live-cache.js`（`liveCacheSignature` / `sessionKeyOf` / `createLiveCache`），由 `test-live-cache.mjs` 的 37 条用例钉住，且拆分前后 2304 组输入的签名逐字对拍一致（`.tmp-exp/sig-parity.mjs`，一次性）。规则集读写（含备份与恢复的三条分支）已由 `test-rules-store.mjs` 的 30 条用例钉住——这组最怕的是「用户手写的 AGENTS.md 被另一条规则的内容悄悄盖掉」，因此备份/恢复的每个分支都单独立了用例。 这一轮补的是 `lib/identity.js`：它原来只有 69% 行覆盖，`installAssembleGuard` 整块（`lib/identity.js:904-1018`）与身份覆盖、红队操作稿、预设继承全都没有守卫，改坏了的表现是「注入没生效但也不报错」。现由 `test-identity-assembly.mjs` 的 141 条用例钉住，行覆盖 69% → 99%（`375-376` 的正则永不抛、`withOwnServers` 的两条因 `lib/net-scope.js` 的 `ownServerNote()` 恒空而不可达、`decideInject` 由 `test-prompt-inject.mjs` 覆盖、`rewritePromptAssembly:1090-1099` 的兜底块在常规输入下不可达）。
 
 ---
 
@@ -358,6 +367,8 @@
 
 30. **`lib/reapply.js` 的 `reapplyInstalled` 用「临时副本 + 桩 core」测，真宿主那一层没有。** `test-reapply-flows.mjs` 把 `lib/reapply.js` 逐字节复制到临时包、旁边放一份桩 `core.js`，于是调用顺序、`clean` 判定、失败回滚、四处 `catch` 全都能钉住（原文一改立刻跟着测新的）。测不到的是**真实的宿主探测**：`sealedAsarHandoff()` 要求 `detectSurface()` 判成 desktop 且能找到官方 exe 与 `app.asar`，本机是解包布局（`resources/app`，没有 `app.asar`），所以那条路只能用桩返回 `{asar: true}` 模拟；同理 `openSealedDesktopHost` 的真解包、`patchAllShims` 的真写 npm 全局、`silenceCmdFlash` 的真改注册表都只验证了「被调到了、参数对不对」。改坏的表现是「桌面端升级后插件静默失效」或「每次启动都 revert+apply 打成死循环」——都不报错。另有一条 CI 不可复现：`hostStillHasAppliedPatches` 的「`findAiBase()` 返回空 → 当作还在」，只有根本没装宿主的机器才走得到。
 31. **`lib/redteam/settings.js` 与 `lib/redteam/skill-availability.js` 各有几处现状锁定。** ①`readSettings` 用 `parsed && typeof parsed === "object"` 判，数组也会原样返回（`typeof [] === "object"`），只是上层读 `maxAgents` 读不到所以无影响 —— 用例里按现状锁定。②`clampMaxAgents(null)` 是 `Math.floor(Number(null)) === 0` 再夹成 **1**，不是回落默认 3；`maxAgentsOf` 的文件值要求 `> 0` 才认，所以写进去的 0 等于没写。③`expandSkillPath` 是纯字符串拼接、**不做 `path.normalize`**，Windows 上结果会混 `/` 与 `\`（`existsSync` 能认，比较字符串时不能），用例断言必须包一层 `path.normalize`。④`existsUnderAnyHome` 遍历全部候选 home 这件事只能读源码钉：真实场景要求文件在 `~/.dsh` 下而 `DSH_HOME` 指向别处，那要动真实家目录。⑤`bundledSkillSummaries` 恒扫仓库里的 `skills/redteam`（23 个 `.md`），所以 `redteam_preflight` 的「桌面端无 skills 服务」早退支在本仓不可达（见盲区 19）。
+
+32. **`lib/identity.js` 里有五处只能靠源码形状或「不可达」认定。** ①`injectMatchers` 里 `new RegExp` 的 `catch`（`:375-376`）走不到——每个字符都过 `replace(/[.*+?^${}()|[\]\\]/g, "\\$&")` 转义了，构造永不抛；②`withOwnServers` 的两条（`:852`、`:856-857`）依赖 `lib/net-scope.js:407` 的 `ownServerNote()`，它现在是 `return "";`（上游刻意留空），note 恒空所以永远走 `return text`；③`rewritePromptAssembly` 的「注入前 80 字符一段都不含 → 再前置一段 `dsh-purge`」兜底块（`:1090-1099`）在五种常规组合下都触发不到，因为 `leadWithInject` 总会先放一个 head，只能用源码形状断言钉住；④`foldInjectIntoPersona` 新造的 `deployment:persona-prefix` 会被随后的 `leadWithInject` 用全文精确匹配清空丢弃，对外不可见；⑤`insertNamedSection` 的落点（`capAt+1` / `purgeAt+1` / `0`）在 13 种组合下产出完全相同——card/role 段名固定、排序后落点一致，改了不会红。
 
 ---
 

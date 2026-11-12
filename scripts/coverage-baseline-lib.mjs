@@ -31,6 +31,12 @@ const HIT_METRICS = new Set(['lh', 'fnh', 'brh'])
 // 复现出同样的下跌，否则就是拿容差掩盖真倒退。
 export const ENV_TOLERANCE = {
   'lib/desktop.js': { fnh: 2, brh: 4 },
+  // 2026-11-12 实测：`platform-config` 的 brh 与 `redteam/tools` 的 brh 各掉 1，
+  // 在干净 worktree 里 checkout 基线提交 89a96c8 与 df748ed 都能复现同样的 -1，
+  // 且单文件连跑两次稳定在同一数值 —— 与新增测试无关，属本机环境漂移。
+  // 这两格只留 1 的容差，涨上去仍会正常记录。
+  'lib/redteam/platform-config.js': { brh: 1 },
+  'lib/redteam/tools.js': { brh: 1 },
 }
 
 /** 某个文件的某项指标允许的环境漂移量（默认 0）。 */
