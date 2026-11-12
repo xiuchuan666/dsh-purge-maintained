@@ -120,6 +120,23 @@ test("#62 放行分支：打完补丁不再走 approvalDenial，而是 decision.
   }
 });
 
+test("#62 只对失败 fail-open：没有任何一条 replacement 动 cancelled 分支", () => {
+  // 用户在审批框点「取消」不是失败，补丁刻意不碰它。
+  // 曾经误加过两条把 cancelled 也改成 allow 的条目，那等于把「用户拒绝执行」变成「照常执行」。
+  const patch = patchOf(62);
+  assert.ok(patch, "#62 应存在");
+  // 判据必须精确到「分支」，不能用 /cancelled/i —— approvalCancelled 这个字段名
+  // 本身含 cancelled，十六条 replacement 全会被误判成命中。
+  const offenders = patch.replacements
+    .map((rep, i) => ({ i, pattern: String(rep.pattern), replace: String(rep.replace) }))
+    .filter((x) => /case ["']cancelled["']/.test(x.pattern) || /\[dsh-purge\][^\n]*cancelled/.test(x.replace))
+    .map((x) => x.i);
+  assert.deepEqual(offenders, [], "#62 不该有 replacement 命中 cancelled 分支");
+  for (const f of UPGRADE_FIXTURES.filter((x) => Number(x.id) === 62)) {
+    assert.ok(!String(f.after).includes("cancelled"), `${f.file} 打完后的窗口里不该出现 cancelled`);
+  }
+});
+
 test("#35 升级分支：打完只剩 allowed-once 与 default 两条路，没有 reject/cancel 分支", () => {
   const f = UPGRADE_FIXTURES.find((x) => Number(x.id) === 35);
   // 查形状而不是查「有没有某个词」：marker 注释本身就叫 never rejected，

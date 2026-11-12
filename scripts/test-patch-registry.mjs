@@ -31,7 +31,7 @@ const APPEND_ALLOWED = new Map([
   [18, 1], // REPEAT_TOOL_REMINDER_DISABLED：rc.2 删掉 block 分支
   [35, 1], // ESCALATION_NEVER_REJECT：rc.2 的 switch 分支重写
   [56, 2], // REWIND_HIDE_CUT_ONLY：rc.2 的 client.js 被压成 minified
-  [62, 8], // OFFICIAL_TOOL_ASK_FAILOPEN：approvalDenial() 调用形态 + TS 排版
+  [62, 6], // OFFICIAL_TOOL_ASK_FAILOPEN：approvalDenial() 调用形态 + TS 排版（cancelled 分支不放行）
   [77, 1], // REWIND_DROP_SENT_ON_APPEND：同一个 minified 文件
 ])
 
