@@ -12,8 +12,9 @@ npm run check
 
 1. `npm run check:syntax`：检查 `bin/`、`lib/`、`scripts/` 与 `client.js` 的 JavaScript 语法，并动态导入 `lib/index.js`。
 2. `npm run check:metadata`：检查 `package.json` 版本与 `release-notes.md` 首行一致、`dshTarget` 在 `dshTargets` 内、补丁 ID 唯一且有效。`ALL_PATCHES` 的数组顺序是实际应用顺序，不要求数字 ID 升序，也不为重排而重排。
-3. `npm run check:client`：前端产物链校验（见下节「前端产物链」）。
-4. `npm test`：`node --test "scripts/test-*.mjs"`，离线、默认不含覆盖率，实测约 1 秒。
+3. `npm run check:eol`：行尾约定校验（见下节「行尾约定」）。
+4. `npm run check:client`：前端产物链校验（见下节「前端产物链」）。
+5. `npm test`：`node --test "scripts/test-*.mjs"`，离线、默认不含覆盖率，实测约 1 秒。
 
 默认检查不读取或改写 DSH profile，不应用宿主补丁，也不需要安装宿主。补丁数量从 `ALL_PATCHES` 动态读取，不在检查器里固定写死。
 
@@ -319,6 +320,54 @@ npm run check           # 3. 全量校验（含片段同步检测）
 ### 拆完之后还剩下什么没拆
 
 `lib/core.js`（5268 行）与 `lib/redteam/tools.js`（2268 行）仍未拆。两者的共同点是「搬出去的每一块都要跨文件传一堆上下文」，收益不如 `store-core.js` 那么直接，优先级排在补测试之后。真要动，先按本节的三条顺序做，别省对拍。
+
+## 行尾约定
+
+仓库里的行尾**按目录分工**，不是全库统一：
+
+| 位置 | 行尾 | 为什么 |
+|---|---|---|
+| `lib/**/*.js` | CRLF | 与宿主解包出来的源码一致；补丁锚点按 CRLF 写，换行尾等于全部锚点 MISS |
+| `scripts/*.mjs` | LF | Node 工具链习惯；`scripts/test-*.mjs` 必须全 LF |
+| `README.md`、`docs/**`、`skills/**` 等文档 | CRLF | 与 `lib/` 一致，编辑器打开不会出现混排 |
+| `client.js`、`docs/origin/client-1.1.94.js` | 混合 | 上游产物的逐字节锚点，一个字节都不能动 |
+
+`lib/` 下有四个历史遗留的 LF 文件（`asset-table.js`、`bom-guard.js`、`redteam/bridge.js`、`redteam/tools.js`），`scripts/` 下有八个上游带过来的 CRLF 脚本（`build-client.mjs`、`e2e-apply.mjs`、`e2e-desktop.mjs`、`embed-default-prompt.mjs`、`ensure-profile-bundle.mjs`、`export-engagement-report.mjs`、`patch-client-dock.mjs`、`verify-target.mjs`）。这些现状由 `docs/eol-baseline.json` 记录，不要求改。
+
+### 为什么要有 `.gitattributes`
+
+`.gitattributes` 只有一行有效内容：`* -text`。**不要改成 `text=auto`**。
+
+`text=auto` 的语义是「blob 里存 LF、检出时按平台转」，它会把这个按目录分工抹平，于是同一份文件在两台机器上锚点对不上。更现实的原因是这台机器上有**两个 git**：
+
+- `C:/Program Files/git/bin/git.exe`（v2.54.0），system 级 `C:/Program Files/Git/etc/gitconfig` 里写着 `autocrlf = true`；
+- dsh-ops 自带的 niugit（v2.56.0.niugit），没有 `autocrlf`。
+
+两者对同一个文件算出的 blob 不同，**谁最后 `git add` 谁说了算**。2026-11-12 就因此让 `lib/redteam/score-report.js` 以 LF 入库，而工作区是 CRLF —— 本地全绿、CI 全绿，仓库里存的却是另一份字节。`-text` 关掉全部转换，两个 git 算出的 blob 都是工作区原始字节。
+
+### `npm run check:eol` 查三件事
+
+1. **文件内不许混行尾** —— 混了之后任何跨行锚点都会 MISS。`MIXED_ALLOWED` 里的两个上游锚点是唯一例外。
+2. **已入库文件的行尾不许悄悄变** —— 基线记着每个文件原来是 `crlf` 还是 `lf`，变了就报错。
+3. **新文件要符合同目录多数派** —— 从基线算每个目录的多数派（样本少于 3 个、或平票时不给结论），新文件不一致就报错；推不出多数派时只提示不拦。
+
+另外单独查一次「索引 blob 与工作区只差行尾」。这条是上面那次事故的指纹：`git add` 时 autocrlf 把 CRLF 压成 LF，工作区看着没问题、`check` 也全绿，但仓库里存的不是这份字节。**只在这种「仅差行尾」的形态下报警**，普通未提交改动不报。
+
+### 什么时候用 `--update`
+
+只有在**确认行尾改动是有意的**时候：
+
+```bash
+node scripts/check-eol.mjs --update
+```
+
+典型场景是新增文件（跑完 `--update` 把它记进基线，之后才受第 2 条约束）。**不要**为了让检查变绿而 `--update` —— 那等于永久放弃这道守卫，跟刷覆盖率基线掩盖倒退是一回事。
+
+### 已经踩过的坑
+
+- **`git add` 不会重算已缓存的 blob。** 索引里已经有 LF 版本时，再 `git add` 同一文件仍然不转换。必须 `git rm --cached <file>` 后重 add，或 `git add --renormalize <file>`。
+- **`git cat-file --batch` 的头部不含路径。** 输出是 `<sha> <type> <size>` + 换行 + 内容，按输入顺序逐条对应；用 `parts.slice(3)` 取路径会让所有 blob 落到同一个键下，检测静默失效（第一版就是这么错的，靠负向验证才抓出来）。内容要按声明的 size 切片，不能按行切。
+- **逐个 `git cat-file blob` 太慢。** 227 个文件要起 227 次进程、实测 2.7 秒；一次 `--batch` 是 0.18 秒。
 
 ## CI 与发布
 

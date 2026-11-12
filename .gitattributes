@@ -1,0 +1,14 @@
+# 行尾策略：一律不转换。
+#
+# 为什么是 `-text` 而不是 `text=auto`：本仓库的行尾约定是「按目录分工」——
+#   lib/**/*.js         CRLF（跟宿主解包出来的源码一致，补丁锚点按 CRLF 写）
+#   scripts/*.mjs       LF（Node 工具链的习惯）
+#   README.md 等文档    CRLF
+# 这个分工已经写死在 docs/test-map.md 与 MAINTENANCE.md 里，用 text=auto 会把它
+# 抹成「blob 里全 LF、检出时按平台再转」，于是同一份文件在两台机器上锚点对不上。
+#
+# 更麻烦的是这台机器上有两个 git：C:/Program Files/git（system 级 autocrlf=true）
+# 与 dsh-ops 自带的 niugit（没有 autocrlf）。两者对同一个文件算出不同 blob，
+# 谁最后 add 谁说了算 —— 2026-11-12 就因此让 score-report.js 以 LF 入库。
+# `-text` 关掉全部转换，两个 git 算出的 blob 就都是工作区的原始字节。
+* -text

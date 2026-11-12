@@ -12,7 +12,7 @@
 | 运行时依赖 | 零（只用 Node 内置模块） |
 | 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.1（另兼容 0.2.1-rc.5 / 0.2.1-rc.2） |
 | 补丁条数 | 86 条（提示词 27 / 代码 48 / 工具 8 / 兼容层 3） |
-| 回归测试 | 58 个文件 / 1686 个用例，`npm run check` 一条命令跑完 |
+| 回归测试 | 59 个文件 / 1715 个用例，`npm run check` 一条命令跑完 |
 | 维护仓库 | `xiuchuan666/dsh-purge-maintained`（私有） |
 
 ---
@@ -237,10 +237,11 @@ npm run check
 |---|---|
 | `check:syntax` | 递归 `node --check` 全部 `bin/ lib/ scripts/ *.js`，最后 `import lib/index.js` 验模块图 |
 | `check:metadata` | 版本号是语义化版本、`release-notes.md` 首行等于 `# <version>`、`dshTargets` 含 `dshTarget`、86 条补丁 id 唯一 |
+| `check:eol` | 行尾约定：文件内不许混行尾（`client.js` 与它的上游锚点除外）、已入库文件的行尾不许悄悄变、新文件要符合同目录多数派；另外查一次索引 blob 与工作区是否只差行尾（git 的 autocrlf 偷转换过就是这种形态） |
 | `check:client` | `client.js` 与 `docs/origin/client-1.1.94.js` 锚点哈希一致、DRILL 标记结构完整、演练台片段与 `lib/redteam/client.js` 同步 |
-| `test` | 58 个 `scripts/test-*.mjs`（1686 个用例），`node --test` 跑，失败能定位到具体用例名 |
+| `test` | 59 个 `scripts/test-*.mjs`（1715 个用例），`node --test` 跑，失败能定位到具体用例名 |
 
-当前基线：`[syntax] 156 files` / `[metadata] patches=86 tests=58` / `[client] anchor OK` / `[test] PASS 1685/1686`（约 11 秒）。
+当前基线：`[syntax] 159 files` / `[metadata] patches=86 tests=59` / `[client] anchor OK` / `[test] PASS 1714/1715`（约 11 秒）。
 
 三条命令分三层：`npm test`（离线，约 1 秒）→ `npm run check`（加语法/元数据/产物链，约 3 秒）→ `npm run test:full`（加覆盖率棘轮基线，约 2 秒，需要 git 工作副本）。
 
