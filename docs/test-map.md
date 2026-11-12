@@ -260,6 +260,12 @@
 | 通道状态：坏 `channel.json` 回落 stable、beta pin 清空并回写 | `test-self-update.mjs` | `lib/update.js` 45% |
 | 版本比较与筛选：`versionIsNewer`、`latestStableVersion`、`hideListedVersion` | `test-self-update.mjs` | 同上 |
 | 更新 ref 白名单（`safeUpdateRef` 挡住路径穿越与命令拼接） | `test-self-update.mjs` | 同上 |
+| 解压包条目校验：`..` / 盘符 / UNC / 前导斜杠 / 空段都被 `safeZipName` 归一或挡掉，反斜杠先归一成斜杠（`a\..\b.txt` 才看得出是穿越） | `test-zip-extract.mjs`（6 条） | `lib/zip-extract.js` 98% |
+| zip 结构解析：中央目录顺序与签名、EOCD 后面跟 60000 字节注释仍能找到、zip64 占位值 / 未知压缩方法 / 正文截断 / 本地头签名四种拒绝 | `test-zip-extract.mjs`（9 条） | 同上 |
+| 解包落点：`stored` 与 `deflate` 都解出原文、嵌套目录自动建、0 字节写空文件、反斜杠结尾算目录、已存在的目标不清空、单前导斜杠当相对路径（现状锁定，不逃出 dest） | `test-zip-extract.mjs`（7 条） | 同上 |
+| 挑解包器：`node` 自己判 zip-slip 且失败后**停手不再往下试**；`tar`/`unzip`/`python3`/`powershell` 各自的 argv 与 powershell 的环境变量传参；条目预检不过时一个外部工具都不跑，报错里只有 `entries:` 一条 | `test-zip-extract.mjs`（9 条） | 同上 |
+| 外部工具失败要带「命令名: 首行 stderr」进 notes，最终报错拼成 `Extraction failed: a \| b`；空 tools 列表报 `no extractor available` 且目标目录已建出 | `test-zip-extract.mjs`（3 条） | 同上 |
+| 源码形状：`buf.length < 22`、`out !== root && !out.startsWith(prefix)`、盘符判断三道冗余守卫（外部行为等价，去掉不会红） | `test-zip-extract.mjs`（2 条） | 同上 |
 
 ---
 
@@ -318,6 +324,8 @@
 25. **`lib/hide-console.js` 的 `MARK` 一旦打上就删不掉，装好之后这一层只能靠导出函数来测；`installHideConsoleIntoBin` 里那段「清理旧 import 行」的正则在 install 路径上走不到。** 两处都是结构性的、不是疏忽：`Object.defineProperty(cp, MARK, { value: true, enumerable: false })` 没给 `configurable`，所以测试进程里没法「重装」builtin 来观察 wrapper —— 这也是把 `forceHideOptions`/`wrapSpawn`/`wrapExecLike`/`wrapExecFile`/`wrapFork` 导出成 public 的唯一理由（`fd47647`）。真正测不到的是「宿主真跑起来时这层有没有生效」：Windows 上子进程弹不弹黑窗，本仓库只能靠真开一次宿主目视。第二处：`already_injected` 的判据是「含 `IMPORT_MARK`」且「含 `import "./dsh-purge-hide-console.js";`」，任何双引号旧行两条都满足 → 直接早退，后面那条 `/m` 的清理正则永远走不到（只有 `revertHideConsoleFromBin` 的 `/gm` 才会真清）。单引号形态（`import './dsh-purge-hide-console.js';`）会漏过去，结果是多插一行 —— ESM 按 specifier 去重，无害，测试里已按现状锁定。另：`writeHostFileAtomic` 在 POSIX 下把原 mode 带到临时文件（#213）这条，Windows 上只有只读位、`chmod 0444` 与 `0644` 的差别测不全，真正的 `+x` 丢失只能在 Linux/macOS 上验证。
 
 26. **`lib/redteam/platform-config.js` 的「文件名转小写再匹配」在 Windows 上测不到，只能靠 CI 的 Linux 跑 + 源码形状钉。** `adaptInDir` 的判据是 `pattern.test(String(name).toLowerCase())`，为的是认出 `HTTPX-ToolKit` 这种大小写被改过的分发名。但 Windows 文件系统大小写不敏感，`names` 里的精确匹配（`httpx-toolkit`）会先命中，`adaptInDir` 那条路根本走不到 —— 本地把 `.toLowerCase()` 删掉，行为完全一样。处置：`test-platform-config.mjs` 里拆成两条，一条在非 Windows 上真跑（断言 `basename` 是 `HTTPX-ToolKit`，CI 的 ubuntu-latest 覆盖），一条读源码断言 `if (!pattern.test(String(name).toLowerCase())) continue` 这一行的形状，本地也能红。同类还有两处**现状锁定**：`scanFolderForTools` 的 `maxDepth: 0` 因为 `Number(0) || 4` 是 falsy 会走默认 4（不是被夹到 1）；`TOOL_CATALOG` 的 `names` 与 `adapt` 是两份手写清单，只有用例互校能发现不一致（例如给 `httpx` 加了个 `adapt` 却没进 `names`）。另有一条只能手写 fixture 的：`resolveTool` 的 `looksLikePythonCli`（读前 96 字节看 `#!` 里有没有 `python`）只在 `httpx` 的 `rejectPython` 上生效，要造一个「名叫 `httpx` 但其实是 Python 脚本」的文件才触发，本仓库没有这样的分发样本，用例里手写了一份 `#!/usr/bin/env python3` 的假工具。
+
+27. **`lib/zip-extract.js` 的真解压路径按本机装了什么外部工具而变：`tar` 与 `python3` 在本机与 CI 上恰好都在，`unzip` / `powershell` / `bsdtar` 都不在。** 于是 `test-zip-extract.mjs` 里「tar 真能解」「python3 真能解」两条只在装了对应工具的机器上有效（对非 zip 输入的那条已经写成「没装就 return」，避免在别的机器上假绿）。另有三处**现状锁定**：①手拼 zip 必须写对 CRC32，否则内置解包器不看 CRC 能过、`tar` 会报 `ZIP bad CRC` —— 这是 fixture 的坑，不是产品的坑；②单前导斜杠（`/etc/passwd`）被 `safeZipName` 的开头斜杠剥离剥掉后当相对路径，落在 `dest/etc/passwd`，不逃出目标目录但也不是拒绝；③`extractZipArchive` 的 `entriesSafe` 预检只看「是不是 zip + 名字安不安全」，看不了外部工具解出来的**符号链接与硬链接**（`tar` 会照原样建），真正的越界只有 `node` 这条自己写的解包路径挡得住。
 
 ---
 
