@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | 86 条补丁能打在当前宿主上（文本替换成功） | `npm run host:status` → `docs/host-baseline.json` | — |
 | 我们调的宿主 API 还在（`ctx.webServer` 等 8 个服务、9 个成员、7 个事件、`dshHomePath`） | `scripts/host-contract.mjs` / `test-host-contract.mjs` | — |
-| 宿主版本兼容判定（major.minor.patch.pre 全等） | `lib/core.js` `hostCompat`，被 `host:status` 间接覆盖 | `lib/core.js` 28% |
+| 宿主版本兼容判定（major.minor.patch.pre 全等） | `lib/core.js` `hostCompat`，被 `host:status` 间接覆盖 | `lib/core.js` 49% |
 | 探测真宿主树、排除 Electron 外壳依赖树 | `test-host-baseline.mjs`（`looksLikeHostTree` / `resolveAiBase`） | —（同上） |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
@@ -38,7 +38,7 @@
 | 结论只由「升级打断」触发：本来就坏的不算这次升级的账，空批量报 `no-data` 而不是「兼容」 | `test-host-preview.mjs`（`describePreview` 8 条） | 同上 |
 | 预发布版本（rc/alpha/beta/pre/next）必须显式标出来，不许当成「升级就绪」 | `test-host-preview.mjs`（`isPrerelease` 4 条） | 同上 |
 | 预演的四种归类各自计数，出现没见过的 kind 也照样累加不静默丢弃 | `test-host-preview.mjs`（`summarizePreview` 3 条） | 同上 |
-| 补丁落点按「正在清洗的这棵树」判定，不按进程 surface 猜：桌面树里的 `pi-ai-*` 在 web 面也必须登记 | `test-display-targets.mjs`（`targetFiles` 落点 8 条） | `lib/core.js` 40% |
+| 补丁落点按「正在清洗的这棵树」判定，不按进程 surface 猜：桌面树里的 `pi-ai-*` 在 web 面也必须登记 | `test-display-targets.mjs`（`targetFiles` 落点 8 条） | `lib/core.js` 49% |
 | 「要不要重打补丁」的判据：戳、版本、rev 三者对齐，空 sha 不算对齐，占位戳只认版本 | `test-reapply-settle.mjs`（9 条） | `lib/reapply.js` 70% |
 | 空 sha 的旧戳什么时候允许就地补成非空（密封包不补、缺标记不补） | `test-reapply-settle.mjs`（3 条） | 同上 |
 | `installed-rev` 的三个来源与占位戳刷新（显式值 > 已有 rev > 戳里的 sha > `apply:<version>`） | `test-reapply-settle.mjs`（7 条） | 同上 |
@@ -80,10 +80,21 @@
 | minified 的 `client.js` 只能用块注释写 marker：单行 70 万字节里 `//` 会把后半行连同类定义一起注掉 | `test-patch-upgrade.mjs`（`#56`/`#77` 追加条目逐条查 `/*` 与 `//`） | — |
 | minified 追加条目一律带 `insertProbe`，且 probe 打完必须在、原文必须不在（`skipIfMarked` 只能防「marker 还在」那种重复，marker 被冲掉就得靠它） | `test-patch-upgrade.mjs`（2 条） | — |
 | 补丁 id 唯一、非空、是整数 | `check-metadata.mjs` / `test-verification.mjs` | — |
-| 状态汇总优先级（`pending` > `unmatched` > `drifted` > 全 skip > `applied`） | `test-display-targets.mjs`（6 条，含「漂移压过已完成」「全跳过不报 applied」「未知状态退化 skipped」） | `lib/core.js` 28% |
-| 显示分组（九个组、组内 lead 取最小 id、无组补丁自成一行、只适配桌面的补丁不进 web 面、`na` 与缺状态不进行） | `test-display-targets.mjs`（7 条，含「分组 id 必须真实存在且不跨组」） | `lib/core.js` 28% |
-| 面板计数（`tallyDisplayPatches`：跳过同时进 skipped 与 ready、漂移不算就绪、`status`/`st` 双字段名） | `test-display-targets.mjs`（4 条） | `lib/core.js` 28% |
-| 补丁对宿主文件的落点（`targetFiles`）：只登记真实存在的文件、落空键整个删掉、嵌套布局四个 `-nested` 键、`dshHome` 下用户预设与演练台依赖、不跨宿主面收 profile、不登记用户自己的 `cordis.patch.yml` 层 | `test-display-targets.mjs`（9 条，假 aiBase 树 + 临时 dshHome） | `lib/core.js` 28% / `lib/surface.js` 94% |
+| 状态汇总优先级（`pending` > `unmatched` > `drifted` > 全 skip > `applied`） | `test-display-targets.mjs`（6 条，含「漂移压过已完成」「全跳过不报 applied」「未知状态退化 skipped」） | `lib/core.js` 49% |
+| 显示分组（九个组、组内 lead 取最小 id、无组补丁自成一行、只适配桌面的补丁不进 web 面、`na` 与缺状态不进行） | `test-display-targets.mjs`（7 条，含「分组 id 必须真实存在且不跨组」） | `lib/core.js` 49% |
+| 面板计数（`tallyDisplayPatches`：跳过同时进 skipped 与 ready、漂移不算就绪、`status`/`st` 双字段名） | `test-display-targets.mjs`（4 条） | `lib/core.js` 49% |
+| 补丁对宿主文件的落点（`targetFiles`）：只登记真实存在的文件、落空键整个删掉、嵌套布局四个 `-nested` 键、`dshHome` 下用户预设与演练台依赖、不跨宿主面收 profile、不登记用户自己的 `cordis.patch.yml` 层 | `test-display-targets.mjs`（9 条，假 aiBase 树 + 临时 dshHome） | `lib/core.js` 49% / `lib/surface.js` 94% |
+| 补丁状态的汇总口径：写错误 > 严格补丁失配 > **漂移压过「已打上」** > 已打上 > 已落盘 > 全缺 > 跳过（多文件补丁里一个成功一个失效，必须报 `drifted`） | `test-patch-outcomes.mjs`（`rollupPatchStatus` 6 条） | `lib/core.js` 49% |
+| 「能不能 Apply」与「显不显示就绪」两套判据一致：`drifted` 恒不阻断 Apply、`skipped` 只对可选/自标记型软成功、`strictFiles` 让 `optional` 失效、`hit_count_mismatch:` 只对可选补丁软成功、`na` 不算就绪 | `test-patch-outcomes.mjs`（`isPatchResultSoftOk` 9 条 + `patchStatusReady` 4 条） | 同上 |
+| 多宿主合并取最差状态、`id` 规范成 `patch_id`、未知状态按最差处理、同 rank 保留先出现的行；报告按软/硬分成两组 | `test-patch-outcomes.mjs`（`mergeApplyReports` 3 条 + `summarizeApplyReport` 2 条） | 同上 |
+| 写盘分支的四种结局：原文命中→写入、原文不在→漂移、`strictFiles`→`pattern_not_found`、`softFiles` 与自标记型→`self_marked`；`surfaces` 不含当前面→`na` 且不碰文件 | `test-patch-outcomes.mjs`（`applyPatches` 前 6 条） | 同上 |
+| `expect` 命中数是硬契约：官方同名代码多一处/少一处时整条拒写、原文一字未改，状态里带实际/期望计数 | `test-patch-outcomes.mjs`（`hit_count_mismatch:#9007:2/1`） | 同上 |
+| `deleteOnly` 补丁原文还在→`applied`、原文不在→`already`；多文件键一个命中一个不中→整体 `drifted` | `test-patch-outcomes.mjs`（2 条） | 同上 |
+| YAML 落点在写盘时顺带净化折叠块，`replace` 是 no-op 时靠净化也判写入；`preserveClientBundles` 只统计不写 `client.js` | `test-patch-outcomes.mjs`（3 条） | 同上 |
+| `patchStatus` 六态（pending / drifted / skipped / na / missing_file / 非普通文件按落空处理），且对全部 86 条真补丁跑一遍不抛 | `test-patch-outcomes.mjs`（5 条） | 同上 |
+| 宿主版本比对：三段版本 + 预发布后缀保留原大小写、解析不了返回 null、名字含 purge 的包不当宿主、预发布后缀必须原样相等、空目标回 `known:false/ok:null` | `test-patch-outcomes.mjs`（`parseHostVersion` 3 条 + `readHostVersion`/`hostCompat` 6 条） | 同上 |
+| YAML 折叠块净化只碰含样板块的五个键（`personaPrefix`/`prefix`/`persona`/`text`/`suffix`）：整块样板压成空串、混排转字面块、普通折叠块一字不动、五类样板都能认、孤儿空标量的残段被摘掉、CRLF 保持 | `test-patch-outcomes.mjs`（`sanitizeYamlPersonaScalars` 10 条） | 同上 |
+| 净化必须幂等：`applyPatches` 会顺手净化仓库自己的 `cordis.patch.yml`，跑一次测试就改掉仓库文件是不可接受的 | `test-patch-outcomes.mjs` 收尾断言（字节比对，不幂等直接抛） | — |
 
 ---
 
@@ -476,6 +487,20 @@
     **结论是刻意不改判定层**：改它要同时动 `rollupPatchStatus` / `patchStatusReady` / `isPatchResultSoftOk` / `applyPatches` / `verify-target.mjs` / `host-preview-lib.mjs` 六处，
     而收益是零实证问题；这个取舍写在这里，避免以后重新发现同一点又去动它。真要加固，先把 `#42` 那种插入型锚点在测试里写清楚，而不是改判定。
 
+
+45. **判定层的「读失败」分支在 CI 上造不出来。**
+    `patchStatus` 与 `applyPatches` 都有 `loadText` 抛错 → 记 `pending` / `lastError = "read_error"` 的分支，
+    但 `targetFiles` 用 `isFile()` 过滤候选：把文件换成目录后这个键直接落空，走的是 `missing_file` / `na`，
+    根本到不了读失败那一行（`test-patch-outcomes.mjs` 已把这条现状钉住，别当成覆盖缺口去「修」）。
+    真正的读失败（权限不足、被独占锁、盘掉线）在 Linux CI 上难以稳定复现，Windows 上又依赖 ACL 现状。
+    **仍然测不到的**：`write_error:` 分支同理 —— 需要让 `saveText` 抛 EACCES，得先把目标文件设成只读再触发写，
+    这在 NTFS 上与 Linux 上行为不一致，写进 CI 会变成一台机器绿一台机器红。
+
+46. **`sanitizeYamlPersonaScalars` 的「五类样板段」是硬编码清单，不是语义判断。**
+    官方改一句样板文案（例如把 `You are a coding agent powered by` 改掉），净化就不再认得它，
+    于是折叠块原样留下、`personaPrefix` 与官方身份文案一起生效，用户会看到两套身份并存。
+    表现为「注入看起来没生效」而不是报错。守卫只看这五类各自还能被认出来，测不出「官方又多了一类」。
+    **检测办法**：升级后跑 `npm run host:status`，若 `cordis.patch.yml` 的 `personaPrefix` 没被清空，就是这一类。
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
