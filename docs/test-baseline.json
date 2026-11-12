@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T19:35:21.008Z",
-  "commit": "71f3fca",
+  "capturedAt": "2026-11-12T20:01:49.610Z",
+  "commit": "bb14909",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -85,12 +85,12 @@
       "brf": 210
     },
     "lib/core.js": {
-      "lh": 2575,
+      "lh": 2662,
       "lf": 5274,
-      "fnh": 183,
-      "fnf": 321,
-      "brh": 706,
-      "brf": 948
+      "fnh": 198,
+      "fnf": 322,
+      "brh": 750,
+      "brf": 1012
     },
     "lib/desktop.js": {
       "lh": 1386,
@@ -169,14 +169,14 @@
       "lf": 1148,
       "fnh": 91,
       "fnf": 94,
-      "brh": 530,
-      "brf": 584
+      "brh": 531,
+      "brf": 585
     },
     "lib/index.js": {
-      "lh": 196,
-      "lf": 1307,
+      "lh": 166,
+      "lf": 974,
       "fnh": 1,
-      "fnf": 32,
+      "fnf": 16,
       "brh": 5,
       "brf": 5
     },
@@ -275,6 +275,14 @@
       "fnf": 20,
       "brh": 149,
       "brf": 185
+    },
+    "lib/prompt-source.js": {
+      "lh": 324,
+      "lf": 363,
+      "fnh": 22,
+      "fnf": 24,
+      "brh": 77,
+      "brf": 115
     },
     "lib/reapply.js": {
       "lh": 270,
@@ -402,7 +410,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1256
+      "brf": 1255
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -477,12 +485,12 @@
       "brf": 236
     },
     "lib/rules.js": {
-      "lh": 529,
+      "lh": 534,
       "lf": 560,
       "fnh": 45,
       "fnf": 48,
-      "brh": 172,
-      "brf": 205
+      "brh": 179,
+      "brf": 209
     },
     "lib/session-access.js": {
       "lh": 159,
