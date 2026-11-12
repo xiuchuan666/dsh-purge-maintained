@@ -193,32 +193,49 @@ test("sessionKeyOf：cwd 参与签名，换 cwd 必须换 key", () => {
   assert.notEqual(a, b);
 });
 
-// ---- 生产接线：lib/index.js 必须真的用这套纯函数 ----
+// ---- 生产接线：真正持有 rewriteLiveAssembly 的那个文件必须用这套纯函数 ----
+//
+// 2026-11-13 批53 把 rewriteLiveAssembly 从 lib/index.js 搬进 lib/inject-write.js。
+// 这组断言盯的是「缓存接线」，不是「它在哪个文件」，所以按持有者读：
+// 逐个候选文件读出来，谁里面有 rewriteLiveAssembly 就断言谁。
+// 这样以后再搬家不用改这五条，只要能找到持有者即可。
 
-const indexSource = fs.readFileSync(path.join(ROOT, "lib", "index.js"), "utf8");
+const WIRING_HOLDERS = ["lib/inject-write.js", "lib/index.js"].map((rel) => ({
+  rel,
+  text: fs.readFileSync(path.join(ROOT, rel), "utf8"),
+}));
 
-test("生产接线：lib/index.js 用 createLiveCache 建缓存", () => {
-  assert.match(indexSource, /const liveRewriteCache = createLiveCache\(\);/);
-  assert.doesNotMatch(indexSource, /const liveRewriteCache = new WeakMap\(\);/);
+const holder = WIRING_HOLDERS.find((f) => f.text.includes("function rewriteLiveAssembly("));
+if (!holder) throw new Error("找不到 rewriteLiveAssembly 的持有者，生产接线断言无从校验");
+
+test("生产接线：持有 rewriteLiveAssembly 的文件用 createLiveCache 建缓存", () => {
+  assert.match(holder.text, /const liveRewriteCache = createLiveCache\(\);/);
+  assert.doesNotMatch(holder.text, /const liveRewriteCache = new WeakMap\(\);/);
 });
 
-test("生产接线：lib/index.js 用 liveCacheSignature 算签名，不再内联数组", () => {
-  assert.match(indexSource, /const cacheSig = liveCacheSignature\(\{/);
-  assert.doesNotMatch(indexSource, /const cacheSig = \[/);
+test("生产接线：持有者用 liveCacheSignature 算签名，不再内联数组", () => {
+  assert.match(holder.text, /const cacheSig = liveCacheSignature\(\{/);
+  assert.doesNotMatch(holder.text, /const cacheSig = \[/);
 });
 
 test("生产接线：命中判定走 cache.get(obj, sig) 且必须比对 undefined", () => {
   // 缓存值可能是空对象，用 `if (cached)` 会把空对象当未命中，白算一遍；
   // 反过来用 `if (cached !== undefined)` 才是对的。
-  assert.match(indexSource, /const cached = liveRewriteCache\.get\(assembled, cacheSig\);/);
-  assert.match(indexSource, /if \(cached !== undefined\) return cached;/);
+  assert.match(holder.text, /const cached = liveRewriteCache\.get\(assembled, cacheSig\);/);
+  assert.match(holder.text, /if \(cached !== undefined\) return cached;/);
 });
 
 test("生产接线：写缓存走 cache.set(obj, sig, value)，不再手工拼 {sig, value}", () => {
-  assert.match(indexSource, /liveRewriteCache\.set\(assembled, cacheSig, rewritten\);/);
-  assert.doesNotMatch(indexSource, /liveRewriteCache\.set\(assembled, \{ sig: cacheSig/);
+  assert.match(holder.text, /liveRewriteCache\.set\(assembled, cacheSig, rewritten\);/);
+  assert.doesNotMatch(holder.text, /liveRewriteCache\.set\(assembled, \{ sig: cacheSig/);
 });
 
 test("生产接线：会话签名来自 sessionKeyOf，不是就地读 header", () => {
-  assert.match(indexSource, /session: sessionKeyOf\(context\)/);
+  assert.match(holder.text, /session: sessionKeyOf\(context\)/);
+});
+
+test("生产接线：lib/index.js 里不再留内联缓存（搬走后不能有第二份）", () => {
+  const indexText = WIRING_HOLDERS.find((f) => f.rel === "lib/index.js").text;
+  assert.doesNotMatch(indexText, /new WeakMap\(\)/);
+  assert.doesNotMatch(indexText, /liveRewriteCache\./);
 });

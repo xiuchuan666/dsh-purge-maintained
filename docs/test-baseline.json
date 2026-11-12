@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T20:01:49.610Z",
-  "commit": "bb14909",
+  "capturedAt": "2026-11-12T20:37:54.150Z",
+  "commit": "d05a13b",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -169,24 +169,32 @@
       "lf": 1148,
       "fnh": 91,
       "fnf": 94,
-      "brh": 531,
-      "brf": 585
+      "brh": 540,
+      "brf": 586
     },
     "lib/index.js": {
-      "lh": 166,
-      "lf": 974,
+      "lh": 145,
+      "lf": 631,
       "fnh": 1,
-      "fnf": 16,
+      "fnf": 12,
       "brh": 5,
       "brf": 5
+    },
+    "lib/inject-write.js": {
+      "lh": 349,
+      "lf": 363,
+      "fnh": 19,
+      "fnf": 23,
+      "brh": 114,
+      "brf": 143
     },
     "lib/live-cache.js": {
       "lh": 84,
       "lf": 84,
       "fnh": 5,
       "fnf": 5,
-      "brh": 33,
-      "brf": 34
+      "brh": 35,
+      "brf": 36
     },
     "lib/net-scope.js": {
       "lh": 290,
@@ -281,7 +289,7 @@
       "lf": 363,
       "fnh": 22,
       "fnf": 24,
-      "brh": 77,
+      "brh": 79,
       "brf": 115
     },
     "lib/reapply.js": {
@@ -353,8 +361,8 @@
       "lf": 178,
       "fnh": 19,
       "fnf": 19,
-      "brh": 101,
-      "brf": 109
+      "brh": 102,
+      "brf": 110
     },
     "lib/redteam/schema.js": {
       "lh": 621,

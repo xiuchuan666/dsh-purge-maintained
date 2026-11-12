@@ -137,6 +137,12 @@
 | 注入快照与闸门 `injectSnapshot` / `rejectIfNeedPrompt` / `ensureRestartReady`（快照三字段形状、空提示词时回 `needPrompt:true` 与固定文案、重启前先问 `core.ensureHostClean()`） | `test-prompt-source.mjs`（8 条，含文案与形状的源码断言） | 同上 |
 | 装配决策输入 `shouldInjectAssembly` / `readSessionEvents`（默认 full/general、只有 `origin:"subagent"` 算子会话、续跑标记只消费一次变 `lastRole:"retry"`、事件优先 `snapshotEvents` 抛错退 `events` 再兜 `[]`） | `test-prompt-source.mjs`（8 条） | 同上 |
 | 诊断日志 `purgeLog` / `logAssembleDecision`（`ISO [tag] k=v` 单行、值里的空白换 `_`、`undefined` 写空、对象写 `[object_Object]`、超 2MB 翻滚成 `.1`、装配决策固定四字段） | `test-prompt-source.mjs`（5 条） | 同上 |
+| mnemon 插件消息剥离 `installMnemonMessageStrip`（没 `ctx.on` 不落标记、装一次挂一条带 `global+prepend`、重复安装被标记挡住、`mounted` 闸让微任务补挂只补一次且 1500ms 迟到重试不叠第二层、没滤掉返回同一对象、`messages` 不是数组也补成 `[]`、`stripMnemon:false` 一条都不滤） | `test-inject-write.mjs`（12 条） | `lib/inject-write.js` 96% |
+| 每轮装配改写 `rewriteLiveAssembly`（默认段序 `dsh-purge`→`dshpg-capabilities`→原段→`deployment:persona-suffix`→`dsh-purge:anchor`、`enabled:false` 只挂 3 段、`stripMnemon:false` 保留 `mnemon-memory`、`anchorMode:"off"` 去掉锚点段） | `test-inject-write.mjs`（4 条） | 同上 |
+| 改写缓存的签名覆盖面（`policy` 从 `fallback` 变 `strict` 变 `always` 每次都必须重算、`revision` / `session` 参与签名、命中判定必须比 `undefined` 不能真值判断、换 assembled 对象不复用、cwd 落 `last-cwd.txt`） | `test-inject-write.mjs`（5 条，含 `if (cached !== undefined) return cached;` 的源码断言） | 同上 |
+| 装配诊断行 20 个字段（字段顺序固定、`afterCloser` 必须是正数、`anchorApplied` 默认 `true` 关掉锚点时 `false` 且 `injectTail:false`、`chatml` 命中 `<project_instructions>`、`injectBytes` 万级） | `test-inject-write.mjs`（3 条） | 同上 |
+| `closerFollowBytes`（闭标记之后还剩多少字：没有段/没有标记一律 `-1`、多段先按空行拼、闭标记出现多次按**最后**一次算、空段被 filter 掉） | `test-inject-write.mjs`（4 条） | 同上 |
+| 装配挂载 `installIdentityOverride`（4 类钩子与 `global/prepend` 选项、`__dshPurgeDisabled` 停用立即生效、有 next 用下游结果而下游抛错退回上游、旧签名自己动手、`next` 取最后一个参数不是 `args[2]`、guard 内层抛错给空装配、`prepareAssemble` 幂等且隔离层补分段与锚点、`guard.wrap` 签名不变不刷日志、cleanup 清六个 flag 且能重装、400ms 轮询必须 unref） | `test-inject-write.mjs`（15 条） | 同上 |
 
 **本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住；缓存签名与命中规则抽成 `lib/live-cache.js`（`liveCacheSignature` / `sessionKeyOf` / `createLiveCache`），由 `test-live-cache.mjs` 的 37 条用例钉住，且拆分前后 2304 组输入的签名逐字对拍一致（`.tmp-exp/sig-parity.mjs`，一次性）。规则集读写（含备份与恢复的三条分支）已由 `test-rules-store.mjs` 的 30 条用例钉住——这组最怕的是「用户手写的 AGENTS.md 被另一条规则的内容悄悄盖掉」，因此备份/恢复的每个分支都单独立了用例。 这一轮补的是 `lib/identity.js`：它原来只有 69% 行覆盖，`installAssembleGuard` 整块（`lib/identity.js:904-1018`）与身份覆盖、红队操作稿、预设继承全都没有守卫，改坏了的表现是「注入没生效但也不报错」。现由 `test-identity-assembly.mjs` 的 141 条用例钉住，行覆盖 69% → 99%（`375-376` 的正则永不抛、`withOwnServers` 的两条因 `lib/net-scope.js` 的 `ownServerNote()` 恒空而不可达、`decideInject` 由 `test-prompt-inject.mjs` 覆盖、`rewritePromptAssembly:1090-1099` 的兜底块在常规输入下不可达）。 这一轮另外两件事：一是把 `lib/redteam/store-core.js` 从 5429 行拆到 3832 行，计分三件套搬进 `lib/redteam/score-report.js`、元数据与阶段口径搬进 `lib/redteam/engagement-meta.js`，类里只留四个一行转发（详见第十节盲区 33 与 `MAINTENANCE.md` 的「巨型文件拆分」）；二是给行尾约定加了常驻守卫 `npm run check:eol` —— 起因是 `lib/redteam/score-report.js` 入库时被 git 的 `autocrlf` 压成 LF 而工作区是 CRLF，本地与 CI 都全绿、仓库里存的却是另一份字节。现在 `.gitattributes` 用 `* -text` 关掉全部转换，`scripts/check-eol.mjs` 查「文件内不许混行尾 / 已入库不许变 / 新文件符合同目录多数派」三件事，外加一条「索引 blob 与工作区只差行尾」的 autocrlf 指纹检测（这条第一版写错了、检测静默失效，靠负向验证才抓出来，见盲区 34）。
 
@@ -241,6 +247,8 @@
 **2026-11-13 四补**：`/purge` 的六个分支（155 行）从 `lib/index.js` 抽到了 `lib/chat-purge.js`（169 行，1 个 export）。这是唯一一条「一条命令写穿宿主」的入口：apply 会改宿主包、打 shim、写 override 并请求重启，判错的表现是「回了 ✓ 已清洗但宿主没变」或者「清洗没完成却重启了」——两种都不报错，只在用户下次启动时才发现。八个依赖（`core` / `uninstaller` / `reapply` / `renderStatus` / `rejectIfNeedPrompt` / `refreshHungOperator` / `applyShouldRestart` / `scheduleApplyRestart`）全部按 deps 传入，其中 `scheduleApplyRestart` 是 `lib/index.js` 的模块私有函数（自己又依赖 `hostctl` 与 `core.restartSealedDesktopIfNeeded`），硬搬会把整个 index.js 拖进测试。函数体 154 行逐字照抄（`old body lines 154 / new body lines 154 / diffs 0`），`lib/index.js` 1459 → 1307 行。新增 30 条用例（假 `core` + 假 deps，纯内存、不碰宿主机），RED 演练 32 条注入 **32/32 全红**。这次 `lib/index.js` 的行命中 196 → 196 **完全没动**——被搬走的 155 行原本就是零命中段，所以不需要 hunk 记账。
 
 **2026-11-13 五补**：注入正文本体的读盘/缓存/日志这一层（339 行，从 `injectAllowedNow` 到 `readInjectFallback`）从 `lib/index.js` 抽到了 `lib/prompt-source.js`（363 行，12 个 export）。挑它而不是先抽 `installIdentityOverride`，是因为后者依赖这 8 个函数——先把底座搬出来，下一步拆上层就不用把整个 index.js 拖进测试。这一层唯一碰宿主的地方是 `globalThis.__dshPurgeHungPrompt`，最容易测，但改坏了的表现是「注入正文变成旧的或空的」且不报错。函数体逐字照抄（`old block lines 339 / new block lines 339 / diffs 0`），`lib/index.js` 1307 → 974 行。新增 45 条用例（临时 `DSH_HOME` + 真 `lib/core.js` / `lib/rules.js`，不碰宿主），RED 演练 22 条注入 **22/22 全红**。`lib/index.js` 的行命中 196 → 166 已精确记账：被删掉的命中行 44 条、存活 152/152 零丢失、新 import 命中 14 条（`196 - 44 + 14 = 166`）。
+
+**2026-11-13 六补**：注入到底有没有生效的最后一段执行路径（329 行）从 `lib/index.js` 抽到了 `lib/inject-write.js`（363 行，4 个 export）：mnemon 插件消息剥离、每轮装配改写（含缓存命中）、`closerFollowBytes` 诊断指标、`installIdentityOverride` 的四类钩子挂载。挑它的理由是这三处判错的表现全是「AI 行为变了但没有任何报错」——插件消息进了上下文、缓存把上一轮的注入套到这一轮、guard 挂不上导致注入真空。上一批先把它的 8 个私有依赖搬进了 `lib/prompt-source.js`，所以这次可以直接整段搬。函数体逐字照抄（`old body lines 329 / new body lines 329 / PARITY OK`），`lib/index.js` 974 → 631 行。新增 50 条用例（假 ctx + 假 prompt + 临时 `DSH_HOME`，不碰宿主），RED 演练 34 条注入 **34/34 全红**（第一轮 23/36，补了 9 条区分用例 + 修 2 条锚点后才全红，详见盲区 52）。`lib/index.js` 的行命中 166 → 145 已精确记账：被删掉的命中行 24 条、幸存 142/142 全中零丢失、新增命中 3 条（`166 - 24 + 3 = 145`，`lost: []`）。
 
 ---
 
@@ -566,6 +574,19 @@
 
 50. **`/purge apply` 只钉了「怎么报告」，没钉「真写进宿主」**。`test-chat-purge.mjs` 用假 `core` 断言调用顺序、四种补丁记号、五种收尾文案与重启判据，但 `applyPatchesAllHosts` / `patchAllShims` / `silenceCmdFlash` 本身一行都没执行。也就是说：把 apply 的报告写错会被测试抓住，把宿主机真的改坏不会。这一层的真实守卫只有「跑一次 `npm run host:status` 看 verdict」和「升级前跑 `npm run host:preview`」，两条都要对着真安装目录。检测办法：改了 apply 分支之后必须实跑一次 `/purge apply` 再看状态页的补丁明细，不能只看测试绿。
 51. **注入读盘层的四档降级只钉了形状，没钉真实降级路径**：`installHungPromptGlobal` 的 `refresh → hung → disk → sealed` 是「上一档抛错才走下一档」，测试里是用假 `core` 让第一档抛来模拟的；真实情形是加密槽解不开（`openSlot()` 返回空串）或 `prompt-inject.md` 被独占锁住，这两条在这台机器上造不出来。还有个连带效应：`refreshHungOperator` 一旦成功过一次就把结果钉进 `hungCache` 与 `core.hungOperatorPrompt()`，之后改盘上的 `prompt-inject.md` 不会再生效（要等 mtime 或提交版本变化）——这条已在用例里如实钉住，但**升级后如果官方改了 `committedOverrideRevision` 的语义，缓存会变成永久命中**，表现就是「改了提示词但注入不变」。检测办法：改一次 `prompt-inject.md` 保存，看下一轮对话的注入是否跟着变；不变就是这一层卡住了。
+
+52. **注入写盘层的 34 条 RED 演练里，第一轮有 9 条是绿的**——不是代码问题，是断言不够区分。记下来免得下次重犯：
+    ①`incoming = decision.messages || []` 与 `Array.isArray(...)` 在「字段缺失」上等价，只有 `messages` 是**非数组真值**（如字符串）时才分得开；
+    ②去掉 `if (mounted) return;` 之后微任务补挂仍然只挂一次，必须等 1500ms 的迟到重试到点才看得出叠层；
+    ③缓存签名里的 `policy` 默认就是 `fallback`，换成常量 `"always"` 时同一 home 下无差别——必须先写一份 `workspace-policy.json` 造出非默认值；
+    ④`if (cached)` 与 `!== undefined` 只在缓存值是空对象时才分开，实际路径里缓存值永远非空——只能源码形状钉；
+    ⑤`afterCloser` / `anchorApplied` 第一版只钉了「字段存在 + 顺序」，没钉值，于是 `afterCloser: 0` 与 `anchorApplied: false` 蒙过去；
+    ⑥`closerFollowBytes` 的 `lastIndexOf` 与 `indexOf` 只在闭标记出现多次时才分开；
+    ⑦`next = args.length >= 3 ? args[args.length-1] : null` 与 `args[2] || null` 只在「四参调用」时才分开（三参时两者都是同一个函数）；
+    ⑧cleanup 里 `delete ctx.__dshPurgeMnemonStrip` / `__dshPurgeRegionGate` 只在该 ctx 曾装过这两个模块时才分得开，必须在 cleanup 前手动置位；
+    ⑨`rewriteLiveAssembly` 命中缓存后不再写日志，所以「读日志验 policy」必须换一个 assembled 对象。
+    另外两条锚点第一次写错：`isMnemonPluginMessage` 的两行在 `lib/identity.js:724-729`（不在 `lib/inject-write.js`），`chatml` 那行的正则字面量里是三个反斜杠。
+    **仍然测不到的**：真宿主上「切预设后锚点会不会消失」「400ms 轮询能否在第一次 assemble 之前挂上 guard」都只在真会话里分晓，测试只能证明钩子挂上了。
 
 ## 维护约定
 
