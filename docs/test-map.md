@@ -237,7 +237,7 @@
 
 | 能力 | 守卫 | 覆盖率 |
 | --- | --- | --- |
-| 在线更新保持关闭（不指回已删库的 `HunYiSage/dsh-purge`） | `test-update-source.mjs` | `lib/update.js` 45% |
+| 在线更新保持关闭（不指回已删库的 `HunYiSage/dsh-purge`） | `test-update-source.mjs` | `lib/update.js` 55% |
 | 出厂面里没有残留的上游地址与渠道（含成品 `client.js` 的欢迎页链接、演练台兜底仓库、Release 工作流） | `test-upstream-refs.mjs` | — |
 | `package.json` 的 `files` / `dsh.install` / `private` 不回退 | `test-package-integrity.mjs` | — |
 | `npm pack` 产物里不含 `.bak`、`default-prompt-inject.md` | `test-package-integrity.mjs` | — |
@@ -264,9 +264,17 @@
 | 设置读写：文件值赢过配置值、非布尔被忽略、坏 JSON/数组/`"false"` 三种回落、写盘两空格+结尾换行、patch 非布尔保留旧值、目录自建且不留 `.tmp` | `test-hooks-deny.mjs`（8 条） | 同上 |
 | 原子写失败要往上抛且收走 `.tmp`（落点被目录占住 → rename EPERM） | `test-hooks-deny.mjs`（1 条） | 同上 |
 | `selectPatches`：旁路开着照常、关掉四条一个不留且顺序不变、四条 id 与常量一致、只认数字 id | `test-hooks-deny.mjs`（4 条） | 同上 |
-| 通道状态：坏 `channel.json` 回落 stable、beta pin 清空并回写 | `test-self-update.mjs` | `lib/update.js` 45% |
+| 通道状态：坏 `channel.json` 回落 stable、beta pin 清空并回写 | `test-self-update.mjs` | `lib/update.js` 55% |
 | 版本比较与筛选：`versionIsNewer`、`latestStableVersion`、`hideListedVersion` | `test-self-update.mjs` | 同上 |
 | 更新 ref 白名单（`safeUpdateRef` 挡住路径穿越与命令拼接） | `test-self-update.mjs` | 同上 |
+| 更新地址改写：`archiveZipUrl` / `archiveTarballUrl` 认 40 位 sha 走裸路径、`v?数字` 走 `refs/tags`、其余走 `refs/heads` 且 ref 要编码；`rewriteDownloadUrl` 只把 `github.com/.../archive/...` 改写到 `codeload`（源码形状钉，含 `{7,40}` 与 `decodeURIComponent`） | `test-update.mjs`（6 条） | `lib/update.js` 55% |
+| 通道与历史落盘：无文件回 stable **且不写盘**、坏 pin（beta 名 / `beta` 分支）清掉**并回写**、`switchChannel apply:false` 的落盘是两空格缩进 + 结尾换行、`channelPublic` 未知通道回落 stable、`pushHistory` 上限 20 条且同 ref 去重、`writeStamp` 空值不写 | `test-update.mjs`（9 条） | 同上 |
+| profile 扫描与钉版本：`findPurgeProfiles` 只认 `dependencies`/`devDependencies`（**不认 optional**）、`profilePluginDir` 判存在、`pinInstalledSpec` 只改三个依赖段里已存在的 `dsh-purge` 键、注释里留着「不手改 `pnpm-lock.yaml`」的原因与当年报错 | `test-update.mjs`（6 条） | 同上 |
+| `checkUpdate` 的两条短路：beta 通道没有远端时回「还没有测试版」而不是抛错；stable 没有远端时抛 `UPDATES_DISABLED_MESSAGE`，且**抛错不覆盖** `lastUpdateResult()` | `test-update.mjs`（4 条） | 同上 |
+| `checkUpdate` 的正常路径（历史里有一条更新的标签）：`hasUpdate` / `lanes.stable.version` / `updateTarget` / `remoteVersion` / `via` / 本地版本补的 `kind:"local"` 行，以及 `lanes.*.sha` 在在线更新关闭时**恒空**（现状锁定） | `test-update.mjs`（7 条） | 同上 |
+| 分派与回绝：`switchChannel` 默认会真 apply（关闭时抛错且不改通道）、`switchVersion` 的「已下线 / 空 ref / 非法 ref / 未知 ref」四条与按 id、按 sha 前缀两种认出方式、`handleUpdateOp` 的 `auto`/`channel`/`switch`/`rollback` 分派与「该测试标签已不再提供」「未知版本」两种回绝 | `test-update.mjs`（12 条） | 同上 |
+| 更新闸门：`applyUpdate()` 与 `applyUpdate([])` 都抛 `UPDATES_DISABLED_MESSAGE`，且都不改 `channel.json`、不创建 `version-history.json`；`applyUpdateInflight` 复用同一 Promise（源码形状） | `test-update.mjs`（3 条） | 同上 |
+| `autoUpdateIfNeeded` 恒回 `{auto:true, skipped:"manual-only"}` 且不写 `channel.json` | `test-update.mjs`（2 条） | 同上 |
 | 解压包条目校验：`..` / 盘符 / UNC / 前导斜杠 / 空段都被 `safeZipName` 归一或挡掉，反斜杠先归一成斜杠（`a\..\b.txt` 才看得出是穿越） | `test-zip-extract.mjs`（6 条） | `lib/zip-extract.js` 98% |
 | zip 结构解析：中央目录顺序与签名、EOCD 后面跟 60000 字节注释仍能找到、zip64 占位值 / 未知压缩方法 / 正文截断 / 本地头签名四种拒绝 | `test-zip-extract.mjs`（9 条） | 同上 |
 | 解包落点：`stored` 与 `deflate` 都解出原文、嵌套目录自动建、0 字节写空文件、反斜杠结尾算目录、已存在的目标不清空、单前导斜杠当相对路径（现状锁定，不逃出 dest） | `test-zip-extract.mjs`（7 条） | 同上 |
@@ -299,7 +307,7 @@
 4. **`client.js` 主体（上游成品，源码已失传）无法验证。** 只有整体哈希锚点，锚点一变就说明有人动过，但动得对不对无从判断。
 5. **桌面端的探测、脚本文本与重启决策都已钉住，真跑那一层没有。** 安装根名判定、exe 分类、结构反推、aiBase、常见位置展开、封存目录由 33 条用例守着（`test-desktop-locate.mjs`）；换包脚本必须满足的约束、三件套的三级回退与退级层数、`planOfficialRestart` / `desktopRestartChoice` 的决策表、空闲改名的排队语义由 24 条用例守着（`test-desktop-scripts.mjs`），合计把 `lib/desktop.js` 行覆盖推到 61%。仍未测的是注册表（`REGISTRY_INSTALL_SCRIPT`）、进程（`PROCESS_EXE_SCRIPT`）、快捷方式（`SHORTCUT_EXE_SCRIPT`）这三段 powershell 本身：它们只在 `discover: true` 时走到，要真的调 `powershell.exe`、要有真安装树与真进程，fixture 造不出来。改坏的表现是「装了但探测不到」。
 6. **64 个工具的「入口」已被钉住，但每个工具自己的业务分支没有。** `lib/redteam/tools.js` 之前模块顶层就调 `loadDefineTool()`，没有宿主包的进程连 `import` 都抛错，2256 行一条测试都没有。改成 `apply(ctx)` 里按 `ctx.defineTool` 注入的本地工厂后，24 条用例把参数面（宿主 `parameterSchemaSpecToJsonSchema` 编译 64/64、`validateArgs` 拒缺必填/类型错/枚举外）、绑定解析、并发闸门、错误结构化全钉住了，行覆盖 74%。但真正写库的 `execute` 分支（`addVuln` 的幂等键、`searchPocs` 的两层检索、`scoreReport` 的条目筛选）仍只有间接覆盖 —— 它们要一个完整的靶标库 fixture，属下一批。
-7. **自更新与打包的纯函数已钉住，真跑安装/卸载的那一层没有。** `test-self-update.mjs` 的 28 条用例覆盖 profile 补齐、`allowBuilds` 的 pnpm 11/12 分支、卸载顺序与摘引用、通道状态与版本比较（`profile-insert.js` 93%、`uninstall.js` 83%、`update.js` 45%）。但没覆盖：真的跑 `pnpm install` / `npm pack` 装一遍、`scheduleCleanupRestart` 真的重启宿主、`version-history.json` 的写入与 `checkUpdate()` 的网络路径（在线更新已关闭，只能走本地 tgz 手工验证）。
+7. **自更新与打包的纯函数已钉住，真跑安装/卸载的那一层没有。** `test-self-update.mjs` 的 28 条用例覆盖 profile 补齐、`allowBuilds` 的 pnpm 11/12 分支、卸载顺序与摘引用、通道状态与版本比较（`profile-insert.js` 93%、`uninstall.js` 83%、`update.js` 55%）。但没覆盖：真的跑 `pnpm install` / `npm pack` 装一遍、`scheduleCleanupRestart` 真的重启宿主、`version-history.json` 的写入与 `checkUpdate()` 的网络路径（在线更新已关闭，只能走本地 tgz 手工验证）。
 8. **`/rewind` 的规划与落地已钉住，但「回退之后界面填对了吗」没有。** `test-rewind.mjs` 的 45 条用例覆盖切点、认哪句话、四条落地路径、异常边界、草稿一次性取用、读盘三路、收件箱与子会话，`lib/rewind.js` 行覆盖从 10% 推到 90%。没覆盖的是：`waitTurnClosed` 的 8 秒超时（要真等）、草稿 10 分钟过期的清理（要真等）、以及前端拿到草稿之后往输入框里填的那一段（在 `client.js`，源码已失传，只有锚点哈希）。改坏的表现是「回退了，但输入框里是空的或者还是原来那句」。
 9. **`scheduleRestart` / `scheduleCleanupRestart` 本身不测。** 它们会 `spawn` 一个 detached helper，然后 `setTimeout(() => process.exit(0), 250)` —— 直接调用会把跑测试的进程杀掉，所以 `test-host-restart.mjs` 只钉住了它们依赖的 `restartArgv` 与 `hostAdapter`。真跑的那一层只能靠实机点一次「重启」验证：改坏的表现是「点了重启，窗口关了但服务没起来」，用户以为插件把 dsh 弄坏了。
 10. **子代理审批只在钩子层测，真宿主里 policy 翻转后的实际审批结果没有。** `test-host-restart.mjs` 用假 `ctx.on` 抓到了两个钩子的注册参数、触发条件、翻转上限与释放语义，但「宿主收到 `approval/policy: ask` 之后下一次审批真的弹出来了」这段在宿主内部，本仓看不到。
@@ -335,6 +343,8 @@
 27. **`lib/zip-extract.js` 的真解压路径按本机装了什么外部工具而变：`tar` 与 `python3` 在本机与 CI 上恰好都在，`unzip` / `powershell` / `bsdtar` 都不在。** 于是 `test-zip-extract.mjs` 里「tar 真能解」「python3 真能解」两条只在装了对应工具的机器上有效（对非 zip 输入的那条已经写成「没装就 return」，避免在别的机器上假绿）。另有三处**现状锁定**：①手拼 zip 必须写对 CRC32，否则内置解包器不看 CRC 能过、`tar` 会报 `ZIP bad CRC` —— 这是 fixture 的坑，不是产品的坑；②单前导斜杠（`/etc/passwd`）被 `safeZipName` 的开头斜杠剥离剥掉后当相对路径，落在 `dest/etc/passwd`，不逃出目标目录但也不是拒绝；③`extractZipArchive` 的 `entriesSafe` 预检只看「是不是 zip + 名字安不安全」，看不了外部工具解出来的**符号链接与硬链接**（`tar` 会照原样建），真正的越界只有 `node` 这条自己写的解包路径挡得住。
 
 28. **`lib/skills.js` 里有四处只能靠源码形状或 CI 的 Linux 兜住。** ①`blockScalarValue` 最后统一 `replace(/\s+/g, " ").trim()` 把正文压成单行（上游面板按单行描述渲染），于是 YAML 的 `|` 字面量与 `>` 折叠两种样式在输出上完全等价 —— 把 `|` 分支改成折叠逻辑，RED 演练是 GREEN，用例里写成现状锁定。②`listSkills` 的 `entries.sort((a, b) => a.name.localeCompare(b.name))` 在 NTFS 上测不出：`readdir` 本身就按字母序返回，删掉 sort 结果一样，只能用源码形状断言钉。③`installBundleDir` 里 `parsed.ok && parsed.name !== id` 是死分支（`id` 就是取 `parsed.name`），`walkFiles` 的 `depth > 6` 与 `findSkillRoots` 的 `depth > 4` 只能造深层目录真跑、造不出就靠形状；`pathsOverlap` 的 `realpath` 判重在没链接权限的机器上要退回源码形状（本机 `symlinkSync` 可用，真跑）。④`saveSkill` 里 `const check = parseSkillDocument(document); if (!check.ok) throw` 构造不出输入（模板自己刚拼的文档必然合法），同样是源码形状。改坏的表现是「导入技能包后名字变成目录名」「覆盖已有技能时把旧正文冲掉且备份里也没有」或「软链指向 `skills` 时把自己整个删穿」——都没有报错。
+
+29. **`lib/update.js` 的下载与 git 那一层在当前配置下不可测。** ①`ONLINE_UPDATES_ENABLED = false`，`listRemoteVersions()` 直接短路成 `["", "", []]`，于是 `requestBuffer` / `fetchRes` / `fetchText` / `fetchJson` / `remotePackageVersion` / `remoteHeadSha` / `listGithubTags` 一个都跑不到；真打网络也不行（私有仓库返回 404，而重定向白名单与 50MB 上限都要真流量才触发）。②`runGit` / `gitResetTo` / `gitTrackedDirty` / `overlayFromZip` / `runReapplyChild` 会改本机安装或起子进程，只能在真机上手工验一遍。③`gitTrackedDirty` 的 `catch { return true; }` 是**保守**选择：git 不存在时宁可当作「有改动、不覆盖」，所以「删掉 catch 改成 false」这种改法在装了 git 的机器上测不出——已用源码形状钉住那行的存在。④`lanes.*.sha` 在开关关闭时恒空，`describeLane` 里比 sha 的两支只有在打开在线更新后才有意义。改坏的表现是「点了更新但什么都没下载」「回退到某个版本后 git 工作区被覆盖」或「升级失败后通道状态已经写成了新版本」——都没有报错。
 
 ---
 
