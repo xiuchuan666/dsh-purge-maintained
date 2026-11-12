@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-10T08:34:03.463Z",
+  "capturedAt": "2026-11-12T15:25:40.947Z",
   "pluginVersion": "1.1.94",
   "host": {
     "version": "0.2.2-rc.1",
@@ -188,6 +188,21 @@
       "rel": "dsh-api-session-controller/lib/index.js",
       "bytes": 159347,
       "sha256": "3940393fa4cab1a6fa841ffc18c850c9e88ee3c8d43854a19e672fd284ab254c"
+    },
+    "pi-ai-completions": {
+      "rel": "../@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "bytes": 65797,
+      "sha256": "53c1fe84e629c53d599ca633dbfb59b10ef15a578ecf1bf8ea10d0c60e45293f"
+    },
+    "pi-ai-responses-shared": {
+      "rel": "../@earendil-works/pi-ai/dist/api/openai-responses-shared.js",
+      "bytes": 32885,
+      "sha256": "25ca4a318f4a4168344d28942963fa7be8c6ef7bddec2ca45828dc857323d79d"
+    },
+    "pi-ai-anthropic-messages": {
+      "rel": "../@earendil-works/pi-ai/dist/api/anthropic-messages.js",
+      "bytes": 60453,
+      "sha256": "c834d325d3fa24e4a4bfde55498b464f1136deff57e0a828e6704799a966aee5"
     },
     "session-reference#0": {
       "rel": "dsh-session-reference/lib/index.js",
