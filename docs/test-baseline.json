@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T01:44:17.450Z",
-  "commit": "41aa5a4",
+  "capturedAt": "2026-11-12T03:20:21.999Z",
+  "commit": "a73b636",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -285,36 +285,36 @@
       "brf": 47
     },
     "lib/redteam/evidence-ledger.mjs": {
-      "lh": 201,
+      "lh": 467,
       "lf": 507,
-      "fnh": 0,
-      "fnf": 18,
-      "brh": 1,
-      "brf": 1
+      "fnh": 19,
+      "fnf": 20,
+      "brh": 45,
+      "brf": 80
     },
     "lib/redteam/ip-utils.js": {
-      "lh": 107,
+      "lh": 115,
       "lf": 140,
-      "fnh": 10,
+      "fnh": 11,
       "fnf": 12,
-      "brh": 20,
-      "brf": 33
+      "brh": 22,
+      "brf": 40
     },
     "lib/redteam/platform-config.js": {
-      "lh": 368,
+      "lh": 378,
       "lf": 612,
-      "fnh": 27,
+      "fnh": 29,
       "fnf": 36,
-      "brh": 60,
-      "brf": 119
+      "brh": 63,
+      "brf": 120
     },
     "lib/redteam/report-replay.js": {
       "lh": 173,
       "lf": 213,
       "fnh": 8,
       "fnf": 12,
-      "brh": 29,
-      "brf": 64
+      "brh": 30,
+      "brf": 60
     },
     "lib/redteam/role-section.js": {
       "lh": 168,
@@ -337,8 +337,8 @@
       "lf": 940,
       "fnh": 30,
       "fnf": 31,
-      "brh": 171,
-      "brf": 246
+      "brh": 174,
+      "brf": 243
     },
     "lib/redteam/settings.js": {
       "lh": 58,
@@ -349,44 +349,44 @@
       "brf": 13
     },
     "lib/redteam/skill-availability.js": {
-      "lh": 277,
+      "lh": 282,
       "lf": 354,
       "fnh": 18,
       "fnf": 22,
-      "brh": 65,
-      "brf": 112
+      "brh": 75,
+      "brf": 118
     },
     "lib/redteam/skill-fixes.js": {
-      "lh": 504,
+      "lh": 520,
       "lf": 529,
       "fnh": 9,
       "fnf": 10,
-      "brh": 21,
-      "brf": 45
+      "brh": 25,
+      "brf": 47
     },
     "lib/redteam/store-core.js": {
-      "lh": 4235,
+      "lh": 4631,
       "lf": 5429,
-      "fnh": 297,
-      "fnf": 404,
-      "brh": 1021,
-      "brf": 1557
+      "fnh": 335,
+      "fnf": 425,
+      "brh": 1179,
+      "brf": 1702
     },
     "lib/redteam/tools.js": {
-      "lh": 1746,
+      "lh": 2114,
       "lf": 2268,
-      "fnh": 62,
-      "fnf": 202,
-      "brh": 148,
-      "brf": 253
+      "fnh": 137,
+      "fnf": 226,
+      "brh": 299,
+      "brf": 404
     },
     "lib/redteam/validate.js": {
       "lh": 87,
       "lf": 88,
       "fnh": 7,
       "fnf": 7,
-      "brh": 34,
-      "brf": 38
+      "brh": 35,
+      "brf": 39
     },
     "lib/rewind.js": {
       "lh": 580,
