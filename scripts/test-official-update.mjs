@@ -53,13 +53,12 @@ function installTree(exe = 'DeepSeek Harness.exe', resources = []) {
  * ------------------------------------------------------------------ */
 
 test('upgradeMarkerPath：四个官方可执行名都认，且大小写不敏感', () => {
+  // 路径必须用 path.join 拼：写死 `C:\...\DeepSeek Harness.exe` 在 Linux 上
+  // 整个串被当成一个文件名（没有 `/`），dirname 得到 `.`，断言必红。
+  const installDir = path.join(sandbox, 'install-ou')
   for (const exe of ['DeepSeek Harness.exe', 'deepseek-harness.exe', 'DSH Next.exe', 'dsh-next.exe']) {
-    const p = upgradeMarkerPath(`C:\\Users\\x\\AppData\\Local\\Programs\\DeepSeek Harness\\${exe}`)
-    assert.equal(
-      p,
-      path.join('C:\\Users\\x\\AppData\\Local\\Programs\\DeepSeek Harness', 'resources', 'dsh-purge-reapply-asar'),
-      exe,
-    )
+    const p = upgradeMarkerPath(path.join(installDir, exe))
+    assert.equal(p, path.join(installDir, 'resources', 'dsh-purge-reapply-asar'), exe)
   }
 })
 

@@ -157,16 +157,23 @@ test('pathCountsOnThisHost：名字里的平台标记要按分隔符边界匹配
 })
 
 test('referencedPathsOf：只留 toolkit / bin / local 下的路径，且要能算到这台机器上', () => {
+  // 注意：`pathCountsOnThisHost` 用的是**真实** process.platform / process.arch，
+  // 所以「哪些名字算跨系统」在不同平台上是不同的 —— 断言必须按平台分开写，
+  // 否则 Linux CI 上 `nmap.exe` 会被剔掉、`nmap-linux-amd64` 反而会留下。
+  const isWin = process.platform === 'win32'
+  const isMac = process.platform === 'darwin'
   const content = [
-    '用 `$DSH_HOME/redteam/toolkit/nmap.exe` 扫',
-    '还有 `$DSH_HOME/redteam/toolkit/nmap-linux-amd64`',
+    '用 `$DSH_HOME/redteam/toolkit/nmap` 扫',
+    '还有 `$DSH_HOME/redteam/toolkit/nmap.exe`',
+    '以及 `$DSH_HOME/redteam/toolkit/nmap-linux-amd64`',
     '配置在 `~/.config/foo/bar`',
     '模板在 `$DSH_HOME/redteam/toolkit/nuclei-templates/`',
     '示例 `<你的VPS_IP>/bin/x`',
   ].join('\n')
   const out = referencedPathsOf(content)
-  assert.ok(out.includes('$DSH_HOME/redteam/toolkit/nmap.exe'), 'toolkit 下的 exe 要收')
-  assert.equal(out.some((p) => p.includes('nmap-linux-amd64')), false, '跨系统的要剔掉')
+  assert.ok(out.includes('$DSH_HOME/redteam/toolkit/nmap'), '无后缀的 toolkit 二进制哪台机器都算')
+  assert.equal(out.includes('$DSH_HOME/redteam/toolkit/nmap.exe'), isWin, 'exe 只在 Windows 上算')
+  assert.equal(out.includes('$DSH_HOME/redteam/toolkit/nmap-linux-amd64'), !isWin && !isMac, 'linux 后缀只在 Linux 上算')
   assert.equal(out.some((p) => p.includes('.config')), false, '不在 toolkit/bin/local 下的不收')
   assert.equal(out.some((p) => p.includes('<')), false, '带占位符的不收')
 })
@@ -264,8 +271,10 @@ test('checkSkill：缺环境变量记 env-missing，并进 needs_user', () => {
 })
 
 test('checkSkill：引用的本机路径不存在记 path-missing，超过 6 处只列前 6 个', () => {
+  // 文件名不能带 `.exe`：`pathCountsOnThisHost` 在非 Windows 上会把它判成「跨系统二进制」
+  // 直接剔掉，那样一条 path-missing 都造不出来（Linux CI 上就是这么红的）。
   const lines = []
-  for (let i = 0; i < 9; i += 1) lines.push('$DSH_HOME/redteam/toolkit/missing' + i + '.exe')
+  for (let i = 0; i < 9; i += 1) lines.push('$DSH_HOME/redteam/toolkit/missing' + i)
   const out = checkSkill({ name: 'x', content: lines.join('\n') }, { env: { DSH_HOME: freshHome() } })
   const issue = out.issues.find((i) => i.kind === 'path-missing')
   assert.ok(issue, JSON.stringify(out.issues))
