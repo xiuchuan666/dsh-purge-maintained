@@ -302,6 +302,33 @@ test('targetFiles 逐次调用互不串味：同一个 aiBase 连调结果稳定
   assert.ok(!first.includes(desk))
 })
 
+test('targetFiles 按「正在清洗的这棵树」判定落点，不按进程 surface 猜', () => {
+  // 事故复盘：pi-ai-* 三条补丁（#47 / #49 / #57）的目标文件在桌面树里真实存在，
+  // 但 listPiAiApiFiles 内部用 keepSurfaceFile(fp) 判定，而它当时只看 allowTargetPath
+  // （进程级 surface）。CLI 跑 host:status 时 surface 推成 web，桌面树里这些路径被判成
+  // desktop-install 而丢掉 —— 于是 applyPatches 报 missing_file、verify-target 按 argv
+  // 推成 desktop 又报 would-apply，两处口径分叉，用户看到「补丁全丢了」。
+  const { root, aiBase } = makeAiBase('piai')
+  const apiDir = join(root, 'resources', 'app', 'dsh', 'node_modules', '@earendil-works', 'pi-ai', 'dist', 'api')
+  const anthropic = put(join(apiDir, 'anthropic-messages.js'))
+  const completions = put(join(apiDir, 'openai-completions.js'))
+  const responses = put(join(apiDir, 'openai-responses-shared.js'))
+  // 用 DSH_DESKTOP_INSTALL 把这棵假树登记成「桌面安装」，让 pathZone 判成 desktop-install。
+  // 不设的话临时目录落在 shared，allowTargetPath 会放行，这条用例就测不出东西。
+  const prev = process.env.DSH_DESKTOP_INSTALL
+  process.env.DSH_DESKTOP_INSTALL = root
+  try {
+    assert.equal(allowTargetPath(anthropic), false, '前提不成立：桌面安装目录里的文件不该被 surface 判定放行')
+    const files = targetFiles(aiBase, join(sandbox, 'piai-home'))
+    assert.deepEqual(files['pi-ai-anthropic-messages'], [anthropic], '桌面树里的 pi-ai 文件必须登记，否则 #47/#49 打不上')
+    assert.deepEqual(files['pi-ai-completions'], [completions], '#57 的落点要登记')
+    assert.deepEqual(files['pi-ai-responses-shared'], [responses], '#57 的另一个落点要登记')
+  } finally {
+    if (prev === undefined) delete process.env.DSH_DESKTOP_INSTALL
+    else process.env.DSH_DESKTOP_INSTALL = prev
+  }
+})
+
 test('targetFiles 不登记官方文档支持的用户 patch 层', () => {
   const { aiBase } = makeAiBase('patchlayer')
   const home = join(sandbox, 'patchlayer-home')

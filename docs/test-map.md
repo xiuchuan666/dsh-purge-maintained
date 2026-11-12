@@ -33,6 +33,7 @@
 | 旁路副本上重打 86 条补丁，结果与 `docs/host-baseline.json` 逐字节一致（59 个文件） | `npm run host:sandbox`（`scripts/sandbox-apply.mjs`） | `scripts/` 不计覆盖率 |
 | 包清单从 `targetFiles()` 推出来，不写死包名 —— 宿主加包/改路径时自动跟上 | `test-sandbox-apply.mjs`（`packagesFromTargetFiles` 7 条） | 同上 |
 | 沙盒目录必须在仓库内、且不与真宿主/`$DSH_HOME` 重叠（「旁路」不能是假的） | `test-sandbox-apply.mjs`（`isSafeSandboxDir` 6 条） | 同上 |
+| 补丁落点按「正在清洗的这棵树」判定，不按进程 surface 猜：桌面树里的 `pi-ai-*` 在 web 面也必须登记 | `test-display-targets.mjs`（`targetFiles` 落点 8 条） | `lib/core.js` 40% |
 | 「要不要重打补丁」的判据：戳、版本、rev 三者对齐，空 sha 不算对齐，占位戳只认版本 | `test-reapply-settle.mjs`（9 条） | `lib/reapply.js` 70% |
 | 空 sha 的旧戳什么时候允许就地补成非空（密封包不补、缺标记不补） | `test-reapply-settle.mjs`（3 条） | 同上 |
 | `installed-rev` 的三个来源与占位戳刷新（显式值 > 已有 rev > 戳里的 sha > `apply:<version>`） | `test-reapply-settle.mjs`（7 条） | 同上 |
@@ -416,6 +417,15 @@
     ③桌面壳文件（`desktop-shell` 那 7 条 patch 在副本里恒 `na`，因为副本没有 Electron 外壳）。
     另外 `missing_file` 的 10 条在副本与真宿主上都会出现，是「目标文件本来就不在这台机器上」
     （`pi-ai-*`、`hooks-*`、`preset-unrestricted` 等），不是回归。
+
+38. **补丁落点的「面」判定有两套口径，一套按进程、一套按正在清洗的树；后者才是对的。**
+    `allowTargetPath(fp)` 看 `detectSurface()`（进程级：exe / argv / `DSH_SURFACE`），`allowTargetPathForAiBase(fp, aiBase)` 看这棵宿主树在不在桌面安装目录里。
+    `targetFiles(aiBase)` 期间会设 `_patchTargetAiBase`，`firstExisting` / `allExisting` 都走 `allowTargetForPatch`（aiBase 感知），但五个 list 函数内部的 `push` 曾经走 `keepSurfaceFile`（surface 感知）——
+    结果桌面树里真实存在的 `pi-ai-anthropic-messages` / `pi-ai-completions` / `pi-ai-responses-shared` 在 CLI（surface 推成 web）下被判成 `desktop-install` 而丢掉，
+    `applyPatches` 报 `missing_file`、`verify-target` 按 argv 推成 desktop 又报 `would-apply`，两处口径分叉，用户看到的是「补丁全丢了」。
+    2026-11-12 把 `keepSurfaceFile` 改成走 `allowTargetForPatch`（`_patchTargetAiBase` 为空时原样退回 `allowTargetPath`，`targetFiles` 之外行为不变），三个键在 web 面也能登记。
+    **仍然测不到的**：真宿主上「哪一套 surface 才是用户视角」这件事没有独立判据 —— `DSH_SURFACE` 不设时 CLI 一律推成 web，只有带 argv 的 `verify-target` 才推成 desktop。
+    所以 `host:status` 与 `verify-target` 对同一棵树可能给出不同结论，这是设计上的已知分叉，不是 bug，但读输出时必须先看它用的是哪套口径。
 
 ---
 
