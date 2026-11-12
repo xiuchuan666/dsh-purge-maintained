@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T05:36:57.467Z",
-  "commit": "db87963",
+  "capturedAt": "2026-11-12T06:12:57.792Z",
+  "commit": "7d306e4",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -370,7 +370,7 @@
       "fnh": 335,
       "fnf": 425,
       "brh": 1179,
-      "brf": 1698
+      "brf": 1699
     },
     "lib/redteam/tools.js": {
       "lh": 2114,
@@ -421,12 +421,12 @@
       "brf": 34
     },
     "lib/skills.js": {
-      "lh": 540,
+      "lh": 682,
       "lf": 747,
-      "fnh": 45,
-      "fnf": 60,
-      "brh": 103,
-      "brf": 230
+      "fnh": 56,
+      "fnf": 62,
+      "brh": 324,
+      "brf": 390
     },
     "lib/subagent-control.js": {
       "lh": 67,
@@ -493,12 +493,12 @@
       "brf": 27
     },
     "lib/zip-extract.js": {
-      "lh": 184,
+      "lh": 186,
       "lf": 186,
       "fnh": 13,
       "fnf": 13,
-      "brh": 79,
-      "brf": 85
+      "brh": 81,
+      "brf": 84
     }
   }
 }

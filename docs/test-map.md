@@ -133,6 +133,13 @@
 | `rules` / `skills` 两个分发器的 op 优先级（forcedOp > body.op > 尾段 > `?op=` > `?id=` 推断 > status）与 OPTIONS/405 | `test-http-routes.mjs` | 同上 |
 | `skills` 的 14MB 请求体上限（区别于默认 512KB） | `test-http-routes.mjs` | 同上 |
 | `registerRoute` 给 handler 套跨站守卫，注册失败只 warn 不炸 | `test-http-routes.mjs` | 同上 |
+| 技能库的读写面：`validSkillName` 的 13 种输入、五个路径函数、`displayUnderHome` 把越界路径压成 `$DSH_HOME`、`toPublicSkill` 只转 `path`/`backup` 且不改原对象、`formatSize` 四档 | `test-skills.mjs`（5 条） | `lib/skills.js` 91% |
+| frontmatter 解析：`splitFrontmatter` 的 BOM / CRLF / 结尾无换行 / 非 frontmatter 六种、`parseSkillDocument` 五种报错文案、两个开关 6 种真值与 2 种非法、双引号走 `JSON.parse` 真解开转义、开关后跟行内注释、块标量 `\|2` 缩进指示与 chomp 三态 | `test-skills.mjs`（8 条） | 同上 |
+| 渲染与合并：标准 frontmatter 模板、含空格的描述加引号、描述截 500、剥 BOM、`mergeSkillDocument` 保留其它字段且 `name`/`description` 各只一行 | `test-skills.mjs`（6 条） | 同上 |
+| 读与列：bundle 优先 flat、按目录名查直接命中（不校验 frontmatter 的 name，现状锁定）、找不到回 null 而非法名抛错、坏文档标 `valid:false`、`.system` 与根 `SKILL.md` 跳过、同 id 去重 bundle 赢、两个目录同名只收第一个、排序靠源码形状钉 | `test-skills.mjs`（9 条） | 同上 |
+| 写与删：新建、覆盖 bundle/flat 各自先备份旧内容、拒非法名与 256KB、显式描述优先于 frontmatter、失败回滚、删除找不到抛错 | `test-skills.mjs`（7 条） | 同上 |
+| 导入：目录按 frontmatter 名建目录、坏 frontmatter 用目录名兜底且不改写文档、无 frontmatter 补 render、单 `.md` 导入、拒从 `skills` 自己导入、拒软链到 `skills` 里（`realpath` 判重）、`importFileTree` 的 base64/utf8 与空/过多/越界/超大四类拒绝、`importArchive` 的空包/12MB/`..` 条目/超 200 条目/解包后 50MB 上限 | `test-skills.mjs`（12 条） | 同上 |
+| 找根与状态：含 `SKILL.md` 的目录当根并停止下钻、最多 4 层、命中后不再往下找、`skillsStatus` 不带正文 | `test-skills.mjs`（5 条） | 同上 |
 | 13 条 `exact` 路由的注册面（路径、顺序、标签唯一、都是 `exact`） | `test-exact-routes.mjs`（1 条） | `lib/routes.js` 93% |
 | 只读路由的方法白名单与参数：`status` / `last-user` / `rewind/options` / `rewind` GET / `hooks-deny` GET | `test-exact-routes.mjs`（11 条） | `lib/routes.js` 93% |
 | `/status` 的四种形态：进度期回上次载荷、未就绪 503、就绪全字段、`gatherState` 抛错 500 | `test-exact-routes.mjs`（4 条） | `lib/routes.js` 93% |
@@ -326,6 +333,8 @@
 26. **`lib/redteam/platform-config.js` 的「文件名转小写再匹配」在 Windows 上测不到，只能靠 CI 的 Linux 跑 + 源码形状钉。** `adaptInDir` 的判据是 `pattern.test(String(name).toLowerCase())`，为的是认出 `HTTPX-ToolKit` 这种大小写被改过的分发名。但 Windows 文件系统大小写不敏感，`names` 里的精确匹配（`httpx-toolkit`）会先命中，`adaptInDir` 那条路根本走不到 —— 本地把 `.toLowerCase()` 删掉，行为完全一样。处置：`test-platform-config.mjs` 里拆成两条，一条在非 Windows 上真跑（断言 `basename` 是 `HTTPX-ToolKit`，CI 的 ubuntu-latest 覆盖），一条读源码断言 `if (!pattern.test(String(name).toLowerCase())) continue` 这一行的形状，本地也能红。同类还有两处**现状锁定**：`scanFolderForTools` 的 `maxDepth: 0` 因为 `Number(0) || 4` 是 falsy 会走默认 4（不是被夹到 1）；`TOOL_CATALOG` 的 `names` 与 `adapt` 是两份手写清单，只有用例互校能发现不一致（例如给 `httpx` 加了个 `adapt` 却没进 `names`）。另有一条只能手写 fixture 的：`resolveTool` 的 `looksLikePythonCli`（读前 96 字节看 `#!` 里有没有 `python`）只在 `httpx` 的 `rejectPython` 上生效，要造一个「名叫 `httpx` 但其实是 Python 脚本」的文件才触发，本仓库没有这样的分发样本，用例里手写了一份 `#!/usr/bin/env python3` 的假工具。
 
 27. **`lib/zip-extract.js` 的真解压路径按本机装了什么外部工具而变：`tar` 与 `python3` 在本机与 CI 上恰好都在，`unzip` / `powershell` / `bsdtar` 都不在。** 于是 `test-zip-extract.mjs` 里「tar 真能解」「python3 真能解」两条只在装了对应工具的机器上有效（对非 zip 输入的那条已经写成「没装就 return」，避免在别的机器上假绿）。另有三处**现状锁定**：①手拼 zip 必须写对 CRC32，否则内置解包器不看 CRC 能过、`tar` 会报 `ZIP bad CRC` —— 这是 fixture 的坑，不是产品的坑；②单前导斜杠（`/etc/passwd`）被 `safeZipName` 的开头斜杠剥离剥掉后当相对路径，落在 `dest/etc/passwd`，不逃出目标目录但也不是拒绝；③`extractZipArchive` 的 `entriesSafe` 预检只看「是不是 zip + 名字安不安全」，看不了外部工具解出来的**符号链接与硬链接**（`tar` 会照原样建），真正的越界只有 `node` 这条自己写的解包路径挡得住。
+
+28. **`lib/skills.js` 里有四处只能靠源码形状或 CI 的 Linux 兜住。** ①`blockScalarValue` 最后统一 `replace(/\s+/g, " ").trim()` 把正文压成单行（上游面板按单行描述渲染），于是 YAML 的 `|` 字面量与 `>` 折叠两种样式在输出上完全等价 —— 把 `|` 分支改成折叠逻辑，RED 演练是 GREEN，用例里写成现状锁定。②`listSkills` 的 `entries.sort((a, b) => a.name.localeCompare(b.name))` 在 NTFS 上测不出：`readdir` 本身就按字母序返回，删掉 sort 结果一样，只能用源码形状断言钉。③`installBundleDir` 里 `parsed.ok && parsed.name !== id` 是死分支（`id` 就是取 `parsed.name`），`walkFiles` 的 `depth > 6` 与 `findSkillRoots` 的 `depth > 4` 只能造深层目录真跑、造不出就靠形状；`pathsOverlap` 的 `realpath` 判重在没链接权限的机器上要退回源码形状（本机 `symlinkSync` 可用，真跑）。④`saveSkill` 里 `const check = parseSkillDocument(document); if (!check.ok) throw` 构造不出输入（模板自己刚拼的文档必然合法），同样是源码形状。改坏的表现是「导入技能包后名字变成目录名」「覆盖已有技能时把旧正文冲掉且备份里也没有」或「软链指向 `skills` 时把自己整个删穿」——都没有报错。
 
 ---
 
