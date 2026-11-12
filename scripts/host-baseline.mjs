@@ -21,7 +21,8 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  buildSnapshot, diffSnapshots, findAiBase, mergeVerdicts, renderDiff, resolveAiBase, SNAPSHOT_SCHEMA,
+  auditStampVsTree, buildSnapshot, diffSnapshots, findAiBase, mergeVerdicts, renderDiff, resolveAiBase,
+  SNAPSHOT_SCHEMA,
 } from "./host-baseline-lib.mjs";
 import { checkContract, loadContract, scanHost } from "./host-contract-lib.mjs";
 
@@ -76,6 +77,49 @@ function probe() {
 
 const probeOut = probe();
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+
+/**
+ * 读状态戳并与宿主树核对。
+ *
+ * 只读：`~/.dsh/dsh-purge/applied.json` 与 `installed-rev` 都不写。
+ * `hasAiBase=false`（找不到宿主根）时 auditStampVsTree 会单列 unknown-base，
+ * 避免把「web 启动早期/纯 CLI」误判成补丁丢失（#59）。
+ */
+function readStampAudit(base, pluginVersion) {
+  const home = process.env.DSH_HOME && String(process.env.DSH_HOME).trim()
+    ? path.resolve(String(process.env.DSH_HOME).trim())
+    : path.join(os.homedir(), ".dsh");
+  const dir = path.join(home, "dsh-purge");
+  const readText = (name) => {
+    try {
+      return fs.readFileSync(path.join(dir, name), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  let stamp = null;
+  try {
+    const parsed = JSON.parse(readText("applied.json") || "null");
+    stamp = parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    stamp = null;
+  }
+  let markersPresent = false;
+  if (base) {
+    try {
+      markersPresent = core.hostCleanMarkersPresent(base);
+    } catch {
+      markersPresent = false;
+    }
+  }
+  return auditStampVsTree({
+    stamp,
+    installedRev: readText("installed-rev").trim(),
+    pluginVersion,
+    markersPresent,
+    hasAiBase: Boolean(base),
+  });
+}
 const snapshot = buildSnapshot({
   host: core.readHostVersion(aiBase),
   aiBase,
@@ -119,18 +163,24 @@ if (CAPTURE) {
     }
   }
 
-  const verdict = mergeVerdicts(diff.verdict, contract);
+  // 状态戳核对：`applied.json` 说「已应用」不代表宿主树上真有补丁。
+  // 2026-11-12 实测撞上过：戳写着 1.1.94 已应用，59 个目标文件里 55 个是原版、标记计数 0。
+  // 在那之前这里只会给 verdict=review（"补丁还站得住"），语义完全反了。
+  const stampAudit = readStampAudit(aiBase, pkg.version);
+
+  const verdict = mergeVerdicts(diff.verdict, contract, stampAudit);
   if (JSON_OUT) {
     console.log(JSON.stringify({
       baselineFile: BASELINE_FILE,
       baselineAt: baseline.capturedAt,
       verdict,
       diff,
+      stampAudit,
       contract: contract ? { ok: contract.ok, total: contract.total, counts: contract.counts, missing: contract.missing } : null,
       contractSkip,
     }, null, 2));
   } else {
-    console.log(renderDiff(diff, { contract }));
+    console.log(renderDiff(diff, { contract, stampAudit }));
     if (contractSkip) console.log(`[host] ${contractSkip}`);
   }
   process.exitCode = verdict === "broken" ? 1 : 0;

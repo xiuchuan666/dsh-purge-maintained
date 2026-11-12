@@ -26,6 +26,10 @@
 | 探测真宿主树、排除 Electron 外壳依赖树 | `test-host-baseline.mjs`（`looksLikeHostTree` / `resolveAiBase`） | —（同上） |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
+| 状态戳说「已应用」但宿主树上没有注入标记 → 必须 `broken`，不许报「补丁仍站得住」 | `test-host-baseline.mjs`（`auditStampVsTree` 9 条） | `scripts/` 不计覆盖率 |
+| 找不到宿主根时单列 `unknown-base`，绝不判成补丁丢失（#59） | 同上 | 同上 |
+| 补丁从 `settled` 掉成 `would-apply`（=没打）必须算失效，79 条全掉要一条不漏 | `test-host-baseline.mjs`（`diffSnapshots` 6 条） | 同上 |
+| 两类失效分行显示：「重打即可」与「要改 pattern」，修法不同不能混 | `test-host-baseline.mjs`（`renderDiff` 2 条） | 同上 |
 | 「要不要重打补丁」的判据：戳、版本、rev 三者对齐，空 sha 不算对齐，占位戳只认版本 | `test-reapply-settle.mjs`（9 条） | `lib/reapply.js` 70% |
 | 空 sha 的旧戳什么时候允许就地补成非空（密封包不补、缺标记不补） | `test-reapply-settle.mjs`（3 条） | 同上 |
 | `installed-rev` 的三个来源与占位戳刷新（显式值 > 已有 rev > 戳里的 sha > `apply:<version>`） | `test-reapply-settle.mjs`（7 条） | 同上 |
@@ -387,8 +391,16 @@
 
 34. **行尾约定只能靠 `docs/eol-baseline.json` 现状锁定，没有「应该是什么」的独立判据。** `check:eol` 的三条规则全部相对基线判断：第 2 条要求「已入库文件的行尾不许变」，而基线本身就是 `--update` 从当前工作区生成的 —— 所以**只要有人跑一次 `--update`，任何行尾改动都会被当成新的正确状态**。这道守卫挡的是「无意中被 git 转换」，不是「故意改行尾」。能兜住的只有第 3 条（新文件必须符合同目录多数派）与第 1 条（文件内不许混行尾），这两条不依赖基线。另外：①`client.js` 与 `docs/origin/client-1.1.94.js` 是 5017 CRLF / 9381 LF 的混合文件，它们是上游产物的逐字节锚点（`check:client` 校验哈希），所以进 `MIXED_ALLOWED` 白名单、永远不报 —— 这意味着**这两份文件的行尾无法用任何自动手段保护**，只能靠「别手改 `docs/origin/`」这条约定。②`readBlobs` 用 `git cat-file --batch`，头部 `<sha> <type> <size>` **不含路径**，必须按输入顺序对上；第一版用 `parts.slice(3)` 取路径导致所有 blob 落到同一个键、检测静默失效（`check` 永远 PASS），是靠负向验证（临时开 `core.autocrlf=true` 造出「工作区 2 CRLF、blob 2 LF」）才抓出来的。③`--batch` 的缺失对象只输出两段 `<输入> missing`，要跳过，且内容必须按声明的 size 切、不能按行切。④`git ls-files` 只列已跟踪文件，未跟踪的新文件不在审计范围 —— 新增文件要先 `git add` 才会被查，所以「刚写完还没 add 的文件行尾不对」这件事要到下一轮才暴露。
 
-35. **`lib/redteam/tools.js` 按领域拆成五个 `tool-specs-*.js` 之后，「拆分等价性」同样只有一次性对拍。** 2269 → 474 行（`apply` 只剩编排），五个组文件共 1865 行；64 个工具块的原文逐行对拍过（recon 569 / findings 448 / scoring 380 / knowledge 180 / evidence 212，全部 diff 0），但这份对拍脚本没进仓库，下次再搬只能重写。守行为的是原有测试（注册面 64 个、参数面宿主编译、业务分支 41 条），它们只能证明「搬完行为没变」，不能证明「搬的时候一个字都没改」。
-   另外三处只能现状锁定：①`tool-specs-evidence.js` 里的 `ledgerOf` / `unknownsOf` 两个工厂是**组内自带**（只闭包 `store`），不从 `deps` 注入，所以「deps 漏传」这类错误在证据组不会暴露，只在 recon/findings/scoring/knowledge 组暴露；②`score_report` 的 `summary` 与 `items` 同口径（`limit:1` 时 `count` 也是 1），要改成全量口径得另算一遍，属产品决策；③`redteam_roles` 的 `parameters` 是空对象，它的角色列表来自 `ROLE_TITLES` 而非 `ROLE_ORDER`，两个来源顺序不同（`ROLE_TITLES` 含 `plan` 在首位）。
+35. **`lib/redteam/tools.js` 按领域拆成五个 `tool-specs-*.js` 之后，「拆分等价性」同样只有一次性对拍。** 2269 → 474 行（`apply` 只剩编排），五个组文件共 1865 行；64 个工具块的原文逐行对拍过（recon 569 / findings 448 / scoring 380 / knowledge 180 / evidence 212，全部 diff 0），但这份对拍脚本没进仓库，下次再搬只能重写。守行为的是原有测试（注册面 64 个、参数面宿主编译、业务分支 41 条），它们只能证明「搬完行为没变」，不能证明「搬的时候一个字都没改」。 另外三处只能现状锁定：①`tool-specs-evidence.js` 里的 `ledgerOf` / `unknownsOf` 两个工厂是**组内自带**（只闭包 `store`），不从 `deps` 注入，所以「deps 漏传」这类错误在证据组不会暴露，只在 recon/findings/scoring/knowledge 组暴露；②`score_report` 的 `summary` 与 `items` 同口径（`limit:1` 时 `count` 也是 1），要改成全量口径得另算一遍，属产品决策；③`redteam_roles` 的 `parameters` 是空对象，它的角色列表来自 `ROLE_TITLES` 而非 `ROLE_ORDER`，两个来源顺序不同（`ROLE_TITLES` 含 `plan` 在首位）。
+
+36. **状态戳只能说明「上次谁写了它」，不能说明「宿主树上现在有什么」。**
+    `applied.json` 是插件自己写的文件，宿主被官方升级/换回原版时它不会被改动；
+    2026-11-12 实测就撞上过：戳写着 1.1.94 已应用，59 个目标文件里 55 个是原版、`dsh-purge` 标记计数 0。
+    现在 `host:status` 会用 `hostCleanMarkersPresent` 反查树上标记并给出 `stamp-lies`，
+    但**标记本身只有一个探针**（`dsh-system-prompt/lib/index.js` 里那几行注释）；
+    如果哪天这个文件的补丁被单独回滚、其它 58 个文件仍是打过补丁的，
+    这里会误报成 `stamp-lies`。要根治得让 86 条补丁各自留标记，代价是补丁正文变长，暂不做。
+    `reapply.js` 的 `patchesMatchInstallStrict()` 走的是同一套标记，所以两处会一起误报、不会互相矛盾。
 
 ---
 

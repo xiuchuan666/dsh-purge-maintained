@@ -191,9 +191,17 @@ const BROKEN_FROM = new Set(["settled", "would-apply"]);
 
 /**
  * 比对两份快照。verdict:
- *   broken —— 有补丁从「可用/已装」跌成 drifted，或新出现 drifted
+ *   broken —— 有补丁从「可用/已装」跌成 drifted，或从「已装」跌成 would-apply，
+ *             或补丁整条从表里消失
  *   review —— 宿主版本变了、目标文件增删改，但补丁状态还站得住
  *   ok     —— 一切相同
+ *
+ * 为什么 settled -> would-apply 也算失效：would-apply 的语义是「原文还是原版，
+ * 这条 pattern 现在能打上去」——也就是**没打**。基线记的是 settled（打过）。
+ * 2026-11-12 实测：宿主树被换回原版后，79 条 settled 全变成 would-apply，
+ * 老判定给的是 changed/review，输出「有变化但补丁仍站得住」——语义完全反了。
+ * drifted 与 would-apply 的区别只在修法：前者要改 pattern，后者重打即可，
+ * 所以单独给一个 severity 名字，但两者都必须让 verdict 非 ok。
  */
 export function diffSnapshots(baseline, current) {
   if (!baseline || !current) throw new Error("diffSnapshots: both snapshots are required");
@@ -226,8 +234,10 @@ export function diffSnapshots(baseline, current) {
     if (prev.status === cur.status) continue;
     const severity = cur.status === "drifted"
       ? (BROKEN_FROM.has(prev.status) ? "broken" : "still-broken")
-      : prev.status === "drifted" ? "recovered"
-        : "changed";
+      : cur.status === "would-apply" && BROKEN_FROM.has(prev.status) ? "unapplied"
+        : cur.status === "would-apply" && prev.status === "drifted" ? "still-broken"
+          : prev.status === "drifted" ? "recovered"
+            : "changed";
     transitions.push({ id, name: cur.name, from: prev.status, to: cur.status, severity });
     if ((prev.status === "no-file" || prev.status === "(new)") && cur.status === "would-apply") {
       gained.push({ id, name: cur.name });
@@ -237,7 +247,8 @@ export function diffSnapshots(baseline, current) {
     if (!curPatches.has(id)) transitions.push({ id, name: prev.name, from: prev.status, to: "(gone)", severity: "broken" });
   }
 
-  const broken = transitions.filter((t) => t.severity === "broken" || t.severity === "still-broken");
+  const FATAL = new Set(["broken", "still-broken", "unapplied"]);
+  const broken = transitions.filter((t) => FATAL.has(t.severity));
   const verdict = broken.length > 0 ? "broken" : (versionChanged || files.length > 0 || transitions.length > 0) ? "review" : "ok";
 
   return {
@@ -253,26 +264,97 @@ export function diffSnapshots(baseline, current) {
 }
 
 /**
- * 合并两份判定：补丁还能不能打上去（host-baseline） + 我们调的宿主 API 还在不在
- * （host-contract）。两者不重叠，verdict 取更严重的那一个。
+ * 状态戳与宿主树是否自洽。
  *
- * 为什么不合算成一个分数：这两件事的修法完全不同——补丁 drifted 要改 pattern，契约
- * missing 要改代码或改契约。混成一个数字只会把这个信息丢掉。
+ * 为什么需要这一条：`~/.dsh/dsh-purge/applied.json` 只记录「上次 markPatchesApplied 写了什么」，
+ * 它不会因为宿主被重装 / asar 被换 / 用户手改而回退。2026-11-12 实测就撞上了：
+ * 戳写着 version=1.1.94、sha=apply:1.1.94，而 resources/app/dsh 下 59 个目标文件里
+ * 55 个与「打过补丁的基线」不同、`dsh-purge` 标记计数为 0 —— 树是原版，戳说已打。
+ *
+ * 在此之前 `host:status` 给的是 verdict=review（"有变化但补丁还站得住"），
+ * 语义完全反了。所以单独出一条判据，把「戳撒谎」升级成 broken。
+ *
+ * @param {{stamp?: {version?: string, sha?: string}|null, installedRev?: string,
+ *          pluginVersion?: string, markersPresent?: boolean}} input
+ * @returns {{state: string, verdict: string, detail: string, claimsApplied: boolean, placeholder: boolean}}
  */
-export function mergeVerdicts(patchVerdict, contractResult) {
-  if (!contractResult || contractResult.ok !== false) return patchVerdict;
-  return "broken";
+export function auditStampVsTree({
+  stamp = null,
+  installedRev = "",
+  pluginVersion = "",
+  markersPresent = false,
+  hasAiBase = true,
+} = {}) {
+  const version = String(pluginVersion || "");
+  const stampVersion = String(stamp?.version || "");
+  const sha = String(stamp?.sha || "");
+  const rev = String(installedRev || "");
+  const placeholder = sha.startsWith("apply:") || sha === "applied";
+  const sameVersion = !version || stampVersion === version;
+  const claimsApplied = Boolean(stampVersion) && Boolean(sha) && sameVersion;
+
+  let state;
+  // 找不到插件根时无法核对（#59：web 启动早期、纯 CLI 都可能是这种状态）。
+  // 这时判 broken 会让人误以为补丁丢了，所以单列一档。
+  if (!hasAiBase) state = "unknown-base";
+  else if (claimsApplied && markersPresent) state = "consistent-applied";
+  else if (claimsApplied && !markersPresent) state = "stamp-lies";
+  else if (stampVersion && !sameVersion) state = "stale-stamp";
+  else if (markersPresent) state = "tree-lies";
+  else state = "no-stamp";
+
+  // stamp-lies 是唯一「功能已经没了但状态说没事」的组合，必须判 broken。
+  // tree-lies 反过来：树上有补丁但戳不知道 —— 功能在，只是记录过期，review 足够。
+  const verdict = state === "stamp-lies" ? "broken" : state === "tree-lies" ? "review" : "ok";
+
+  const shaNote = sha ? `sha=${sha}${placeholder ? "（占位，不是真提交号）" : ""}` : "sha 为空";
+  const revNote = rev ? `installed-rev=${rev}` : "installed-rev 为空";
+  const treeNote = markersPresent ? "树上有注入标记" : "树上没有注入标记";
+  const detail = state === "unknown-base"
+    ? `找不到宿主插件根，无法核对状态戳（${stampVersion || "无戳"}）与宿主树 —— 这不等于补丁丢失`
+    : state === "stamp-lies"
+      ? `状态戳说 ${stampVersion} 已应用（${shaNote}），但${treeNote} —— 补丁不在树上，戳在撒谎`
+      : state === "consistent-applied"
+        ? `状态戳与宿主树一致：${stampVersion} 已应用，${treeNote}`
+        : state === "stale-stamp"
+          ? `状态戳是旧版本 ${stampVersion}（当前插件 ${version || "未知"}），${revNote}，${treeNote} —— 需要重打`
+          : state === "tree-lies"
+            ? `宿主树上有注入标记，但没有对应版本的状态戳（${stampVersion || "无"}）—— 记录过期，功能还在`
+            : `没有状态戳，${treeNote} —— 干净状态`;
+
+  return { state, verdict, detail, claimsApplied, placeholder };
+}
+
+/**
+ * 合并三份判定：补丁还能不能打上去（host-baseline） + 我们调的宿主 API 还在不在
+ * （host-contract） + 状态戳与宿主树是否自洽（auditStampVsTree）。
+ * 三者不重叠，verdict 取更严重的那一个。
+ *
+ * 为什么不合算成一个分数：这三件事的修法完全不同——补丁 drifted 要改 pattern，契约
+ * missing 要改代码或改契约，戳撒谎要重打或回滚。混成一个数字只会把这个信息丢掉。
+ */
+export function mergeVerdicts(patchVerdict, contractResult, stampAudit = null) {
+  if (stampAudit && stampAudit.verdict === "broken") return "broken";
+  if (contractResult && contractResult.ok === false) return "broken";
+  if (stampAudit && stampAudit.verdict === "review" && patchVerdict === "ok") return "review";
+  return patchVerdict;
 }
 
 /** 人读渲染。刻意短：升级当天要能一眼看出「哪个补丁废了」或「哪个宿主 API 没了」。 */
-export function renderDiff(diff, { limit = 40, contract = null } = {}) {
+export function renderDiff(diff, { limit = 40, contract = null, stampAudit = null } = {}) {
   const lines = [];
   const contractFailed = Boolean(contract && contract.ok === false);
-  const verdict = mergeVerdicts(diff.verdict, contract);
+  const verdict = mergeVerdicts(diff.verdict, contract, stampAudit);
   const head = diff.versionChanged
     ? `host ${diff.fromVersion} -> ${diff.toVersion}`
     : `host ${diff.toVersion} (未变)`;
   lines.push(`[host] ${head}  verdict=${verdict}`);
+
+  // 状态戳与树的自洽性放最前面：它一旦是 stamp-lies，下面「补丁状态变化」的解读都会偏。
+  if (stampAudit) {
+    const tag = stampAudit.state === "stamp-lies" ? "✖" : stampAudit.state === "consistent-applied" ? "✓" : "!";
+    lines.push(`[host] ${tag} 状态戳核对 ${stampAudit.state}：${stampAudit.detail}`);
+  }
 
   if (diff.files.length) {
     lines.push(`[host] 目标文件变化 ${diff.files.length} 个`);
@@ -306,13 +388,22 @@ export function renderDiff(diff, { limit = 40, contract = null } = {}) {
   }
 
   if (diff.verdict === "broken") {
-    lines.push(`[host] 失效补丁: ${diff.broken.map((b) => `#${b.id} ${b.name}`).join(", ")}`);
-    lines.push("[host] 定位用: node scripts/verify-target.mjs --ai-base <aiBase> --pad");
+    // 两类失效的修法不同，必须分开列：unapplied 重打就行，broken 要改 pattern。
+    const unapplied = diff.broken.filter((b) => b.severity === "unapplied");
+    const patternGone = diff.broken.filter((b) => b.severity !== "unapplied");
+    if (unapplied.length) {
+      lines.push(`[host] 补丁不在树上（重打即可）: ${unapplied.map((b) => `#${b.id} ${b.name}`).join(", ")}`);
+    }
+    if (patternGone.length) {
+      lines.push(`[host] 失效补丁（要改 pattern）: ${patternGone.map((b) => `#${b.id} ${b.name}`).join(", ")}`);
+      lines.push("[host] 定位用: node scripts/verify-target.mjs --ai-base <aiBase> --pad");
+    }
   }
   if (contractFailed) {
     lines.push("[host] 契约详情: node scripts/host-contract.mjs --ai-base <aiBase>");
   }
   if (verdict === "ok") lines.push("[host] 补丁与契约都与基线一致，无需处理");
   if (verdict === "review") lines.push("[host] 有变化但补丁与契约仍站得住：记录后继续观察");
+  if (verdict === "broken") lines.push("[host] 有失效项，按上面的分类处理后再跑一次");
   return lines.join("\n");
 }
