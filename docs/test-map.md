@@ -239,6 +239,12 @@
 | 路由总数：16 条（13 条 exact + 3 条 prefix），并点名 `/dsh-purge/status` / `apply` / `revert` / `restart` 与 `/dsh-purge/rules` / `skills` / `skill`；`enabled:false` 时一条都不注册 | `test-plugin-boot.mjs`（2 条） | 同上 |
 | 源码形状：`routeSpecs({...})` 的 deps 里每个名字都必须有来处（顶层 import、顶层声明、或函数形参），少一个就报名字 | `test-plugin-boot.mjs`（1 条） | 同上 |
 | 装配顺序不被打断：`applyHostHooks` 仍被调用、skills/rules 两条 prefix 路由仍注册、exact 循环仍跑、`enabled:false` 仍提前 `return`（四条都由 boot 测试间接钉住） | `test-plugin-boot.mjs` + RED 演练 7/7 | 同上 |
+| 启动自愈的早退：`life` 已 dispose 立刻 `skip:inactive`（连归档都不记）、`seed`/`heal` 抛错只记日志、`autoApplyOnStart` 不是 true 时按「宿主是否被动过」分两支、密封桌面等用户点应用 | `test-boot-settle.mjs`（4 条） | `lib/boot-settle.js` 100% |
+| 补丁过期时的三条主分支：宿主已经够干净就只刷戳（`already-clean`）、官方升级后自愈（成功清标记+按面决定是否重启、失败保留标记好让下次再试）、普通自愈（成功强制保戳、失败不刷戳） | `test-boot-settle.mjs`（8 条） | 同上 |
+| 普通自愈写完之后的重启判据：`needsFullQuit` 先置标、面不许重启就不重启、冷却期拦一次、已对齐不再重启、仍不对齐才重启且 `openBrowser:false`、抛错回 `restart-failed` | `test-boot-settle.mjs`（7 条） | 同上 |
+| ctx 在 await 期间被 dispose 的两次拦截：`reapplyInstalled` 之后一次、`patchesMatchInstallStrict` 之后（重启前）再一次——只留前一次会在已 dispose 的 ctx 上发起重启（命中 `INACTIVE_EFFECT`） | `test-boot-settle.mjs`（2 条） | 同上 |
+| `autoApply` 的九条出口：插件根找不到、hooksDeny 还原失败清单、cmd-flash 抛错与不完整、补丁齐了顺手补 shim、关掉时 `disabled`、写完后带 `:cmd_flash_incomplete`、外层 catch 回 `error:` | `test-boot-settle.mjs`（9 条） | 同上 |
+| `scheduleApplyRestart`：不需要重启时连宿主都不问、密封包走 `restartSealedDesktopIfNeeded` 且 `asarSwap` 也算 restarting（ctx 必须透传，否则清不掉 Electron）、普通面原样透出、什么都不返回兜成 `restarting:true`、抛错回 `{restarting:false,error}` | `test-boot-settle.mjs`（5 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -261,6 +267,14 @@
 实证（修前 vs 修后，同一份假 ctx）：`effectErrors: ["ReferenceError: ensureRestartReady is not defined"]` / `registeredRoutes: 0` → `effectErrors: []` / `registeredRoutes: 16`。RED 演练 7 条注入 **7/7 全红**（`ensureRestartReady` 再消失、`refreshHungOperator` 消失、deps 塞不存在的名字、`applyHostHooks` 不再被调用、skills prefix 路由不注册、exact 循环被跳过、`enabled:false` 不再提前 return）。
 
 **教训**：抽取脚本收窄 import 时必须逐个 grep 被搬走的每个名字，确认「要么已 import、要么块外零引用」——`node --check` 只验语法，不验名字解析。
+
+**2026-11-13 八补**：启动自愈这棵决策树（215 行，`shimNeedsPatch` / `currentSettleScope` / `settleInstalledPatches` / `autoApply` / `scheduleApplyRestart`）从 `lib/index.js` 抽到了 `lib/boot-settle.js`（246 行）。`lib/index.js` 633 → 429 行。
+
+这一段是**唯一一段不能靠 import 兄弟模块来测的**：它每一步都要摸真宿主目录（`gatherState` / `purgeStateDir` 里的戳 / `desktopAsarStillSealed`），14 个 return 分支各只在真主机上出现几分之一秒。所以 `lib/boot-settle.js` 不 import 任何本项目模块，全部依赖由 `createBootSettle(deps)` 注入（`core` / `hostctl` / `reapply` / `officialUpdate` / `updater` 五个命名空间 + `settleMayReapply` / `settleMayRestart` 两个纯函数 + `log` + `setBootFullQuit`），五个函数作为返回值交出。这是本项目第一次用工厂注入而不是直接 import。
+
+逐字对拍 `old 215 lines / new 215 lines` / `PARITY OK`（去块缩进 2 格 + `setBootFullQuit(true)` 还原成 `bootFullQuit = true`）。`scripts/test-boot-settle.mjs` **46 条**，RED 演练 **29/29 全红**。覆盖：`lib/boot-settle.js` 行 246/246、函数 9/9、分支 90/106（85%）。
+
+写这一段时被现实纠正的五处：①`over` 覆盖的函数**不会进 base 的 `calls`**（`Object.assign` 只换属性，覆盖后调的是新函数），所以「官方升级清标记」只能断言 `filter(n => n.startsWith("clear"))`；②`String(new Error("no cmd"))` 是 `"Error: no cmd"`，日志断言要么写全要么用 `startsWith`；③自动更新那组必须让 `patchesMatchInstallStrict` 一开始就 true 才能走到 `autoApply` 分支（主分支末尾是 `restarting`）；④`scheduleApplyRestart` 密封包那条要闭包记 `seen` 才能验 ctx 透传；⑤「ctx 在对齐复核期间被 dispose」必须**计数到第二次** `patchesMatchInstallStrict` 才真的踩到重启前那道检查——第一次就置 dead 会停在 `reapplyInstalled` 之后那次早退，测出来的是另一条分支。
 
 ---
 
@@ -605,6 +619,7 @@
     ② `setTimeout(settleInstalledPatches, settleDelayMs(surface))` 这条定时器路径被同步 dispose 立刻撤掉，等于没跑——自愈决策树目前仍是盲区（`settleInstalledPatches` 125 行、14 个 return 分支）；
     ③ 桌面面（`DSH_SURFACE=desktop`）会走 `healOfficeSkills` / `inspectRuntimePayload` 真碰安装目录，测试里固定成 `web`；
     ④ 名字缺失的源码断言只覆盖 `routeSpecs` 这一处 deps 对象，其它 deps 面（`installWebServer` 内部、`applyHostHooks`）还是靠 boot 测试「跑起来不抛」。
+54. **启动自愈能注出来，但「真读宿主」那一步仍然没有守卫**。`lib/boot-settle.js` 的全部 14 个 return 分支现在都能用假 deps 精确走到，可五个注入点本身（`core.gatherState` 返回什么、`reapply.patchesMatchInstallStrict` 怎么判、`hostctl.scheduleRestart` 真起来是什么形状）一行都没被执行。判坏的典型表现仍要人工确认：①启动后补丁过期却没自愈（`gatherState` 的 `patches_pending` 口径变了）；②自愈写完重启了但重启是空转（`scheduleRestart` 返回的 `restarting` 语义变了）；③密封桌面卡在「等 Apply」永远不动（`desktopAsarStillSealed` 判反）。检测办法：改一次宿主包里的某个 `[dsh-purge]` 标记，重启宿主看它是否自己修回来；`npm run host:status` 与 `npm run host:preview` 只验「补丁在不在」，验不到「自愈有没有跑」。另外 `apply()` 里那行 `setTimeout(settleInstalledPatches, settleDelayMs(surface))` 在 boot 测试里被同步 dispose 撤掉了，桌面面 4000ms 的真实时序也没进过测试。
 
 ## 维护约定
 
