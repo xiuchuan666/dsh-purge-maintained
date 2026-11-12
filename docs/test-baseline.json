@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T04:45:34.027Z",
-  "commit": "258ba98",
+  "capturedAt": "2026-11-12T04:59:27.834Z",
+  "commit": "fd47647",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -101,12 +101,12 @@
       "brf": 191
     },
     "lib/hide-console.js": {
-      "lh": 183,
+      "lh": 326,
       "lf": 339,
-      "fnh": 16,
+      "fnh": 23,
       "fnf": 23,
-      "brh": 43,
-      "brf": 65
+      "brh": 116,
+      "brf": 129
     },
     "lib/hooks-deny.js": {
       "lh": 224,
@@ -370,7 +370,7 @@
       "fnh": 335,
       "fnf": 425,
       "brh": 1179,
-      "brf": 1702
+      "brf": 1698
     },
     "lib/redteam/tools.js": {
       "lh": 2114,
