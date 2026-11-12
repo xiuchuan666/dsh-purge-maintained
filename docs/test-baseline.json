@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T04:02:52.593Z",
-  "commit": "080dca1",
+  "capturedAt": "2026-11-12T04:36:37.147Z",
+  "commit": "a8dbf38",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -93,12 +93,12 @@
       "brf": 14
     },
     "lib/extract-asar.js": {
-      "lh": 208,
+      "lh": 493,
       "lf": 493,
-      "fnh": 18,
-      "fnf": 39,
-      "brh": 42,
-      "brf": 50
+      "fnh": 38,
+      "fnf": 40,
+      "brh": 167,
+      "brf": 191
     },
     "lib/hide-console.js": {
       "lh": 183,

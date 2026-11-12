@@ -12,7 +12,7 @@
 | 运行时依赖 | 零（只用 Node 内置模块） |
 | 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.1（另兼容 0.2.1-rc.5 / 0.2.1-rc.2） |
 | 补丁条数 | 86 条（提示词 27 / 代码 48 / 工具 8 / 兼容层 3） |
-| 回归测试 | 45 个文件 / 1078 个用例，`npm run check` 一条命令跑完 |
+| 回归测试 | 46 个文件 / 1134 个用例，`npm run check` 一条命令跑完 |
 | 维护仓库 | `xiuchuan666/dsh-purge-maintained`（私有） |
 
 ---
@@ -240,7 +240,7 @@ npm run check
 | `check:client` | `client.js` 与 `docs/origin/client-1.1.94.js` 锚点哈希一致、DRILL 标记结构完整、演练台片段与 `lib/redteam/client.js` 同步 |
 | `test` | 45 个 `scripts/test-*.mjs`（1078 个用例），`node --test` 跑，失败能定位到具体用例名 |
 
-当前基线：`[syntax] 141 files` / `[metadata] patches=86 tests=45` / `[client] anchor OK` / `[test] PASS 1078/1078`（约 12 秒）。
+当前基线：`[syntax] 142 files` / `[metadata] patches=86 tests=46` / `[client] anchor OK` / `[test] PASS 1134/1134`（约 10 秒）。
 
 三条命令分三层：`npm test`（离线，约 1 秒）→ `npm run check`（加语法/元数据/产物链，约 3 秒）→ `npm run test:full`（加覆盖率棘轮基线，约 2 秒，需要 git 工作副本）。
 
