@@ -235,6 +235,10 @@
 | `/purge apply` 的两个附带效果：解包出 asar 时写 unpacked 戳、有被 scrub 的 bin bak 时多一段 `Desktop in-bin .bak scrub` | `test-chat-purge.mjs`（2 条） | 同上 |
 | `/purge revert` / `uninstall`：还原逐行 `✓ 已还原` + `⚠ 还原失败 p: e`、没有备份时补一句 `no patch backup`、没有 `ai_base` 时整段跳过；卸载的两种开场白（检测到/未检测到）+ override 删除行 + profile 移除行 + `ok:false` 时回 `error` | `test-chat-purge.mjs`（5 条） | 同上 |
 | `/purge edit` 与 `/purge help`：注入文件不存在时先 `installOverride` 再打开并说明「新建」、打不开回 `error`（旧实现在这里假报 success）、`editOverride` 的 `error` 原样带出；`help`/`h`/未知子命令同一份帮助且列全六条 + `/rules` `/skills`，子命令大小写不敏感，`config` 参数当前不影响输出 | `test-chat-purge.mjs`（6 条） | 同上 |
+| 插件能装配：假宿主提供 `webServer` 时 `apply()` 与全部 effect 工厂都不抛错（`ReferenceError` 会在这里露出来，`node --check` 抓不到） | `test-plugin-boot.mjs`（1 条） | `lib/index.js` 55% |
+| 路由总数：16 条（13 条 exact + 3 条 prefix），并点名 `/dsh-purge/status` / `apply` / `revert` / `restart` 与 `/dsh-purge/rules` / `skills` / `skill`；`enabled:false` 时一条都不注册 | `test-plugin-boot.mjs`（2 条） | 同上 |
+| 源码形状：`routeSpecs({...})` 的 deps 里每个名字都必须有来处（顶层 import、顶层声明、或函数形参），少一个就报名字 | `test-plugin-boot.mjs`（1 条） | 同上 |
+| 装配顺序不被打断：`applyHostHooks` 仍被调用、skills/rules 两条 prefix 路由仍注册、exact 循环仍跑、`enabled:false` 仍提前 `return`（四条都由 boot 测试间接钉住） | `test-plugin-boot.mjs` + RED 演练 7/7 | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -249,6 +253,14 @@
 **2026-11-13 五补**：注入正文本体的读盘/缓存/日志这一层（339 行，从 `injectAllowedNow` 到 `readInjectFallback`）从 `lib/index.js` 抽到了 `lib/prompt-source.js`（363 行，12 个 export）。挑它而不是先抽 `installIdentityOverride`，是因为后者依赖这 8 个函数——先把底座搬出来，下一步拆上层就不用把整个 index.js 拖进测试。这一层唯一碰宿主的地方是 `globalThis.__dshPurgeHungPrompt`，最容易测，但改坏了的表现是「注入正文变成旧的或空的」且不报错。函数体逐字照抄（`old block lines 339 / new block lines 339 / diffs 0`），`lib/index.js` 1307 → 974 行。新增 45 条用例（临时 `DSH_HOME` + 真 `lib/core.js` / `lib/rules.js`，不碰宿主），RED 演练 22 条注入 **22/22 全红**。`lib/index.js` 的行命中 196 → 166 已精确记账：被删掉的命中行 44 条、存活 152/152 零丢失、新 import 命中 14 条（`196 - 44 + 14 = 166`）。
 
 **2026-11-13 六补**：注入到底有没有生效的最后一段执行路径（329 行）从 `lib/index.js` 抽到了 `lib/inject-write.js`（363 行，4 个 export）：mnemon 插件消息剥离、每轮装配改写（含缓存命中）、`closerFollowBytes` 诊断指标、`installIdentityOverride` 的四类钩子挂载。挑它的理由是这三处判错的表现全是「AI 行为变了但没有任何报错」——插件消息进了上下文、缓存把上一轮的注入套到这一轮、guard 挂不上导致注入真空。上一批先把它的 8 个私有依赖搬进了 `lib/prompt-source.js`，所以这次可以直接整段搬。函数体逐字照抄（`old body lines 329 / new body lines 329 / PARITY OK`），`lib/index.js` 974 → 631 行。新增 50 条用例（假 ctx + 假 prompt + 临时 `DSH_HOME`，不碰宿主），RED 演练 34 条注入 **34/34 全红**（第一轮 23/36，补了 9 条区分用例 + 修 2 条锚点后才全红，详见盲区 52）。`lib/index.js` 的行命中 166 → 145 已精确记账：被删掉的命中行 24 条、幸存 142/142 全中零丢失、新增命中 3 条（`166 - 24 + 3 = 145`，`lost: []`）。
+
+**2026-11-13 七补**：上一批（六补）收窄 `lib/index.js` 对 `./prompt-source.js` 的具名 import 时，把 `ensureRestartReady` 误删了——`lib/index.js` 的 `routeSpecs({...})` deps 里还留着一个裸引用。后果不是「某条路由报错」，而是**宿主只要提供 `webServer`，`installWebServer` 的 effect 一跑就 `ReferenceError`**，整块插件面装不上。`node --check` 通过、2171 条测试全绿都抓不到，因为没有一条测试走到 `installWebServer`。
+
+修法是把名字补回 import（`lib/index.js` 632 → 633 行），真正的价值在新增的 `scripts/test-plugin-boot.mjs`（4 条）：假 ctx 提供 `webServer` → 调 `plugin.apply(ctx, {})` → **同步跑一遍所有 effect 工厂并把返回的 disposer 立刻执行掉**（`apply()` 里有 `setTimeout(settleInstalledPatches, settleDelayMs(surface))`，同步 dispose 才能在定时器触发前撤掉，否则会真去读本机宿主包）→ 断言无抛错、16 条路由都注册上、`enabled:false` 时一条都不注册。另加一条源码形状断言：从 `routeSpecs({` 截到 `}))`，收集顶层 import 名、顶层声明名**与所有函数形参名**（第一版漏了形参，`ctx` 被误报），断言无缺失——它比 boot 测试失败得更早，也直接指出缺哪个名字。
+
+实证（修前 vs 修后，同一份假 ctx）：`effectErrors: ["ReferenceError: ensureRestartReady is not defined"]` / `registeredRoutes: 0` → `effectErrors: []` / `registeredRoutes: 16`。RED 演练 7 条注入 **7/7 全红**（`ensureRestartReady` 再消失、`refreshHungOperator` 消失、deps 塞不存在的名字、`applyHostHooks` 不再被调用、skills prefix 路由不注册、exact 循环被跳过、`enabled:false` 不再提前 return）。
+
+**教训**：抽取脚本收窄 import 时必须逐个 grep 被搬走的每个名字，确认「要么已 import、要么块外零引用」——`node --check` 只验语法，不验名字解析。
 
 ---
 
@@ -587,6 +599,12 @@
     ⑨`rewriteLiveAssembly` 命中缓存后不再写日志，所以「读日志验 policy」必须换一个 assembled 对象。
     另外两条锚点第一次写错：`isMnemonPluginMessage` 的两行在 `lib/identity.js:724-729`（不在 `lib/inject-write.js`），`chatml` 那行的正则字面量里是三个反斜杠。
     **仍然测不到的**：真宿主上「切预设后锚点会不会消失」「400ms 轮询能否在第一次 assemble 之前挂上 guard」都只在真会话里分晓，测试只能证明钩子挂上了。
+
+53. **「测试全绿但插件装不上」这一类，只有 boot 测试能挡住**——`lib/index.js` 里的 `apply()` 是全插件唯一入口，但它的 11 个 effect 工厂与 `installWebServer` 直到 2026-11-13 之前一条测试都没跑过，所以批53 收窄 import 时漏掉 `ensureRestartReady` 谁都没发现。现在 `test-plugin-boot.mjs` 用「假 ctx + 同步 dispose 所有 effect」覆盖住了，但它**仍然测不到的**：
+    ① 真宿主上 `webServer.register` 的返回值形状（假 ctx 收下就算成功）；
+    ② `setTimeout(settleInstalledPatches, settleDelayMs(surface))` 这条定时器路径被同步 dispose 立刻撤掉，等于没跑——自愈决策树目前仍是盲区（`settleInstalledPatches` 125 行、14 个 return 分支）；
+    ③ 桌面面（`DSH_SURFACE=desktop`）会走 `healOfficeSkills` / `inspectRuntimePayload` 真碰安装目录，测试里固定成 `web`；
+    ④ 名字缺失的源码断言只覆盖 `routeSpecs` 这一处 deps 对象，其它 deps 面（`installWebServer` 内部、`applyHostHooks`）还是靠 boot 测试「跑起来不抛」。
 
 ## 维护约定
 

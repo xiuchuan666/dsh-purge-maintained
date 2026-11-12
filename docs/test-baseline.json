@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T20:37:54.150Z",
-  "commit": "d05a13b",
+  "capturedAt": "2026-11-12T20:55:49.236Z",
+  "commit": "445958a",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -42,7 +42,7 @@
       "fnh": 6,
       "fnf": 8,
       "brh": 34,
-      "brf": 48
+      "brf": 44
     },
     "lib/capability-protocol.js": {
       "lh": 32,
@@ -82,15 +82,15 @@
       "fnh": 38,
       "fnf": 38,
       "brh": 184,
-      "brf": 210
+      "brf": 209
     },
     "lib/core.js": {
-      "lh": 2662,
+      "lh": 2694,
       "lf": 5274,
-      "fnh": 198,
-      "fnf": 322,
-      "brh": 750,
-      "brf": 1012
+      "fnh": 201,
+      "fnf": 323,
+      "brh": 756,
+      "brf": 1035
     },
     "lib/desktop.js": {
       "lh": 1386,
@@ -154,7 +154,7 @@
       "fnh": 15,
       "fnf": 15,
       "brh": 132,
-      "brf": 150
+      "brf": 149
     },
     "lib/http.js": {
       "lh": 105,
@@ -173,20 +173,20 @@
       "brf": 586
     },
     "lib/index.js": {
-      "lh": 145,
-      "lf": 631,
-      "fnh": 1,
-      "fnf": 12,
-      "brh": 5,
-      "brf": 5
+      "lh": 345,
+      "lf": 632,
+      "fnh": 20,
+      "fnf": 38,
+      "brh": 44,
+      "brf": 87
     },
     "lib/inject-write.js": {
-      "lh": 349,
+      "lh": 351,
       "lf": 363,
-      "fnh": 19,
+      "fnh": 20,
       "fnf": 23,
-      "brh": 114,
-      "brf": 143
+      "brh": 115,
+      "brf": 145
     },
     "lib/live-cache.js": {
       "lh": 84,
@@ -197,12 +197,12 @@
       "brf": 36
     },
     "lib/net-scope.js": {
-      "lh": 290,
+      "lh": 307,
       "lf": 766,
-      "fnh": 4,
-      "fnf": 41,
-      "brh": 5,
-      "brf": 5
+      "fnh": 6,
+      "fnf": 45,
+      "brh": 7,
+      "brf": 12
     },
     "lib/official-update.js": {
       "lh": 70,
@@ -274,23 +274,23 @@
       "fnh": 16,
       "fnf": 16,
       "brh": 83,
-      "brf": 101
+      "brf": 99
     },
     "lib/profile-insert.js": {
-      "lh": 386,
+      "lh": 392,
       "lf": 413,
       "fnh": 20,
       "fnf": 20,
       "brh": 149,
-      "brf": 185
+      "brf": 183
     },
     "lib/prompt-source.js": {
       "lh": 324,
       "lf": 363,
       "fnh": 22,
       "fnf": 24,
-      "brh": 79,
-      "brf": 115
+      "brh": 80,
+      "brf": 114
     },
     "lib/reapply.js": {
       "lh": 270,
@@ -361,8 +361,8 @@
       "lf": 178,
       "fnh": 19,
       "fnf": 19,
-      "brh": 102,
-      "brf": 110
+      "brh": 103,
+      "brf": 111
     },
     "lib/redteam/schema.js": {
       "lh": 621,
@@ -418,7 +418,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1255
+      "brf": 1259
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -490,7 +490,7 @@
       "fnh": 20,
       "fnf": 23,
       "brh": 178,
-      "brf": 236
+      "brf": 229
     },
     "lib/rules.js": {
       "lh": 534,
