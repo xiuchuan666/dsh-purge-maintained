@@ -1,16 +1,16 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T04:36:37.147Z",
-  "commit": "a8dbf38",
+  "capturedAt": "2026-11-12T04:45:34.027Z",
+  "commit": "258ba98",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
-      "lh": 82,
+      "lh": 132,
       "lf": 132,
-      "fnh": 1,
-      "fnf": 4,
-      "brh": 9,
-      "brf": 11
+      "fnh": 9,
+      "fnf": 9,
+      "brh": 50,
+      "brf": 50
     },
     "lib/apply-progress.js": {
       "lh": 66,
@@ -370,7 +370,7 @@
       "fnh": 335,
       "fnf": 425,
       "brh": 1179,
-      "brf": 1698
+      "brf": 1702
     },
     "lib/redteam/tools.js": {
       "lh": 2114,
