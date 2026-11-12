@@ -33,6 +33,11 @@
 | 旁路副本上重打 86 条补丁，结果与 `docs/host-baseline.json` 逐字节一致（59 个文件） | `npm run host:sandbox`（`scripts/sandbox-apply.mjs`） | `scripts/` 不计覆盖率 |
 | 包清单从 `targetFiles()` 推出来，不写死包名 —— 宿主加包/改路径时自动跟上 | `test-sandbox-apply.mjs`（`packagesFromTargetFiles` 7 条） | 同上 |
 | 沙盒目录必须在仓库内、且不与真宿主/`$DSH_HOME` 重叠（「旁路」不能是假的） | `test-sandbox-apply.mjs`（`isSafeSandboxDir` 6 条） | 同上 |
+| 升级前预演：把目标版本装进隔离目录，逐条试锚点，报出「这次升级会打坏哪几条」 | `npm run host:preview`（`scripts/host-preview.mjs`） | `scripts/` 不计覆盖率 |
+| 预演归类：锚点被改掉才算「升级打断」；`no-file`/`na`/`skipped` 单列不适用，不吃掉告警 | `test-host-preview.mjs`（`classifyPreviewRow` 8 条） | 同上 |
+| 结论只由「升级打断」触发：本来就坏的不算这次升级的账，空批量报 `no-data` 而不是「兼容」 | `test-host-preview.mjs`（`describePreview` 8 条） | 同上 |
+| 预发布版本（rc/alpha/beta/pre/next）必须显式标出来，不许当成「升级就绪」 | `test-host-preview.mjs`（`isPrerelease` 4 条） | 同上 |
+| 预演的四种归类各自计数，出现没见过的 kind 也照样累加不静默丢弃 | `test-host-preview.mjs`（`summarizePreview` 3 条） | 同上 |
 | 补丁落点按「正在清洗的这棵树」判定，不按进程 surface 猜：桌面树里的 `pi-ai-*` 在 web 面也必须登记 | `test-display-targets.mjs`（`targetFiles` 落点 8 条） | `lib/core.js` 40% |
 | 「要不要重打补丁」的判据：戳、版本、rev 三者对齐，空 sha 不算对齐，占位戳只认版本 | `test-reapply-settle.mjs`（9 条） | `lib/reapply.js` 70% |
 | 空 sha 的旧戳什么时候允许就地补成非空（密封包不补、缺标记不补） | `test-reapply-settle.mjs`（3 条） | 同上 |
@@ -426,6 +431,18 @@
     2026-11-12 把 `keepSurfaceFile` 改成走 `allowTargetForPatch`（`_patchTargetAiBase` 为空时原样退回 `allowTargetPath`，`targetFiles` 之外行为不变），三个键在 web 面也能登记。
     **仍然测不到的**：真宿主上「哪一套 surface 才是用户视角」这件事没有独立判据 —— `DSH_SURFACE` 不设时 CLI 一律推成 web，只有带 argv 的 `verify-target` 才推成 desktop。
     所以 `host:status` 与 `verify-target` 对同一棵树可能给出不同结论，这是设计上的已知分叉，不是 bug，但读输出时必须先看它用的是哪套口径。
+
+39. **升级预演只回答「锚点还在不在」，不回答「打上去之后跑起来对不对」。**
+    `scripts/host-preview.mjs` 把目标版本 `npm install` 到 `.tmp-preview/`（1.4GB，已 gitignore），
+    跑 `patchStatus` 逐条判锚点，报出「这次升级会打坏哪几条」。2026-11-12 对 0.2.2-rc.2 实测：
+    86 条里可打 65 / 升级打断 6（#13 #18 #35 #56 #77 #62）/ 不适用 15。
+    它测不到的四件事：①补丁打上去之后**语义**对不对 —— 锚点在、替换也做了，但上游把那句逻辑搬去了别处，
+    补丁就变成一条写在死代码里的注释；②`desktop-shell` 那 7 条恒 `na`（预演树里没有 Electron 外壳）；
+    ③`hooks-*` / `preset-unrestricted` / `liangshen-*` 那 7 条恒 `missing_file`（包不在 npm 里）；
+    ④预演装的是**完整 rc 树**（668 个包），而真宿主是 42 个包的精简布局，
+    所以「预演可打」不等于「真宿主可打」—— 反过来的方向才成立（预演判死 = 真宿主必死）。
+    另有一条实现上的取舍：预演用 `--ignore-scripts` 装，不跑任何 postinstall，
+    所以它只验证文件层面的锚点，不验证构建产物（比如 `lib/bin-*.js` 那种带 hash 的 chunk 名）。
 
 ---
 

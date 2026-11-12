@@ -47,3 +47,9 @@ default-prompt-inject.md
 
 # 沙盒副本（scripts/sandbox-apply.mjs 复制出来的宿主副本，6.4MB，每次重建）
 /.tmp-sandbox/
+
+# 宿主升级预演（scripts/host-preview.mjs 装进去的完整 rc 树，1.4GB，每次重装）
+/.tmp-preview/
+
+# 真宿主重打前的自建快照（119 个目标文件的 sha256 副本，不依赖 .dshpurge.bak）
+/.tmp-realhost-snapshot/

@@ -171,6 +171,7 @@ test("缓存命中时不再重建", () => {
 ```bash
 npm run host:status     # 与 docs/host-baseline.json 比对，只读
 npm run host:capture    # 升级适配完成后，把新状态记为基线
+npm run host:preview    # 升级前预演：目标版本装到隔离目录，只读，不动真宿主
 ```
 
 `host:status` 自动探测本机宿主（也接受 `--ai-base <目录>`，或环境变量 `DSH_HOST_AI_BASE`），把当前状态与 `docs/host-baseline.json` 比对，输出三段：宿主版本变化、目标文件指纹变化、补丁状态迁移。结论分三级：
@@ -182,6 +183,34 @@ npm run host:capture    # 升级适配完成后，把新状态记为基线
 | `broken` | 有补丁从 `settled`/`would-apply` 跌成 `drifted` | 立即列出失效补丁 ID，按 `verify-target --pad` 定位字面量 |
 
 判定规则不在这里另写一份：`host:status` 调用 `scripts/verify-target.mjs --json`，补丁分类始终只有一处实现。退出码 `0` 表示 ok/review，`1` 表示 broken，`2` 表示探测或用法失败。
+
+### 升级前预演：先知道会坏哪几条
+
+`host:status` 回答的是「现在这棵树对不对」，`host:preview` 回答的是「升到某个版本会怎样」。
+后者把目标版本 `npm install` 到 `.tmp-preview/`（完整 rc 树约 1.4GB，已 gitignore），
+在那里跑 `patchStatus` 逐条判锚点，**真宿主一个字节都不碰**。
+
+```bash
+npm run host:preview                      # 默认预演 0.2.2-rc.2
+npm run host:preview -- --version 0.2.3   # 指定版本
+npm run host:preview -- --keep --json     # 复用上次装好的树，只出 JSON
+```
+
+归类只有四种，判据在 `scripts/host-preview-lib.mjs`：
+
+| kind | 含义 | 要不要管 |
+| --- | --- | --- |
+| `broken-by-upgrade` | 基线是 `settled`、预演变 `drifted`/`unmatched`/`pattern_not_found` | **要改锚点**，这是这次升级的账 |
+| `already-broken` | 基线本来就坏、预演还是坏 | 不是这次升级造成的，另开工单 |
+| `not-applicable` | `no-file`/`na`/`skipped`/`missing_file` | 这一版根本没这个文件，不是回归 |
+| `ok` | 锚点还在 | 不用管 |
+
+结论词只由 `broken-by-upgrade` 触发：有就是 `breaking` 并列最多 8 条，没有就是 `compatible`。
+预发布版本（`rc`/`alpha`/`beta`/`pre`/`next`）会在输出里显式标注 —— 预演通过**不等于**可以升级到预发布。
+
+**它测不到的**（见 [测试地图](docs/test-map.md) 盲区 39）：锚点在但语义已经搬走、
+`desktop-shell` 恒 `na`、`hooks-*`/`preset-unrestricted` 恒 `missing_file`、
+以及预演树是完整 npm 树而真宿主是 42 包精简布局。方向性上只有「预演判死 = 真宿主必死」成立，反过来不成立。
 
 基线文件 `docs/host-baseline.json` 只存相对路径与 sha256，不含绝对安装路径，入库无害；桌面补丁需要纯净 `main.js` 的验证仍走 `e2e-desktop`。
 
