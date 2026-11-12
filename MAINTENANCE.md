@@ -102,6 +102,37 @@ test("缓存命中时不再重建", () => {
 
 - **测试要在 Linux 上也能过。** CI 跑在 `ubuntu-latest`，而开发机是 Windows。最容易踩的是 `path.basename`：在 Linux 上它**不把反斜杠当分隔符**，所以 `'C:\\x\\DeepSeek Harness\\DeepSeek Harness.exe'` 整串会被当成一个文件名，断言「官方 exe 走 windows-official 分支」在 CI 上变成 `helper`。写路径常量一律用正斜杠（`C:/x/DeepSeek Harness/DeepSeek Harness.exe`）——被测代码里的 `path.basename` 在 Windows 上同样认正斜杠，两边结果一致。这条是真实事故：`580c273` 本地全绿、CI 红了一条。
 
+- **只在一侧成立的代码路径，要在测试里把平台「伪造」出来。** 与上一条同源但更狠：`lib/hide-console.js` 的 `installHideConsoleIntoBin` 第一句就是 `if (process.platform !== "win32") return "skipped_not_win32";`，十条注入/还原用例在 Windows 上全绿，到 `ubuntu-latest` 上集体变成 `actual: 'skipped_not_win32'`（`2fbe512` 就是这么红的）。做法是把它们包一层 `asWin32()`：
+
+  ```js
+  function asWin32(fn) {
+    if (process.platform === "win32") return fn();
+    const desc = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      return fn();
+    } finally {
+      Object.defineProperty(process, "platform", desc);
+    }
+  }
+  const testWin = (name, fn) => test(name, () => asWin32(fn));
+  ```
+
+  `process.platform` 是 configurable 的，可以临时改、`finally` 里恢复。**反向也要能自测**：在 Windows 上想确认这些用例真的会在 Linux 上过，用 `--import` 预加载一个「把 platform 改成 linux 且不还原」的小文件，再跑同一个测试文件：
+
+  ```js
+  // .tmp-linux-preload.mjs —— 用完即删，不进仓库
+  const desc = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true, enumerable: desc.enumerable });
+  ```
+
+  ```bash
+  node --import ./.tmp-linux-preload.mjs --test scripts/test-hide-console.mjs
+  ```
+
+  两个细节：`--import` 必须排在 `--test` 前面；预加载里**不能**在 `finally` 还原，否则 `test()` 的回调执行时平台已经变回 win32，等于没测。别用「先 `await import()` 测试文件、再还原」的写法——那只覆盖模块求值期，回调在还原之后才跑，会得到一堆看不懂的假红。
+
+
 还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
 
 ### RED 演练：反向验证怎么写（一条血教训）

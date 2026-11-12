@@ -52,6 +52,22 @@ const MARK = "__dshPurgeHideConsole";
 const IMPORT_MARK = "dsh-purge-hide-console";
 const SHOULD_PATCH = process.platform === "win32" && !process.versions.electron;
 
+// 注入/还原这一段测的是「Windows 宿主上怎么写文件」，与跑测试的机器无关。
+// CI 跑在 ubuntu-latest 上，不临时改 platform 的话 installHideConsoleIntoBin 会直接
+// 早退成 skipped_not_win32，九条用例全部变成假红。
+function asWin32(fn) {
+  if (process.platform === "win32") return fn();
+  const desc = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+  try {
+    return fn();
+  } finally {
+    Object.defineProperty(process, "platform", desc);
+  }
+}
+
+const testWin = (name, fn) => test(name, () => asWin32(fn));
+
 // ---------------------------------------------------------------- 假 fs
 
 const norm = (p) => String(p).split("\\").join("/");
@@ -491,7 +507,7 @@ test("resolveDshBinRoot：什么都没有时返回 null，不抛", () => {
 
 const BIN_JS = (text) => text;
 
-test("installHideConsoleIntoBin：非 win32 直接 skipped_not_win32（CI 上就走这条）", () => {
+testWin("installHideConsoleIntoBin：非 win32 直接 skipped_not_win32（CI 上就走这条）", () => {
   const desc = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux", configurable: true });
   try {
@@ -501,20 +517,20 @@ test("installHideConsoleIntoBin：非 win32 直接 skipped_not_win32（CI 上就
   }
 });
 
-test("installHideConsoleIntoBin：找不到 bin 时 missing_bin，什么都不写", () => {
+testWin("installHideConsoleIntoBin：找不到 bin 时 missing_bin，什么都不写", () => {
   const { fs, calls } = fakeFs({});
   assert.equal(installHideConsoleIntoBin("/pkg", { fs, path }), "missing_bin");
   assert.equal(calls.write.length, 0);
 });
 
-test("installHideConsoleIntoBin：源码树 skipped_source_cli，一个字节都不写（#41）", () => {
+testWin("installHideConsoleIntoBin：源码树 skipped_source_cli，一个字节都不写（#41）", () => {
   const root = "/repo/apps/cli";
   const { fs, calls } = fakeFs({ [norm(path.join(root, "lib", "bin.js"))]: "src" });
   assert.equal(installHideConsoleIntoBin(root, { fs, path }), "skipped_source_cli");
   assert.equal(calls.write.length, 0, "源码树的构建产物绝不能写");
 });
 
-test("installHideConsoleIntoBin：密封 asar 里的根连候选都进不去，一个字节都不写", () => {
+testWin("installHideConsoleIntoBin：密封 asar 里的根连候选都进不去，一个字节都不写", () => {
   const root = path.join("/a/app.asar", "dsh");
   const { fs, calls } = fakeFs({ [norm(path.join(root, "lib", "bin.js"))]: "" });
   // 现状锁定：resolveDshBinRoot 已经先 continue 掉密封根，所以走不到函数里那道
@@ -523,7 +539,7 @@ test("installHideConsoleIntoBin：密封 asar 里的根连候选都进不去，�
   assert.equal(calls.write.length, 0, "密封根绝不能被写");
 });
 
-test("installHideConsoleIntoBin：正常注入 —— 两份 sidecar + bin.js 顶部那一行，顺序是先 sidecar 后 bin.js", () => {
+testWin("installHideConsoleIntoBin：正常注入 —— 两份 sidecar + bin.js 顶部那一行，顺序是先 sidecar 后 bin.js", () => {
   const root = "/pkg/@deepseek-ai/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   const { fs, calls } = fakeFs({ [norm(binJs)]: "#!/usr/bin/env node\nconsole.log(1);\n" });
@@ -537,7 +553,7 @@ test("installHideConsoleIntoBin：正常注入 —— 两份 sidecar + bin.js �
   assert.match(fs.readFileSync(binJs), /^#!\/usr\/bin\/env node\nimport "\.\/dsh-purge-hide-console\.js"; \/\/ \[dsh-purge\] hide-console\n/);
 });
 
-test("installHideConsoleIntoBin：bin.js 没有 shebang 时 import 行放在最前面", () => {
+testWin("installHideConsoleIntoBin：bin.js 没有 shebang 时 import 行放在最前面", () => {
   const root = "/pkg/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   const { fs, calls } = fakeFs({ [norm(binJs)]: "console.log(1);\n" });
@@ -545,7 +561,7 @@ test("installHideConsoleIntoBin：bin.js 没有 shebang 时 import 行放在最�
   assert.match(fs.readFileSync(binJs), /^import "\.\/dsh-purge-hide-console\.js"; \/\/ \[dsh-purge\] hide-console\nconsole\.log/);
 });
 
-test("installHideConsoleIntoBin：只有 shebang 没有换行时也能插进去", () => {
+testWin("installHideConsoleIntoBin：只有 shebang 没有换行时也能插进去", () => {
   const root = "/pkg/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   const { fs, calls } = fakeFs({ [norm(binJs)]: "#!/usr/bin/env node" });
@@ -553,7 +569,7 @@ test("installHideConsoleIntoBin：只有 shebang 没有换行时也能插进去"
   assert.equal(fs.readFileSync(binJs), `#!/usr/bin/env node\nimport "./dsh-purge-hide-console.js"; // [dsh-purge] hide-console\n`);
 });
 
-test("installHideConsoleIntoBin：已经注入过就 already_injected，不改 bin.js", () => {
+testWin("installHideConsoleIntoBin：已经注入过就 already_injected，不改 bin.js", () => {
   const root = "/pkg/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   const injected = `#!/usr/bin/env node\nimport "./dsh-purge-hide-console.js"; // [dsh-purge] hide-console\nx\n`;
@@ -562,7 +578,7 @@ test("installHideConsoleIntoBin：已经注入过就 already_injected，不改 b
   assert.equal(calls.write.filter((c) => c.p === norm(binJs)).length, 0, "已经在了就不要重写 bin.js");
 });
 
-test("installHideConsoleIntoBin：双引号旧行（无行尾注释）也算已注入，install 路径上的清理正则走不到（现状锁定）", () => {
+testWin("installHideConsoleIntoBin：双引号旧行（无行尾注释）也算已注入，install 路径上的清理正则走不到（现状锁定）", () => {
   const root = "/pkg/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   // already_injected 的判据是「含 IMPORT_MARK」且「含 import "./dsh-purge-hide-console.js";」，
@@ -576,7 +592,7 @@ test("installHideConsoleIntoBin：双引号旧行（无行尾注释）也算已�
   assert.equal(fs.readFileSync(binJs), stale, "一个字节都不动");
 });
 
-test("installHideConsoleIntoBin：单引号形态的旧行既不算已注入、也不被清理正则匹配（现状锁定）", () => {
+testWin("installHideConsoleIntoBin：单引号形态的旧行既不算已注入、也不被清理正则匹配（现状锁定）", () => {
   const root = "/pkg/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   // 清理正则写死了双引号（`^import "\.\/dsh-purge-hide-console\.js";`），单引号形态匹配不到。
@@ -647,7 +663,7 @@ test("revertHideConsoleFromBin：bin.js 读不出来时返回 error: 前缀，si
   assert.deepEqual(calls.unlink, [], "读失败时这一轮不删 sidecar");
 });
 
-test("注入 → 还原 是逐字节可逆的", () => {
+testWin("注入 → 还原 是逐字节可逆的", () => {
   const root = "/pkg/dsh";
   const binJs = path.join(root, "lib", "bin.js");
   const original = "#!/usr/bin/env node\nimport x from 'y';\nmain();\n";
