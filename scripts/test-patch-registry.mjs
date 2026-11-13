@@ -27,6 +27,7 @@ const after = await import(pathToFileURL(join(root, 'lib', 'core.js')).href)
 // 已知允许追加 replacement 的补丁：上游 0.2.2-rc.2 改了这些代码的形状。
 // 新追加一条就要在这里登记，否则「悄悄多一条」会被当成回归。
 const APPEND_ALLOWED = new Map([
+  [12, 2], // APPROVAL_ASK_SENTENCE_BYPASS：0.2.2 把 ASK_SENTENCE 整句改写成 "Approval prompts are enabled..."（双引号 + 单引号两处）
   [13, 1], // ESCALATION_WIDENING_EXEMPT：rc.2 换成 SandboxEscalationError
   [18, 1], // REPEAT_TOOL_REMINDER_DISABLED：rc.2 删掉 block 分支
   [35, 1], // ESCALATION_NEVER_REJECT：rc.2 的 switch 分支重写
