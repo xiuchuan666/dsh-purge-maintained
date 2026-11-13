@@ -37,12 +37,21 @@ test('fileKeysOf 把单值与数组都归一成数组', () => {
   assert.deepEqual(lib.fileKeysOf({ file: undefined }), [undefined]);
 });
 
-test('patchReplacements 优先用 replacements，否则由 patterns+replace 拼', () => {
+test('patchReplacements / matchesPattern 直接复用 lib/patch-outcome.mjs 那一份', async () => {
+  // 这两个判定原本在这里各有一份逐字照抄的实现，与 lib/patch-outcome.mjs 的同名函数
+  // 已经能从行为上分开（单数 pattern、null patch、空串 pattern）。同一份注册表被两处
+  // 各判一次，谁先改谁说了算 —— 所以只留 lib 那一份，这里只做转出。
+  const outcome = await import('../lib/patch-outcome.mjs');
+  assert.equal(lib.patchReplacements, outcome.patchReplacements);
+  assert.equal(lib.matchesPattern, outcome.matchesPattern);
   const explicit = [{ pattern: 'a', replace: 'b' }];
   assert.equal(lib.patchReplacements({ replacements: explicit }), explicit);
   const built = lib.patchReplacements({ patterns: ['x', 'y'], replace: 'z' });
   assert.deepEqual(built, [{ pattern: 'x', replace: 'z' }, { pattern: 'y', replace: 'z' }]);
   assert.deepEqual(lib.patchReplacements({}), []);
+  // 单数 pattern 只有 lib 那份认（86 条里今天一条都不走，但写法是合法的）。
+  assert.deepEqual(lib.patchReplacements({ pattern: 'p', replace: 'q' }), [{ pattern: 'p', replace: 'q' }]);
+  assert.deepEqual(lib.patchReplacements(null), []);
 });
 
 test('keysOfPatch 去掉空键，softKeysOf 只认数组', () => {
@@ -63,12 +72,18 @@ test('pathsOf 统一成数组，缺键回空', () => {
   assert.deepEqual(lib.pathsOf({ a: '' }, 'a'), []);
 });
 
-test('matchesPattern 对字符串归一 CRLF，对正则去掉 g 再测', () => {
+test('matchesPattern 归一 CRLF、摘掉 g 与 y、空 pattern 一律不命中', () => {
   assert.equal(lib.matchesPattern('a\nb', 'a\r\nb'), true);
   const global = /x/g;
   assert.equal(lib.matchesPattern('x', global), true);
   assert.equal(lib.matchesPattern('x', global), true, '带 g 的正则第二次也必须命中（lastIndex 不能留）');
+  const sticky = /x/y;
+  assert.equal(lib.matchesPattern('x', sticky), true);
+  assert.equal(lib.matchesPattern('x', sticky), true, 'y 也要摘掉，否则同样留 lastIndex');
   assert.equal(lib.matchesPattern('nope', /x/), false);
+  assert.equal(lib.matchesPattern('A\r\nA', ''), false, '空 pattern 不是「什么都命中」');
+  assert.equal(lib.matchesPattern('A\r\nA', null), false);
+  assert.equal(lib.matchesPattern(null, 'a'), false);
 });
 
 test('patchAppliesHere 说不在这张面上时直接记 na，一个文件都不读', () => {
@@ -313,6 +328,16 @@ test('default 导出覆盖全部公开名字（少一个就是有人改了 impor
   ]);
 });
 
+
+test('这两个 helper 只在 lib/patch-outcome.mjs 里定义一次，本文件只做转出', async () => {
+  const fs = await import('node:fs');
+  const text = fs.readFileSync(new URL('./verify-target-lib.mjs', import.meta.url), 'utf8');
+  for (const dup of ['function patchReplacements(', 'function matchesPattern(']) {
+    assert.equal(text.includes(dup), false, dup + ' 又回来了：同一份注册表会被两处各判一次');
+  }
+  assert.match(text, /import \{ patchReplacements, matchesPattern \} from "\.\.\/lib\/patch-outcome\.mjs";/);
+  assert.match(text, /export \{ patchReplacements, matchesPattern \};/);
+});
 test('CLI 不再自己维护判定：verify-target.mjs 里不许再出现平行实现', async () => {
   const fs = await import('node:fs');
   const text = fs.readFileSync(new URL('./verify-target.mjs', import.meta.url), 'utf8');

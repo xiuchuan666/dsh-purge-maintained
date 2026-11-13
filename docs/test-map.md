@@ -311,6 +311,7 @@
 | `systemPromptFiles` 只认 `appDir` 下两条候选（`dsh/node_modules/...` 与 `node_modules/...`），exe 定位不到安装根就回空数组 | `test-desktop-relaunch.mjs` | 同上 |
 | `cleanupLegacyRestartScripts` 只删 24h 前的 `dsh-purge-official-restart(?:-[0-9a-f-]+)?\.(js|cmd|log)`，新文件与无关名字一律不动 | `test-desktop-relaunch.mjs` | 同上 |
 | 九个原本私有的帮手（`officialRestartScript` / `systemPromptFiles` / `dshHomeForRelaunch` / `officialExeFromProcess` / `helperEnv` / `helperNodePath` / `unpackedHostIsClean` / `officialRestartLogState` / `probeWshJsEngine`）加 `export` 才能被单独验；公开行为零变化 | `test-plugin-surface.mjs` 之外的导出面 | 同上 |
+| `patchReplacements` / `matchesPattern` 只在 `lib/patch-outcome.mjs` 里定义一次：`scripts/verify-target-lib.mjs` 只做 `import` + 转出，源码形状断言钉住「这里不许再长出同名函数」（两份实现已经能从单数 `pattern` / `null` patch / 空串 pattern 三处分叉） | `test-verify-target-lib.mjs` | 仅 `scripts/` 与 `lib/patch-outcome.mjs`，后者 100% |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -446,6 +447,18 @@ RED 演练 46 条突变跑完 **46/46 全红**，`restored byte-identical: true`
 RED 演练 33 条突变跑完全红（`restored byte-identical: true`），过程里踩了三个坑：①`applySub` 的锚点是在**源码里带 `\r\n`** 的多行串，drill 里写的是 `\n`，四条全 MISS —— 修法是 `applySub` 内部先做 `\n → EOL` 归一；②`python - <<'PY'` 里写含 `\n` 的替换串会把一行中文注释打断成两行，`node --check` 立刻 `SyntaxError: Invalid or unexpected token`（长中文注释一律写成单行，或用 `lines[i] = ...` 按行号 splice）；③两条突变原本是**等价突变**（`home` 传 `null` 与传 `""` 落到 `wshLiteral` 之后完全一样；`sh.Run('\"' + exe + '\"', ...)` 在文件里出现三处，按子串改第二处改到的是别条分支）—— 都换成了「把入参丢掉，恒写空串」和「按行号定位 `!renamed` 那一行再行内替换」。
 
 **教训**：一条突变能活下来，先怀疑**它本身是不是等价突变**，再怀疑测试漏了。等价突变写进 drill 只会留下一条永远 GREEN 的噪音，把它删掉比补一条勉强能红的用例更诚实。
+
+**二十一补**：交接单（`D:\零散对话1\交接单-choke-facility.md`）第六节说「`verify-target` 与 `patch-outcome` 不冲突」。语义上确实不重叠 —— 一个是单树无基线的五态，一个是双树有基线的七态 —— 但两个文件里各有一份**同名同注释**的 `patchReplacements()` 与 `matchesPattern()`。批65 抽 `verify-target-lib.mjs` 时是逐字照抄当时的 CLI，于是同一份补丁注册表有两个解析器。
+
+探针实测四处已分叉：`patchReplacements({ pattern: 'A', replace: 'B' })` → 这边 `[]`、`patch-outcome` 那份 `[{pattern:'A',replace:'B'}]`；`patchReplacements(null)` → 这边抛 TypeError、那边 `[]`；`matchesPattern('A\r\nA', '')` 与 `matchesPattern(..., null)` → 这边 `true`、那边 `false`。今天的危害是零：`core.ALL_PATCHES` 的 86 条里 `pluralOnly: 7`、`singOnly: 0`、`both: 0`，单数 `pattern` 那条分支一条都走不到；`matchesPattern` 的差异只在空串与 null pattern，而那 7 条都有真 pattern。所以这是一处**不可达的平行实现** —— 正是 `MAINTENANCE.md` 那节「判定的平行实现比没有判定更危险」说的东西：它现在不产生错误答案，只等着下一个人在改注册表格式时改错一份。
+
+做法：`scripts/verify-target-lib.mjs` 删掉两个函数体，改成 `import { patchReplacements, matchesPattern } from "../lib/patch-outcome.mjs";` 加一行 `export { patchReplacements, matchesPattern };`（公开面一行不改，`judgePatch` 里两处调用不动）。`lib/patch-outcome.mjs` 一行未改 —— 它那份更宽（认单数 `pattern`、容忍 `null`、空串 pattern 判不命中），宽的那份当唯一实现是安全方向。
+
+等价性用三条独立证据：①`node scripts/verify-target.mjs --pad` 的 93 行 stdout 与改前**逐字节相同**（`diff` 无输出）；②`--json` 的 `86 would-apply=67 settled=5 drifted=0 no-file=7 na=7` 相同，且 `rows` 的 `[id, status, files]` 三元组 86 行逐行相等；③两平台测试 —— `node --test scripts/test-verify-target-lib.mjs` 26/26（Windows）与 `node --import ./.tmp-linux-preload.mjs --test` 同样 26/26。
+
+用例改写：原来那两条 helper 用例断言的是「这份实现怎么算」，现在改成「转出的是不是同一份实现」—— `assert.equal(lib.patchReplacements, outcome.patchReplacements)` 直接用引用相等钉住，比逐条比行为更能防住「又抄一份」。新增一条源码形状断言：`scripts/verify-target-lib.mjs` 里不许再出现 `function patchReplacements(` / `function matchesPattern(`，且 `import` 与 `export { ... }` 两行必须都在。
+
+RED 演练 6 条突变全红（`restored: true`）：又长出一份 `patchReplacements` / 又长出一份 `matchesPattern` / `import` 少一个名字 / 转出语句被删 / `import` 指向不存在的模块 / 把 `matchesPattern` 换成自己的薄包装。**这一批的六条都不是等价突变**，与上一批「等价突变要删掉」正好成对照：判据是「改完之后用户会看到什么不同」—— 这六条都会让某个调用点拿到另一个答案或直接起不来。
 
 ---
 

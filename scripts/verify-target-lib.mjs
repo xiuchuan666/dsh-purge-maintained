@@ -21,6 +21,12 @@
  *   settled      marker/产物已在、或 deleteOnly 之类已完成
  */
 
+// 这两个判定与 lib/patch-outcome.mjs 是同一件事，只保留那一份实现：
+// 同一份 registry 被两边各判一次，分开写迟早给出两个答案（见 MAINTENANCE.md）。
+import { patchReplacements, matchesPattern } from "../lib/patch-outcome.mjs";
+
+export { patchReplacements, matchesPattern };
+
 export const VERIFY_SCHEMA = 1;
 
 export const VERIFY_STATES = Object.freeze({
@@ -39,11 +45,6 @@ export function fileKeysOf(patch) {
   return Array.isArray(patch.file) ? patch.file : [patch.file];
 }
 
-export function patchReplacements(patch) {
-  if (Array.isArray(patch.replacements)) return patch.replacements;
-  return (patch.patterns ?? []).map((pat) => ({ pattern: pat, replace: patch.replace }));
-}
-
 export function keysOfPatch(patch) {
   return fileKeysOf(patch).filter(Boolean);
 }
@@ -57,11 +58,6 @@ export function pathsOf(files, key) {
   const value = files ? files[key] : undefined;
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
-}
-
-export function matchesPattern(hay, pattern) {
-  if (pattern instanceof RegExp) return new RegExp(pattern.source, pattern.flags.replace("g", "")).test(hay);
-  return hay.includes(asLf(pattern));
 }
 
 function detailOf(patch, key, file, extra) {
