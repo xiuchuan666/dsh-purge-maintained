@@ -35,6 +35,19 @@ function readLog() {
   }
 }
 
+/**
+ * 只取带这个标签的最后一行。
+ *
+ * 为什么不能用 readLog().trim().split("\n").pop()：日志文件是
+ * os.tmpdir()/dsh-purge-desktop.log，全仓共用一份，而 node --test 会并行跑各个
+ * test-*.mjs（各有自己的进程），别的文件正在往同一个文件里 append。
+ * 直接取「最后一行」会拿到别人的行 —— 2026-11-13 跑 test:full 时就因此假红过。
+ */
+function lastTagged(tag) {
+  const lines = readLog().split("\n").filter((l) => l.includes(`[${tag}]`));
+  return lines.length ? lines[lines.length - 1] : "";
+}
+
 test.after(() => {
   delete globalThis.__dshPurgeHungPrompt;
   delete globalThis.__dshPurgeRetryPending;
@@ -400,26 +413,23 @@ test("ensureRestartReady：直接转调 core.ensureHostClean()", () => {
 test("purgeLog：一行 ISO + 标签 + k=v，空格换下划线，null/undefined 变空串", () => {
   freshHome("log");
   ps.purgeLog("unit.tag", { a: "x y", b: 3, c: null, d: undefined });
-  const line = readLog().trim().split("\n").pop();
+  const line = lastTagged("unit.tag");
   assert.match(line, /^\d{4}-\d{2}-\d{2}T[\d:.]+Z \[unit\.tag\] a=x_y b=3 c= d=$/);
 });
 
 test("purgeLog：没有 kv 时只写标签", () => {
   ps.purgeLog("unit.plain");
-  const line = readLog().trim().split("\n").pop();
-  assert.match(line, /\[unit\.plain\]$/);
+  assert.match(lastTagged("unit.plain"), /\[unit\.plain\]$/);
 });
 
 test("purgeLog：对象值走 String()，方括号里的空格也被替换", () => {
   ps.purgeLog("unit.obj", { e: { k: 1 } });
-  const line = readLog().trim().split("\n").pop();
-  assert.match(line, /e=\[object_Object\]$/);
+  assert.match(lastTagged("unit.obj"), /e=\[object_Object\]$/);
 });
 
 test("logAssembleDecision：把 mode/task/last/sub 四项写进 assemble.<where>", () => {
   ps.logAssembleDecision("pre-step", { mode: "full", taskKind: "general", lastRole: "retry", isSubagent: true });
-  const line = readLog().trim().split("\n").pop();
-  assert.match(line, /\[assemble\.pre-step\] mode=full task=general last=retry sub=true$/);
+  assert.match(lastTagged("assemble.pre-step"), /\[assemble\.pre-step\] mode=full task=general last=retry sub=true$/);
 });
 
 test("purgeLog：1024 次写里必定触发一次翻滚，2MB 的旧日志被挪成 .1", () => {

@@ -251,6 +251,10 @@
 | `apply()` 一共登记 **12** 个 effect 工厂（少一个就等于泄漏一个定时器或闭包；`applyHostHooks` 内部那 8 个各登记一个） | `test-plugin-apply.mjs`（1 条） | 同上 |
 | `watchWebTreeReady` 四条分支的对外读数：没有 connection → `/status` 503（唯一有可观察差异的一条）、服务缺失 → 走 `then` 的**失败回调**也是 mark → 200、非 thenable → 同步 mark → 200、起手必须 `webState.ready = false`（热重载复用旧 ready 会让第二次 inject 之前的 `/status` 说假话） | `test-plugin-apply.mjs`（4 条） | 同上 |
 | 桌面自愈只在 `desktop` 面排程（`if (hostctl.currentSurface() === "desktop")` 守卫、整套启动路径只有一处 `setImmediate`、且必须在守卫之后）+ `/purge` 的 deps 里 `scheduleApplyRestart` 必须是 `bootSettle.scheduleApplyRestart`、rules 带 refresh 而 skills 不带 | `test-plugin-apply.mjs`（2 条源码形状） | 同上 |
+| override 状态的读写与容错：坏 JSON / `null` / 缺文件都回 `{}`、顶层是数组也原样返回（只判 `typeof === "object"`，不判 `Array.isArray`）、写盘必须是紧凑 JSON 且**不带**结尾换行、`customized` 一律 `Boolean` 化、每次自定义都同时记 `hash` 与 `seedHash` | `test-override-state.mjs`（11 条） | `lib/core.js` 57% |
+| 「这份正文算不算用户稿」的四道判据：只有 `PLUGIN_DEFAULT_MARKS` 三个标记**全中**才算插件血统（`<|im_start|>system:` / `<project_instructions>` / `Little Code Sauce`）、当前加密槽的 hash 不算用户稿、`seedHash` 命中的也不算（我们上次自己写的那份）、空稿一律不算 | `test-override-state.mjs`（9 条） | 同上 |
+| `installOverride` 的两道闸与 force：第一道判用户自改、第二道是纵深防御（源码形状钉）、`force` 必须能强行刷回加密槽、落盘后必须把 state 一起刷新（`customized:false` + 两个 hash）、第二次调用回 `exists` 且不重写文件 | `test-override-state.mjs`（9 条） | 同上 |
+| `commitOverrideOnApply` / `seedPromptInjectAtBoot` / `syncPromptInjectOnDiskSync` 三处的分支与记版本：用户稿必须落盘成 `saved_user`、盘上是用户稿时必须 `kept_user_custom` 不许覆盖、全新 home 走 `seed_default`、**每次提交都必须让 `committedOverrideRevision()` 变**（否则注入了新正文但缓存永不失效）、`refresh_default` 这条映射只能靠源码形状钉 | `test-override-state.mjs`（15 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -289,6 +293,12 @@
 逐字对拍 `old 215 lines / new 215 lines` / `PARITY OK`（去块缩进 2 格 + `setBootFullQuit(true)` 还原成 `bootFullQuit = true`）。`scripts/test-boot-settle.mjs` **46 条**，RED 演练 **29/29 全红**。覆盖：`lib/boot-settle.js` 行 246/246、函数 9/9、分支 90/106（85%）。
 
 写这一段时被现实纠正的五处：①`over` 覆盖的函数**不会进 base 的 `calls`**（`Object.assign` 只换属性，覆盖后调的是新函数），所以「官方升级清标记」只能断言 `filter(n => n.startsWith("clear"))`；②`String(new Error("no cmd"))` 是 `"Error: no cmd"`，日志断言要么写全要么用 `startsWith`；③自动更新那组必须让 `patchesMatchInstallStrict` 一开始就 true 才能走到 `autoApply` 分支（主分支末尾是 `restarting`）；④`scheduleApplyRestart` 密封包那条要闭包记 `seen` 才能验 ctx 透传；⑤「ctx 在对齐复核期间被 dispose」必须**计数到第二次** `patchesMatchInstallStrict` 才真的踩到重启前那道检查——第一次就置 dead 会停在 `reapplyInstalled` 之后那次早退，测出来的是另一条分支。
+
+**2026-11-13 十补**：`lib/core.js` 的 override 簇（`lib/core.js:4779-5080`）原本**全部零命中** —— `overrideStatus` / `readOverrideStateSync` / `writeOverrideState` / `markOverrideCustomized` / `isUserCustomizedOverride*` / `readOverrideForUi` / `installOverride` / `commitOverrideOnApply` / `saveOverrideContent` / `editOverride` 一个都没被测过。这一簇是「提示词到底有没有被覆盖、Apply 会不会把用户稿冲掉」的唯一判据，改坏了只表现为「改了提示词但注入不变」，全程不报错。新增 `scripts/test-override-state.mjs`（**55 条**），把 `lib/core.js` 的行命中从 2887 推到 **3010/5274（57.1%）**、函数 231/327、分支 870/1181。全仓行覆盖 **83.60% → 83.93%**（`30532/36376`）。
+
+RED 演练 `.tmp57-red.mjs` 用 `git show HEAD:lib/core.js` 当 BASE、29 条注入逐条跑，最终 **29/29 全红**、`restored byte-identical: true`。第一轮 24/29，四条 GREEN 的处置分两类：①「不认 `seedHash`」与「跳过第二道闸」是真的行为等价（另一道闸挡得住）→ 改成**源码形状断言**并在注释里写明「这是纵深防御，不是可观察行为」；②「commit 后不记版本」与「seed 分支不 remember」是真的漏了断言 → 补「`committedOverrideRevision()` 必须变」的用例。另修一条 `ANCHOR 2`：`markOverrideCustomized` 与 `syncPromptInjectOnDiskSync` 里各有一处 `seedHash:`，锚点必须带上前三行才唯一。
+
+**这一批顺带修掉一个真 bug（在测试侧，不在生产代码里）**：`scripts/test-prompt-source.mjs` 的三条日志断言原先是 `readLog().trim().split("\n").pop()` —— 而日志文件是 `os.tmpdir()/dsh-purge-desktop.log`，全仓共用一份，`node --test` 又是并行跑各个 `test-*.mjs` 进程，于是「最后一行」经常是别的测试刚写进去的。跑 `npm run test:full` 时因此假红过三条（实际拿到 `[inject.read]` 与 `[guard.wrap]`）。修法是加 `lastTagged(tag)`：先按 `[tag]` 过滤再取最后一条。`scripts/test-inject-write.mjs` 用的是按文件 size 切片的 `logDelta(fn)`，不受影响。**教训：任何跨测试共享的旁路文件（日志、临时目录、端口）都不能用「最后一条」这种全局读法。**
 
 ---
 
@@ -636,6 +646,8 @@
 54. **启动自愈能注出来，但「真读宿主」那一步仍然没有守卫**。`lib/boot-settle.js` 的全部 14 个 return 分支现在都能用假 deps 精确走到，可五个注入点本身（`core.gatherState` 返回什么、`reapply.patchesMatchInstallStrict` 怎么判、`hostctl.scheduleRestart` 真起来是什么形状）一行都没被执行。判坏的典型表现仍要人工确认：①启动后补丁过期却没自愈（`gatherState` 的 `patches_pending` 口径变了）；②自愈写完重启了但重启是空转（`scheduleRestart` 返回的 `restarting` 语义变了）；③密封桌面卡在「等 Apply」永远不动（`desktopAsarStillSealed` 判反）。检测办法：改一次宿主包里的某个 `[dsh-purge]` 标记，重启宿主看它是否自己修回来；`npm run host:status` 与 `npm run host:preview` 只验「补丁在不在」，验不到「自愈有没有跑」。另外 `apply()` 里那行 `setTimeout(settleInstalledPatches, settleDelayMs(surface))` 在 boot 测试里被同步 dispose 撤掉了，桌面面 4000ms 的真实时序也没进过测试。
 
 55. **`apply()` 的 12 个 effect 里，只有总数被钉住，顺序与相互依赖没钉**。`test-plugin-apply.mjs` 断言了「登记 12 个」，但谁先谁后、谁的 disposer 依赖谁的初始化，一条都没测——真实宿主里 `installWebServer` 必然最后（它要 `routeSpecs` 的 deps 全部就位），`installCwdCapture` 必须在 `installFreshFullAccess` 之后（否则第一条消息的 cwd 抓不到）。**仍然测不到的**：①`ctx.effect` 在真 Cordis 里是异步注册，同步跑工厂只是近似；②`enabled:false` 路径里 `clearOwnedSelectedDefault` / `removeStaleAgentPresetDir` 在本机都走 `catch`（`$DSH_HOME` 是临时目录），真实清默认有没有清干净只能手验；③`apply()` 之后 `ai_base` 的实测落点是 npm 全局那份，与桌面真实生效的那棵不是同一个——`/status` 会把它显示出来，这是已知的两棵树问题，不属于本批。
+56. **override 的「用户稿」判据只有四道闸被钉住，「哪些正文算用户稿」这条语义本身没有守卫**。`test-override-state.mjs` 钉住了 `PLUGIN_DEFAULT_MARKS` 三标记全中才算插件血统、当前槽 hash 与 `seedHash` 都不算用户稿、空稿不算——但它是**白名单式判据**，上游哪天改了 persona 开头那段（`<|im_start|>system:` 或 `<project_instructions>` 的写法变了），所有旧稿会瞬间从「插件默认」翻成「用户稿」，表现是「升级后注入还是旧的、状态页却说一切正常」，而四道闸全都判对。**仍然测不到的**：①`editOverride` 真的 spawn 一个编辑器并等待它退出（本机只验了 tokenizer 与 `needCreate`，`.on("error")` 的 ENOENT 是同步吞掉的）；②`writeOverrideState` 在 `<home>/dsh-purge` 目录不存在时的竞态（实测是 `rename` 报 ENOENT，正常路径先 `markOverrideCustomized` 就会先建目录，所以只在「同一 home 反复 rm -rf」的探针里出现）；③`refresh_default` 分支在本机不可达（任何非默认正文都被判成用户稿而走 `kept_user_custom`）。检测办法：改一次 `prompt-inject.md` 再跑 `npm run check` 看 `overrideStatus` 是否仍为 `default`；升级宿主后第一次启动看状态页的注入来源是 `prompt` 还是 `default`。
+
 
 ## 维护约定
 
