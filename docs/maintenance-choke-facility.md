@@ -96,13 +96,13 @@ npm run host:outcome -- --baseline-tree .tmp-tree/rc1/node_modules/@deepseek-ai
 ### 实测
 
 ```
-纯净树自比 (rc1 vs rc1)   applied 0  pending 65  native 3  stale 1  na 17  drifted 0  unknown 0
-真宿主 vs rc1 基线        applied 67 pending 0   native 3  stale 0  na 16  drifted 0  unknown 0
+纯净树自比 (rc1 vs rc1)   applied 0  pending 66  native 3  stale 0  na 17  drifted 0  unknown 0
+真宿主 vs rc1 基线        applied 66 pending 1   native 3  stale 0  na 16  drifted 0  unknown 0
 旧 core.patchStatus(真宿主)  applied 71  na 13  missing_file 1  skipped 1
 旧 core.patchStatus(纯净树)  pending 66 applied 5  ← 5 条假 applied
 ```
 
-纯净树上剩的那 1 条 `stale` 是 #12 `APPROVAL_ASK_SENTENCE_BYPASS`：上游把 `Approval policy: ask. Operations that require approval may ask...` 整句改写成 `Approval prompts are enabled in this session: ...`，锚点已死，判定正确——这条需要改锚点，不是判定出 bug。
+纯净树自比现在 `stale` 为 0：唯一那条 `stale` 曾是 #12 `APPROVAL_ASK_SENTENCE_BYPASS`——上游把 `Approval policy: ask. Operations that require approval may ask...` 整句改写成 `Approval prompts are enabled in this session: ...`。它当了一阵子的「需要改锚点」样本，现在已按这个流程改完：给 #12 追加两条跟新文案的 replacement（`lib/index.js` 双引号形态与 `lib/types/index.js` 单引号形态各一条），产物里带上旧 marker 之一 `[dsh-purge] invariant/types ask sentence bypass`，于是 `patchApplied` 仍认得出来。真宿主上它现在是 `pending`——也就是「宿主上这条补丁还没打」，而不是「不知道」。
 
 ## 行为对拍（npm run test:behavior）
 
@@ -171,11 +171,11 @@ no behaviour assertion yet: 74 patch(es)
 实测（rc.1 纯净树 `.tmp-tree/rc1/node_modules/@deepseek-ai`）：
 
 ```
-host:matrix  live 39 / stale 1 / dead 0 / native 3 / retraction 27 / trace 11 / blind 5
+host:matrix  live 40 / stale 0 / dead 0 / native 3 / retraction 27 / trace 11 / blind 5
 host:gates   gated 58 / no-target 14 / trace-anchored 12 / native 2
 ```
 
-唯一 `stale` 是 #12 `APPROVAL_ASK_SENTENCE_BYPASS`，`dead` 为 0——rc.1 上没有「限制真被删掉」的补丁。这就是「哪些旧补丁不用打了」的答案：现在一条都不用退役，只有一条要改锚点。
+`stale` 与 `dead` 都是 0——rc.1 上没有「限制真被删掉」的补丁，也没有「锚点死了要改」的补丁了。这就是「哪些旧补丁不用打了」的答案：现在一条都不用退役。曾经唯一那条 `stale`（#12）走完了完整的改锚点流程，见上一节。`host:gates` 的数字没变，因为 #12 的手写闸门仍然指着同一个常量：自动推导现在也能定位到它，但手写那条更短、更抗改写，留着更好。
 
 ### 写侧表时不能做的两件事（都是踩过的）
 

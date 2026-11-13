@@ -218,6 +218,25 @@ test("没有基线且证据全无 → unknown，不允许蒙一个 applied", fun
   assert.equal(classifyFile(p, { fileText: "something", baselineText: null }).state, UNKNOWN);
 });
 
+test("没有基线时，产物与 marker 都不算证据（60 字符前缀判别力太弱）", function () {
+  // 实测事故：不带 --baseline-tree 时 #12 曾报 applied，因为它的产物前缀
+  // "Approval requests are auto-granted in this session (approval bypass..." 在真宿主
+  // 官方 NEVER_SENTENCE 里就能撞上。缺基线时只有 trace 可信——它认的是 [dsh-purge]。
+  //
+  // 注意 marker 样例故意不带 [dsh-purge]：带了的 marker 本身就是 trace，
+  // 走的是下面第三条断言，不是这条。要验「marker 算不算证据」必须让它与 trace 正交。
+  const p = patchOf({ markers: ["FIXTURE_PLAIN_MARKER"] });
+  const withProduct = classifyFile(p, { fileText: "PATCHED_LINE\n", baselineText: null });
+  assert.equal(withProduct.state, UNKNOWN);
+  const withMarker = classifyFile(p, { fileText: "FIXTURE_PLAIN_MARKER\n", baselineText: null });
+  assert.equal(withMarker.state, UNKNOWN);
+  // trace 仍然算数：它是本插件独有的痕迹，官方不可能写。
+  // 这里必须换一个补丁：上面那个的 marker 是纯文本，构造不出 trace。
+  const traced = patchOf({ markers: ["[dsh-purge] fixture marker"] });
+  const withTrace = classifyFile(traced, { fileText: "[dsh-purge] fixture marker\nPATCHED_LINE\n", baselineText: null });
+  assert.equal(withTrace.state, PATCH_STATES.APPLIED);
+});
+
 test("rollupStates 优先级：pending > drifted > unknown > applied > native > stale", function () {
   assert.equal(rollupStates([]), UNKNOWN);
   assert.deepEqual(rollupStates([PATCH_STATES.NA, PATCH_STATES.NA]), PATCH_STATES.NA);
