@@ -229,9 +229,12 @@ npm run host:snapshot   # 宿主全树指纹（包 / 版本 / 文件哈希 / 注
 npm run host:choke      # 拦点形状扫描 ∩ --dump-config 实际加载清单 → 未覆盖的拦点
 npm run host:outcome    # 86 条补丁的七态判定（applied/pending/native/stale/drifted/na/unknown）
 npm run test:behavior   # 行为对拍：原版拦 / 补丁版放
+npm run host:matrix     # 锚点矩阵：七档分布，dead 是退役候选，stale 是改锚点候选
+npm run host:gates      # 闸门侧表：每条补丁一个行内短锚，`--write docs/patch-gates.json`
+npm run host:new-patch  # 从一行上游文本长出补丁草稿（锚点由文件算出，不改写内容）
 ```
 
-三者回答三个不同的问题：`host:choke` 说「宿主新加了哪些闸门、我一条都没管」，`host:outcome` 说「哪条该改锚点（`drifted`）、哪条该退役（`stale`）」，`test:behavior` 说「补丁还在文件里，但它真的还起作用吗」。
+它们回答不同的问题：`host:choke` 说「宿主新加了哪些闸门、我一条都没管」，`host:outcome` 说「哪条该改锚点（`drifted`）、哪条该退役（`stale`）」，`test:behavior` 说「补丁还在文件里，但它真的还起作用吗」，`host:matrix` 说「补丁自己的 pattern 还命中吗」，`host:gates` 说「把 pattern 抛开，那条限制本身还在不在」。
 
 `host:choke` 的判据是「形状 ∩ 实际加载 ∩ 未被覆盖」：先按调用写法（`ctx.approval.*`、`ctx.sandboxPolicy.*`、`static inject`、拒绝类 `throw`、escalation 调用、模式字面量）收缩到人眼可看的量级，再用 `dsh --profile web --dump-config` 剔除没加载和 `disabled` 的，最后减掉已覆盖的包。实测 rc.1 真宿主：42 组未加载 / 26 组 disabled / 22 组已覆盖 / 11 组包内满权早返回 / 2 组上游已覆盖 → **0 个未覆盖拦点**。
 

@@ -148,6 +148,58 @@ no behaviour assertion yet: 74 patch(es)
 ### 为什么只覆盖 12/86
 
 能轻量对拍的只有两类：可 await 调用的 Config schema、纯函数与类原型。只导出 `apply`/`inject`/`name` 的插件（dsh-skill-badge、dsh-harness-dev-context、dsh-sandbox-local）需要真 cordis ctx；提示词类补丁的「行为」是最终 prompt 文本，得先起一个 SystemPrompt 实例。这 74 条不是不做，是还没找到便宜的观测点——`--json` 输出里逐条列着 `uncovered`，下一步按收益排。
+## 命令四：`npm run host:matrix` 与 `npm run host:gates`（锚点矩阵与闸门侧表）
+
+矩阵回答「补丁自己的 pattern 还命中吗」。这个问题有盲点：#12 的 pattern 引用了一整句，上游把两端都改写了，pattern 死了而限制还在——只看矩阵就会把一条仍需要的补丁退役。
+
+闸门（gate）是第二意见：短、限在一行内、从定位到的文本长出来，宽度只到唯一性所需。它对重新缩进、重排、邻近编辑免疫，因为不带前后文。
+
+七档判定（`scripts/patch-matrix-lib.mjs` 的 `verdictOf`，顺序即决策）：
+
+| 档 | 含义 | 该做什么 |
+| --- | --- | --- |
+| `trace` | 锚点本身就是本插件写进去的痕迹 | 不是对上游的判断，跳过 |
+| `native` | 目标态已经是官方原文（#2/#3） | 无需补丁 |
+| `retraction` | 撤销型（`skipIfMarked`/`deleteOnly`/`softSettle`/`after`） | 找的是自己的痕迹 |
+| `blind` | 树里没有这个文件（桌面壳、包搬迁） | 说不了话，别当死 |
+| `live` | 锚点命中 | 正常 |
+| `stale` | 锚点死了但闸门还在 | **改锚点**，不是退役 |
+| `dead` | 闸门也不在 | 先读再退役 |
+
+`host:matrix` 打七档分布 + dead/stale 清单（带锚点文本）；`host:gates` 打 86 个闸门、`--write docs/patch-gates.json` 落盘侧表、`--compare` 对比两棵树看闸门是否漂移。
+
+实测（rc.1 纯净树 `.tmp-tree/rc1/node_modules/@deepseek-ai`）：
+
+```
+host:matrix  live 39 / stale 1 / dead 0 / native 3 / retraction 27 / trace 11 / blind 5
+host:gates   gated 58 / no-target 14 / trace-anchored 12 / native 2
+```
+
+唯一 `stale` 是 #12 `APPROVAL_ASK_SENTENCE_BYPASS`，`dead` 为 0——rc.1 上没有「限制真被删掉」的补丁。这就是「哪些旧补丁不用打了」的答案：现在一条都不用退役，只有一条要改锚点。
+
+### 写侧表时不能做的两件事（都是踩过的）
+
+1. **前缀阶梯**：想让闸门在换行重排后仍能定位，按 120/80/60/… 逐级截断前缀去 `indexOf`。实测 #2 的 pattern 指名 `REPLACEMENT_WORKSPACE_CONTEXT_INTRO`，上游改名为 `REPLACEMENT_AGENT_INSTRUCTIONS_INTRO`，前缀命中了**改名后的相邻常量**，闸门被挂在错误的常量上，永远报「限制还在」。已删除。
+2. **正则字面回退**：`exec` 不匹配时取最长字面串再定位，同一个病。已删除，`exec` 不匹配一律返回 `null`，交给手写闸门表。
+
+一句话：**定位失败是信息，编造的命中是不会过期的谎。**
+
+## 命令五：`npm run host:new-patch`（从一行文本长出一条补丁草稿）
+
+补丁是两件事：一个必须逐字节命中的锚点，和一句「应该变成什么」。只有前者能从树里算出来——而它就应该被算出来，因为手写锚点会两头失败：太短命中三处，太长下次上游重排就死。
+
+```bash
+npm run host:new-patch -- --list-targets                       # 键 -> 相对路径对照表
+npm run host:new-patch -- --pkg dsh-sandbox --line 151          # 按行号
+npm run host:new-patch -- --pkg dsh-sandbox --needle 'switch (outcome) {'
+npm run host:new-patch -- --patch 12 --json                     # 改已有补丁的锚点
+```
+
+输出：定位到的行、行内最短且唯一的锚点（长度与 slack）、该文件对应的注册表键名、一条填好的草稿条目（`replace` 与 `desc` 留 `TODO:`，绝不编造改写内容）、以及后续五步。
+
+`--patch` 的回退链是「补丁自己的 pattern → gate needle」：pattern 已死时（#12 的情形）仍能靠闸门找回该行，这正是改锚点的起点。
+
+**不唯一就不产草稿**：跨行才唯一（两行完全重复）或行内有多处时，脚本打印原因并退出 1。放它过去，等于让人把一条会编辑三处的 pattern 粘进注册表。
 ## 已知盲区
 
 - `--dump-config` 只描述 profile 配置层加载的插件。运行时动态注册、或由用户 profile 另行 `cordis.patch.yml` 加进来的，扫不到。
