@@ -297,6 +297,8 @@
 | 两个词表跨模块对齐：`STATE_LIST` 与 `BEHAVIOR_STATE_LIST` 必须与 `rehearse-lib` 的判定表逐状态一致 —— 上游新增一个状态时判定会静默变绿，靠这两条让改动在 CI 上直接炸 | `test-rehearse-lib.mjs`（2 条） | 同上 |
 | 第五步 gates：`docs/patch-gates.json` 还描不描述这棵树。表 pin 在同一版掉针是 **blocking**（表与树互相矛盾），跨版掉针只是 warn（漂移，条数就是 bump `dshTarget` 时的重推量），`unreadable` 单列（这棵树里没那个文件，比如桌面壳） | `test-gate-verify-lib.mjs`（13 条）+ `test-rehearse-lib.mjs`（6 条） | 仅 `scripts/`，不进覆盖率基线 |
 | 四步证据各自的定级：apply 只看 blocking、outcome 里 `pending/drifted/unknown` 必须为 0、behaviour 里 `broken/unexpected` 是红而 `inert` 只是黄、gate 的跨版降级；**不认识的枚举值按最坏算**，新状态默认成绿等于默认为安全 | `test-rehearse-lib.mjs`（6 条） | 同上 |
+| `verify-target` 的判定层：每条补丁在这棵树上只有一个答案（na / no-file / would-apply / settled / drifted），`hitMismatch`、改完仍不完整、软键搬家、`deleteOnly` 的 self-marked 各走哪一支 | `test-verify-target-lib.mjs`（25 条） | 仅 `scripts/`，不进覆盖率基线 |
+| 判定只能有一份：`scripts/verify-target.mjs` 里不许再出现 `patchApplied` / `remainingWork` / `matchesPattern` / `keysOfPatch` 这类平行实现（它们已经因为 #42 的 legacy 守卫而与 core 分叉） | 同上（源码形状） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -399,6 +401,19 @@ RED 演练 `.tmp57-red.mjs` 用 `git show HEAD:lib/core.js` 当 BASE、29 条注
 **这里又逮到一次「两条守卫互为备份」**：变异演练 32 条注入，首轮 30 RED / 2 GREEN，两条都出在 `packageTargets`。`不挡兄弟目录` 一条尤其值得记 —— 原有 fixture 是 `D:/host-extra/dsh-sandbox/...`，把它按 base 长度切掉后剩下 `-extra/dsh-sandbox/...`，名字不以 `dsh-` 开头，于是它在下一道 `dsh-` 前缀过滤就被拦了。两条守卫在这条 fixture 上互为备份，删掉任何一条测试都还是绿的。换成 `D:/hostXdsh-zzz/lib/index.js`（切片后正好对齐成 `dsh-zzz/lib/index.js`）才真正钉住尾随分隔符这一条。重跑 32/32 全红。
 
 另一条 GREEN 是 `不合并重复键`，它的解释完全不同，而且更值得记：那条注入删掉去重之后，今天重跑**立刻红**（`fail=1`，用例 `packageTargets lists each registry key once even when two of its files land in one package`）。也就是说首轮 drill 跑的时候，测试文件里还没有这条 fixture —— 首轮 drill 与后来的补测本来就是两次不同的实验，把它们的结果并列读会得出错误结论。
+
+**十八补**：`scripts/verify-target-lib.mjs`（186 行 / 25 条）把 `verify-target` 的判定层从 CLI 里拆出来。拆的理由不是行数，是**这个文件里曾经有三份判定**：`scripts/verify-target.mjs` 自己的 `patchApplied()` 与 `remainingWork()`，加上 `lib/core.js` 的 `patchApplied()`。CLI 后来改成直接问 `core.filePatchOutcome()`，那两份就没人调用了 —— 但它们仍在文件里、仍长得像权威。加 #42 的两条 legacy 守卫（`legacyApplyPathStarts(hay) > 1` 与 `STALE_LEGACY_APPLY_CALL`）时，core 那份被改了，CLI 那两份没有；如果哪天有人照着 CLI 那份再抄一遍，「#42 在已经升过级的树上算不算完成」立刻分叉。所以这一批把判定收敛成一份，并留了一条源码形状断言：这四个函数名不许再出现在 `verify-target.mjs` 里。
+
+判定口径**逐条对齐、一条不改**：`na` → `no-file` → `hit-mismatch` 记 drifted → `changed` 之后复查 `filePatchOutcome`（不完全就记 `partial`，仍算 drifted）→ 一条 pattern 都不中时问引擎（`applied`/`pending`/`skipped` 三支）→ 软键 `soft-moved` → 其余 drifted。合并前先用同一棵真宿主树跑过新旧两版对拍：`would-apply=67 / settled=5 / drifted=0 / no-file=7 / na=7`，86 行逐行 `[id, status, files]` **完全一致**；再造一棵含 drifted 的 fixture 树（缺 needle、缺 marker、`#42` 只留 marker）跑 `--pad`，两版 stdout **逐字节相同**（diff 为空）。`detail` 的截断长度也保留了原样：`hitMismatch` 那条只截 120 字，其余截 200。
+
+**RED 演练 24 条突变 → 24/24 全红**（`{"restored":true,"total":24,"red":24,"green":0,"anchor":0}`）。两轮才收敛，留下的教训有两条：
+
+1. **多行锚点必须用 `sub` 不用 `line`**。第一轮 5 条 ANCHOR 全是把两行源码写成一行字符串塞给 `line()`（它是整行精确匹配）。改成 `sub()` 之后立刻命中。
+2. **两条 GREEN 都是「断言写在了不会被观察的地方」**：
+   - `detail 恒开`：注入点原本选在 drifted 那一句的 `if (detail)`，而那一条用例的所有分支都走不到这里 —— 真正的出口是返回值的 `detail: detail ? notes : undefined`：关掉时到底给不给证据，只有那里说了算。改锚点后立刻红。
+   - `drifted 被 would-apply 覆盖`：pending 分支里那句 `if (status !== VERIFY_STATES.drifted)` 只在「先一条 drifted、再一条 pending」的顺序下才起作用，而原用例里每一条补丁最多一个 key。补了「坏文件 + 没打完的文件」这条 fixture 才转红。
+
+另外顺手补了 `pathsOf` 的一条真空白：原用例只测「键不存在」，没测「值是 `null` / 空串」——少了 `if (!value) return []` 会返回 `[null]`，再往下 `readText(null)` 直接抛。这条不是从 drill 里来的，是加 mutation 时发现 `!value` 这句没有对应的 fixture。
 
 于是本轮有两条纪律，都来自同一个地方：**RED 演练的结果只对「跑那一刻的测试文件」有效**。① 报 GREEN 时先怀疑 fixture 不够毒（兄弟目录那条就靠一个对齐后正好成 `dsh-` 的路径戳穿了两条互为备份的守卫），再怀疑守卫真没用；② 测试文件改过之后必须重跑 drill，否则手上那份 55 红 / 32 红是上一版文件的历史成绩，不证明现在这套判定还钉得住。
 

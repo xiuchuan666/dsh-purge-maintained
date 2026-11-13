@@ -149,6 +149,9 @@ test("缓存命中时不再重建", () => {
 
   验法是跑前跑后对本机启动器做 SHA-256 比对，变了就是又漏出去了。这条只在「`PATH` 干净但 npm 全局存在」的机器上暴露 —— CI 的 ubuntu-latest 恰好是这种机器，而开发机常常不是，所以本地全绿不代表没漏。
 
+- **判定的平行实现比没有判定更危险：死代码长得像权威。** `scripts/verify-target.mjs` 里曾经有两份 `patchApplied()` / `remainingWork()`，CLI 后来改成直接问 `lib/core.js` 的 `filePatchOutcome()`，那两份就没人调用了 —— 但它们还在文件里、还在同一个函数名上、还带着完整注释。给 #42 加两条 legacy 守卫（`legacyApplyPathStarts(hay) > 1`、`STALE_LEGACY_APPLY_CALL`）时，core 那份改了，CLI 那两份没改；于是「已经升过级的树上 #42 算不算完成」在同一个仓库里有两个答案，谁照着死代码再抄一遍就当场分叉。判别办法是搜同名函数：`grep -n "function patchApplied" -r lib scripts` 多于一处就该问「哪一份在被调用」。修法是把它收敛成一份（`scripts/verify-target-lib.mjs`），再留一条源码形状断言：这四个名字不许再出现在 CLI 里。
+
+  顺带记两条同批学到的：**多行锚点要用子串替换，不要用整行匹配**（`line()` 是整行精确匹配，把两行源码拼成一个字符串传进去只会得到 ANCHOR 0；演练脚本第一轮 5 条 ANCHOR 全是这个原因）；**断言要写在会被观察的出口上**（`detail 恒开` 那条 GREEN，是因为注入点在 drifted 分支的 `if (detail)`，而真正决定「关掉时给不给证据」的是返回值的 `detail: detail ? notes : undefined`）。
 
 还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
 
@@ -244,10 +247,10 @@ npm run test:behavior   # 行为对拍：原版拦 / 补丁版放
 npm run host:matrix     # 锚点矩阵：七档分布，dead 是退役候选，stale 是改锚点候选
 npm run host:gates      # 闸门侧表：每条补丁一个行内短锚，`--write docs/patch-gates.json`
 npm run host:new-patch  # 从一行上游文本长出补丁草稿（锚点由文件算出，不改写内容）
-npm run host:rehearse   # 升级预演：在隔离副本上真打 86 条，一次给出五份证据
+npm run host:rehearse   # 升级预演：在隔离副本上真打 86 条，一次给出六份证据
 ```
 
-它们回答不同的问题：`host:choke` 说「宿主新加了哪些闸门、我一条都没管」，`host:outcome` 说「哪条该改锚点（`drifted`）、哪条该退役（`stale`）」，`test:behavior` 说「补丁还在文件里，但它真的还起作用吗」，`host:matrix` 说「补丁自己的 pattern 还命中吗」，`host:gates` 说「把 pattern 抛开，那条限制本身还在不在」，`host:rehearse` 说「换个版本打一遍，五份证据里哪一份先红」。
+它们回答不同的问题：`host:choke` 说「宿主新加了哪些闸门、我一条都没管」，`host:outcome` 说「哪条该改锚点（`drifted`）、哪条该退役（`stale`）」，`test:behavior` 说「补丁还在文件里，但它真的还起作用吗」，`host:matrix` 说「补丁自己的 pattern 还命中吗」，`host:gates` 说「把 pattern 抛开，那条限制本身还在不在」，`host:rehearse` 说「换个版本打一遍，六份证据里哪一份先红」。
 
 `host:choke` 的判据是「形状 ∩ 实际加载 ∩ 未被覆盖」：先按调用写法（`ctx.approval.*`、`ctx.sandboxPolicy.*`、`static inject`、拒绝类 `throw`、escalation 调用、模式字面量）收缩到人眼可看的量级，再用 `dsh --profile web --dump-config` 剔除没加载和 `disabled` 的，最后减掉已覆盖的包。实测 rc.1 真宿主：42 组未加载 / 26 组 disabled / 22 组已覆盖 / 11 组包内满权早返回 / 2 组上游已覆盖 → **0 个未覆盖拦点**。
 
