@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-13T03:05:51.318Z",
-  "commit": "1d1739c",
+  "capturedAt": "2026-11-13T04:32:15.286Z",
+  "commit": "98fed24",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -93,12 +93,12 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 3653,
+      "lh": 3895,
       "lf": 5274,
-      "fnh": 255,
-      "fnf": 334,
-      "brh": 1034,
-      "brf": 1379
+      "fnh": 268,
+      "fnf": 335,
+      "brh": 1146,
+      "brf": 1501
     },
     "lib/desktop.js": {
       "lh": 1417,
@@ -119,10 +119,10 @@
     "lib/extract-asar.js": {
       "lh": 493,
       "lf": 493,
-      "fnh": 38,
+      "fnh": 39,
       "fnf": 40,
-      "brh": 167,
-      "brf": 191
+      "brh": 168,
+      "brf": 192
     },
     "lib/hide-console.js": {
       "lh": 326,
@@ -297,7 +297,7 @@
       "lf": 363,
       "fnh": 22,
       "fnf": 24,
-      "brh": 80,
+      "brh": 81,
       "brf": 114
     },
     "lib/reapply.js": {
@@ -426,7 +426,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1255
+      "brf": 1259
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,

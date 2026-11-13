@@ -12,6 +12,15 @@ import test from "node:test";
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), "dshp-prompt-source-"));
 const ORIG_HOME = process.env.DSH_HOME;
 
+// 诊断日志落在 os.tmpdir() 下、全仓共用一份，而 node --test 会并行跑各个
+// test-*.mjs。换个私有 TMP 目录，让 lib/prompt-source.js 加载时算出的
+// PURGE_INTERNAL_LOG 只属于本进程，读日志时不再混进别的文件写的行。
+const TMP_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "dshp-prompt-source-tmp-"));
+const ORIG_TEMP = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
+process.env.TEMP = TMP_ROOT;
+process.env.TMP = TMP_ROOT;
+process.env.TMPDIR = TMP_ROOT;
+
 const ps = await import("../lib/prompt-source.js");
 const core = await import("../lib/core.js");
 
@@ -54,6 +63,11 @@ test.after(() => {
   if (ORIG_HOME === undefined) delete process.env.DSH_HOME;
   else process.env.DSH_HOME = ORIG_HOME;
   fs.rmSync(SANDBOX, { recursive: true, force: true });
+  for (const key of ["TEMP", "TMP", "TMPDIR"]) {
+    if (ORIG_TEMP[key] === undefined) delete process.env[key];
+    else process.env[key] = ORIG_TEMP[key];
+  }
+  try { fs.rmSync(TMP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
 // ---------- injectAllowedNow ----------

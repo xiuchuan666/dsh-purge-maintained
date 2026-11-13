@@ -17,13 +17,24 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import * as iw from "../lib/inject-write.js";
-import * as core from "../lib/core.js";
+// 诊断日志 dsh-purge-desktop.log 落在 os.tmpdir() 下，全仓共用一份；node --test
+// 默认并行跑各 test-*.mjs，各自往同一个文件追加。logDelta() 靠「文件字节数前后
+// 差」切本次新增的行，别的进程刚好在这期间写一行，就会混进本进程的 delta，
+// 于是「不该再打 guard.wrap」这类断言偶发红（本地全量跑才复现，单跑这个文件全绿）。
+// 根治办法：在 import 任何 lib 之前把 TEMP/TMP/TMPDIR 指到本进程私有的临时目录，
+// 这样 lib/prompt-source.js 模块加载时算出的 PURGE_INTERNAL_LOG 就是私有的。
+const TMP_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "dshp-inject-write-tmp-"));
+const ORIG_TEMP = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
+process.env.TEMP = TMP_ROOT;
+process.env.TMP = TMP_ROOT;
+process.env.TMPDIR = TMP_ROOT;
+
+const iw = await import("../lib/inject-write.js");
+const core = await import("../lib/core.js");
 
 const ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SRC = fs.readFileSync(path.join(ROOT, "lib", "inject-write.js"), "utf8");
 const LOG_FP = path.join(os.tmpdir(), "dsh-purge-desktop.log");
-
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), "dshp-inject-write-"));
 const ORIG_HOME = process.env.DSH_HOME;
 const ORIG_PREPARE = globalThis.__dshPurgePrepareAssemble;
@@ -43,6 +54,11 @@ test.after(() => {
   if (ORIG_PREPARE === undefined) delete globalThis.__dshPurgePrepareAssemble;
   else globalThis.__dshPurgePrepareAssemble = ORIG_PREPARE;
   try { fs.rmSync(SANDBOX, { recursive: true, force: true }); } catch { /* ignore */ }
+  for (const key of ["TEMP", "TMP", "TMPDIR"]) {
+    if (ORIG_TEMP[key] === undefined) delete process.env[key];
+    else process.env[key] = ORIG_TEMP[key];
+  }
+  try { fs.rmSync(TMP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
 /** 假 ctx：可选的 systemPrompt getter、记录 hooks 与 effect。 */
@@ -95,8 +111,7 @@ function trackEffects(wrap) {
 }
 
 /** 从日志里捞本次新增的行。 */
-function logDelta(fn) {
-  const before = fs.existsSync(LOG_FP) ? fs.statSync(LOG_FP).size : 0;
+function logDelta(fn) {  const before = fs.existsSync(LOG_FP) ? fs.statSync(LOG_FP).size : 0;
   const out = fn();
   const text = fs.existsSync(LOG_FP) ? fs.readFileSync(LOG_FP, "utf8") : "";
   const buf = Buffer.from(text, "utf8");
