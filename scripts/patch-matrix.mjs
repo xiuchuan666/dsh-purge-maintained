@@ -86,7 +86,8 @@ for (const tree of opts.trees) {
   const dir = path.resolve(tree.dir);
   const table = core.targetFiles(dir);
   // Gates are derived per tree: a needle is a fact about this version's text, not about the patch.
-  const gates = gateLib.buildGates(core.ALL_PATCHES, table, gateLib.readFileFrom(dir));
+  const relOf = (file) => path.relative(dir, file).split(path.sep).join('/');
+  const gates = gateLib.buildGates(core.ALL_PATCHES, table, gateLib.readFileFrom(dir), undefined, undefined, { relOf });
   perTree[tree.name] = core.ALL_PATCHES.map((patch) =>
     lib.describePatchInTree(patch, table, outcome, behaviorsById, gates.get(patch.id)));
   gateTally[tree.name] = gateLib.tallyGates(gates);

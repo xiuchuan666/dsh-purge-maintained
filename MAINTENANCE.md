@@ -14,7 +14,8 @@ npm run check
 2. `npm run check:metadata`：检查 `package.json` 版本与 `release-notes.md` 首行一致、`dshTarget` 在 `dshTargets` 内、补丁 ID 唯一且有效。`ALL_PATCHES` 的数组顺序是实际应用顺序，不要求数字 ID 升序，也不为重排而重排。
 3. `npm run check:eol`：行尾约定校验（见下节「行尾约定」）。
 4. `npm run check:client`：前端产物链校验（见下节「前端产物链」）。
-5. `npm test`：`node --test "scripts/test-*.mjs"`，离线、默认不含覆盖率，实测约 1 秒。
+5. `npm run check:gates`：闸门侧表与补丁注册表的对账（见下节「闸门侧表」）。不读宿主，裸 runner 上也能跑。
+6. `npm test`：`node --test "scripts/test-*.mjs"`，离线、默认不含覆盖率，实测约 1 秒。
 
 默认检查不读取或改写 DSH profile，不应用宿主补丁，也不需要安装宿主。补丁数量从 `ALL_PATCHES` 动态读取，不在检查器里固定写死。
 
@@ -25,7 +26,7 @@ npm run check
 | 命令 | 用途 | 耗时 | 需要什么 |
 | --- | --- | --- | --- |
 | `npm test` | 改完就跑。只跑测试 | 约 1 秒 | 无 |
-| `npm run check` | 提交前跑。语法 + 元数据 + 前端产物 + 测试 | 约 3 秒 | 无 |
+| `npm run check` | 提交前跑。语法 + 元数据 + 行尾 + 前端产物 + 闸门侧表 + 测试 | 约 3 秒 | 无 |
 | `npm run test:full` | 想知道「有没有让覆盖率倒退」时跑。测试 + lcov + 与基线比对 | 约 2 秒 | git 工作副本 |
 
 `test:full` 用的是**棘轮基线**（`docs/test-baseline.json`），不是百分比阈值：只要求每个文件的行 / 函数 / 分支覆盖不低于记录值，涨上去之后用 `npm run test:baseline` 手动刷。理由很实际——把阈值定在 17% 等于宣布 `lib/core.js` 烂着也算合格；棘轮只记住「现在是多少」，然后逼它单向往上走。
@@ -241,6 +242,25 @@ npm run host:new-patch  # 从一行上游文本长出补丁草稿（锚点由文
 `host:outcome` 里 `stale` 与 `drifted` 必须分开：`stale` 是「宿主把这段删了」（退役），`drifted` 是「宿主还留着、只是换了措辞」（改锚点）。判据是锚点在纯净基线里是否还活着，不是文件是否逐字节相同 —— 前者才是「这条还要不要打」的正确答案。
 
 `test:behavior` 观测值只记 `{kind: value|throw, value|error: 类名}`，**绝不比对错误消息正文**：消息随上游漂移，拿它当断言等于把易碎品钉进 CI。自证方式是把它指向基线树本身 —— 两侧同源时必须大量 `broken`，永远全绿的检查等于没检查。
+
+### 闸门侧表：一条限制还在不在，与补丁自己的 pattern 无关
+
+补丁的 `pattern` 必须逐字节命中，因为它是要被编辑的东西。这使它成为「上游那条限制还在不在」的坏仪器：#12 的锚点引用整句，上游把两端都改了，pattern 死了而限制还在 —— 只看矩阵会退役一条仍然需要的补丁。
+
+闸门（gate）是第二意见：取 pattern 曾命中的那一行，缩成全文件唯一的最短子串，宽度只到唯一性所需，两端对齐词边界。它对重排、重新缩进、邻近编辑都免疫，因为它不要求逐字节命中，只要求那行还在。
+
+```bash
+npm run host:gates                       # 逐条列出 needle 与 路径:行号
+npm run host:gates -- --write docs/patch-gates.json   # 重生成侧表（升级后必跑）
+npm run host:gates -- --compare           # 两棵树之间逐条比 needle
+npm run check:gates                       # CI 侧：只查表与注册表的契约
+```
+
+侧表是**独立文件**而不是补丁上的字段。理由有两条：补丁定义是「对任意树的动作」，闸门是「对着某个上游版本的观察」；而且 `scripts/test-patch-registry.mjs` 断言补丁元数据与拆分快照逐字段相同，加字段等于重写那条保证。
+
+实测 rc.1：gated 58 / no-target 14 / trace-anchored 12 / native 2。四个非 gated 的理由都不是失败 —— `no-target` 是桌面壳或 presets 这类解析不到的文件，`trace-anchored` 是锚点本身就是本插件写进去的痕迹（按构造纯净树里不可能有），`native` 是目标态等于官方原文（#2/#3）。
+
+`--write` 之后要提交 `docs/patch-gates.json`：它是升级前后比对「同一行还算不算同一行」的凭据，不跟着进仓库就失去意义。
 ### 宿主契约：我们调的 API 还在不在
 
 `host:status` 有两层判定，缺一层就会假绿：
@@ -440,7 +460,9 @@ node scripts/check-eol.mjs --update
 
 `.github/workflows/ci.yml` 在 `main` 推送、pull request 和手动触发时运行 `npm run check`。CI 使用 Node.js 24，不需要 `npm install`。
 
-CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安装，只会得到「全 no-file」的假绿。这两条是本机命令。
+CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安装，只会得到「全 no-file」的假绿。这两条是本机命令。同理，`host:snapshot` / `host:choke` / `host:outcome` / `host:matrix` / `host:gates` 都需要宿主树或基线树，全部留在本机。
+
+唯一进 CI 的是 `check:gates`：它只查 `docs/patch-gates.json` 与注册表的契约（缺行、孤儿行、名字不一致、跨行或绝对路径的 needle），不查闸门是否还在上游——那需要宿主树。于是它既能裸跑，又会在补丁加进来但没人记闸门的那一刻变红。
 
 `.github/workflows/release.yml` 在发布前运行相同的 `npm run check`，但**不再由 push 触发**：本副本不发 GitHub Release（仓库私有、包标 `private`、分发只走本机 `npm pack` 产物），保留 `workflow_dispatch` 手动入口以便临时出包。仓库条件写成 `xiuchuan666/dsh-purge-maintained`，并有一条测试（`scripts/test-upstream-refs.mjs`）盯着它不要退回上游仓库名。
 

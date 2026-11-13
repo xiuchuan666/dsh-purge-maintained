@@ -24,5 +24,9 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Verify source and regression tests
+      # npm run check covers syntax, metadata, line endings, the client bundle, the gate table
+      # (check:gates) and the regression suite. Only the gate table can be checked here: every
+      # host-side command (host:snapshot / host:choke / host:outcome / host:matrix / host:gates)
+      # needs an installed host tree, which this runner does not have.
+      - name: Verify source, gate table and regression tests
         run: npm run check

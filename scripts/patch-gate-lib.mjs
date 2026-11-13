@@ -193,7 +193,11 @@ export function gateForPatch(patch, table, readFile, options = {}) {
       const capped = lineEnd < 0 ? text.length : lineEnd;
       const seedEnd = Math.min(capped, at + probe.length);
       const grown = anchor.shortestUniqueAnchor(text, at, seedEnd, { maxLength: limit });
-      if (!grown || !grown.unique) {
+      // Capping the seed does not bound the growth: shortestUniqueAnchor widens left as well as
+      // right, so a seed near the start of a line can reach back across the previous newline and
+      // return a window that contains one. Such a needle dies on the next reflow - which is the
+      // edit an upgrade makes - so it is not a gate. #56 produced exactly this.
+      if (!grown || !grown.unique || grown.anchor.indexOf('\n') >= 0) {
         ambiguous++;
         continue;
       }
@@ -272,7 +276,7 @@ function handGateFor(patch, table, hand, readFile) {
 
 // Build the whole table. Patches without a usable gate keep a reason instead of a needle, so the
 // side table never silently loses a patch.
-export function buildGates(patches, table, readFile, handGates = HAND_GATES, nativePatches = NATIVE_PATCHES) {
+export function buildGates(patches, table, readFile, handGates = HAND_GATES, nativePatches = NATIVE_PATCHES, options = {}) {
   const gates = new Map();
   for (const patch of patches || []) {
     if (nativePatches && nativePatches[patch.id]) {
@@ -280,10 +284,13 @@ export function buildGates(patches, table, readFile, handGates = HAND_GATES, nat
       continue;
     }
     const hand = handGates && handGates[patch.id];
-    gates.set(patch.id, hand ? handGateFor(patch, table, hand, readFile) : gateForPatch(patch, table, readFile));
+    gates.set(patch.id, hand ? handGateFor(patch, table, hand, readFile) : gateForPatch(patch, table, readFile, options));
   }
   return gates;
 }
+
+// The rel a gate should record: relative to the tree root, forward slashes, so the side table is the
+// same file on Windows and Linux and can be reviewed in a diff. Passed into buildGates by every CLI.
 
 export function readFileFrom(aiBase) {
   return (file) => fs.readFileSync(path.resolve(aiBase, file), 'utf8');

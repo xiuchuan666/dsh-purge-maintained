@@ -75,7 +75,8 @@ const meta = {};
 for (const tree of opts.trees) {
   const dir = path.resolve(tree.dir);
   const table = core.targetFiles(dir);
-  const gates = gateLib.buildGates(patches, table, gateLib.readFileFrom(dir));
+  const relOf = (file) => path.relative(dir, file).split(path.sep).join('/');
+  const gates = gateLib.buildGates(patches, table, gateLib.readFileFrom(dir), undefined, undefined, { relOf });
   perTree.set(tree.name, gates);
   let version = 'unknown';
   try {

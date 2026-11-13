@@ -200,12 +200,39 @@ npm run host:new-patch -- --patch 12 --json                     # 改已有补�
 `--patch` 的回退链是「补丁自己的 pattern → gate needle」：pattern 已死时（#12 的情形）仍能靠闸门找回该行，这正是改锚点的起点。
 
 **不唯一就不产草稿**：跨行才唯一（两行完全重复）或行内有多处时，脚本打印原因并退出 1。放它过去，等于让人把一条会编辑三处的 pattern 粘进注册表。
+
+## CI 里查什么：`npm run check:gates`
+
+`host:gates` 需要一棵宿主树，CI 上没有。所以 CI 查的不是「限制还在不在」，而是**侧表和注册表有没有走散**——表会悄悄腐烂的地方恰好全在这里：
+
+```
+[gates] 86 rows for 86 patches, 58 gated
+[gates]   gated 58 / no-target 14 / trace-anchored 12 / native 2
+[gates] PASS
+[gates] not checked here: whether a gate still exists in the current upstream …
+```
+
+六条断言：
+
+| 情形 | 为什么算失败 |
+| --- | --- |
+| 注册表有条目、侧表没行 | 新补丁没留闸门，等下次升级才知道它靠哪句话定位 |
+| 侧表有行、注册表没条目 | 补丁删了，表还留着，读者会去找一个不存在的东西 |
+| 名字不一致 | 按旧名 grep 会找错行 |
+| needle 跨行 | 下次重排必死，而重排正是升级干的第二件事 |
+| needle 是绝对路径 | 表和机器绑死，换台机器就废 |
+| reason 不在词表 / 既无 needle 也无 reason | 记了一条什么也没记录的行 |
+
+最后永远打印一行 `not checked here`——它把「这里没查」说清楚，免得一条绿色 PASS 被读成「限制都还在」。真正的闸门存在性只有 `npm run host:gates -- --compare`（两棵树对 needle）与 `npm run host:matrix`（七档判定）能回答。
+
+`npm run check` 已包含它，而且因为不需要宿主树，裸跑在 ubuntu-latest 上也成立。
 ## 已知盲区
 
 - `--dump-config` 只描述 profile 配置层加载的插件。运行时动态注册、或由用户 profile 另行 `cordis.patch.yml` 加进来的，扫不到。
 - 形状扫描是正则级的，认的是调用写法。宿主换一套 API（比如把 `ctx.approval.request` 换成事件总线）就得补形状，否则会静默漏掉。
 - 五态判定依赖基线树。没有基线树时 `native` / `stale` / `drifted` 都无从区分，脚本返回 `unknown` 而不是猜。
 - 行为对拍只覆盖能 import 的 12 条。剩余 74 条（提示词改写、需要真 ctx 的插件、桌面壳）目前仍只有文本级证据。
+- `check:gates` 只查表的自洽，不查闸门是否真的还在上游——那需要宿主树。表写对而 needle 已被上游改写的情况，CI 是绿的。
 - 行为观测点写死在 scripts/patch-behaviors.mjs 里。上游一旦重命名导出函数，这条会掉成 `inert` 而不是 `broken`——`inert` 是「要看一眼」，不是「没事」。
 
 ## 相关设计
