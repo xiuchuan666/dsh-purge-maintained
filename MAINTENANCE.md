@@ -220,6 +220,24 @@ npm run host:preview -- --keep --json     # 复用上次装好的树，只出 JS
 
 宿主升级适配、前端重建与巨型模块拆分应分别成为独立维护任务，不与无关业务修改混在同一提交。
 
+### 升级前的三问：拦点、五态、行为
+
+`host:status` / `host:preview` 都建立在 `.dshpurge.bak` 之上 —— 没有备份的文件（补丁从未落过盘、或补丁只是漂移）就没有对照物。针对这个盲区有三条独立命令，全部以「npm 装出来的纯净树」为基线，一个字节都不依赖 `.bak`（设计与判据见 [拦截面定位与五态判定设计](docs/maintenance-choke-facility.md)）：
+
+```bash
+npm run host:snapshot   # 宿主全树指纹（包 / 版本 / 文件哈希 / 注入标记），基线存 docs/host-tree.json
+npm run host:choke      # 拦点形状扫描 ∩ --dump-config 实际加载清单 → 未覆盖的拦点
+npm run host:outcome    # 86 条补丁的七态判定（applied/pending/native/stale/drifted/na/unknown）
+npm run test:behavior   # 行为对拍：原版拦 / 补丁版放
+```
+
+三者回答三个不同的问题：`host:choke` 说「宿主新加了哪些闸门、我一条都没管」，`host:outcome` 说「哪条该改锚点（`drifted`）、哪条该退役（`stale`）」，`test:behavior` 说「补丁还在文件里，但它真的还起作用吗」。
+
+`host:choke` 的判据是「形状 ∩ 实际加载 ∩ 未被覆盖」：先按调用写法（`ctx.approval.*`、`ctx.sandboxPolicy.*`、`static inject`、拒绝类 `throw`、escalation 调用、模式字面量）收缩到人眼可看的量级，再用 `dsh --profile web --dump-config` 剔除没加载和 `disabled` 的，最后减掉已覆盖的包。实测 rc.1 真宿主：42 组未加载 / 26 组 disabled / 22 组已覆盖 / 11 组包内满权早返回 / 2 组上游已覆盖 → **0 个未覆盖拦点**。
+
+`host:outcome` 里 `stale` 与 `drifted` 必须分开：`stale` 是「宿主把这段删了」（退役），`drifted` 是「宿主还留着、只是换了措辞」（改锚点）。判据是锚点在纯净基线里是否还活着，不是文件是否逐字节相同 —— 前者才是「这条还要不要打」的正确答案。
+
+`test:behavior` 观测值只记 `{kind: value|throw, value|error: 类名}`，**绝不比对错误消息正文**：消息随上游漂移，拿它当断言等于把易碎品钉进 CI。自证方式是把它指向基线树本身 —— 两侧同源时必须大量 `broken`，永远全绿的检查等于没检查。
 ### 宿主契约：我们调的 API 还在不在
 
 `host:status` 有两层判定，缺一层就会假绿：

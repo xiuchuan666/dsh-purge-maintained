@@ -104,12 +104,57 @@ npm run host:outcome -- --baseline-tree .tmp-tree/rc1/node_modules/@deepseek-ai
 
 纯净树上剩的那 1 条 `stale` 是 #12 `APPROVAL_ASK_SENTENCE_BYPASS`：上游把 `Approval policy: ask. Operations that require approval may ask...` 整句改写成 `Approval prompts are enabled in this session: ...`，锚点已死，判定正确——这条需要改锚点，不是判定出 bug。
 
+## 行为对拍（npm run test:behavior）
+
+五态判定回答的是「补丁还在不在文件里」，回答不了「限制是不是真的解除了」。marker 在 ≠ 行为变了：有人只补了 marker、没删掉那个 throw，五态照样报 applied。行为对拍补上这一层。
+
+做法是同一份代码的两个版本、同一组输入、断言结果必须不同：
+
+```
+.tmp-tree/rc1/node_modules/@deepseek-ai          纯净上游树（npm 装，基线）
+宿主 <resources>/app/dsh/node_modules/@deepseek-ai   已打补丁
+        ↓ 各自 import 同一个模块，调同一个导出函数
+     原版拦 / 补丁版放  → ok
+```
+
+判据收在 scripts/behavior-lib.mjs 的五态里：
+
+| 态 | 含义 | 意味着什么 |
+| --- | --- | --- |
+| `ok` | 原版拦、补丁版放 | 这条补丁有行为证据 |
+| `broken` | 原版拦、补丁版仍拦 | 补丁失效，或被上游闸门绕过 |
+| `already` | 原版就不拦 | 这条该退役了（对应五态的 `stale`） |
+| `inert` | 观测点在一侧不可达 | 补丁改了导出面 / 函数被删，得人工看 |
+| `unexpected` | 两侧都没命中声明值 | 观测配方过期 |
+
+观测值只记 `{kind: value|throw, value|error: 类名}`，**绝不比对错误消息正文**——消息随上游漂移（#12 就是这么坏的），拿它当断言等于把易碎品钉进 CI。
+
+### 实测（真宿主 vs rc1 基线）
+
+```
+15 behaviours, ok=15 broken=0 already=0 inert=0 unexpected=0
+covers 12/86 patch id(s): 9,10,13,14,22,23,34,35,36,38,42,51
+no behaviour assertion yet: 74 patch(es)
+```
+
+自证实验（这套东西不能永远绿）：把 `--ai-base` 指到基线树本身，两侧同源 → `ok=2 broken=13`，只剩两条 `control` 通过。`control` 断言的是「两棵树在这里本来就应该一致」（`WIDER_MODES`、`SANDBOX_MODES` 这类词汇表），`covers` 必须为空——它证明观测手段没瞎，不是补丁证据。
+
+三个出口证据：
+
+- #13 / #14 / #35 三条叠在同一个 `approveEscalation` 上，一次 `rejected` 调用从 THROW 变 RET `danger-full-access`。
+- #9 的 `ApprovalService.prototype.decide` 用假 this（`{effectivePolicy:()=>'ask', ctx:{waterfall:()=>'unavailable'}}`）就能调：rc1 返 `unavailable`，宿主返 `allowed-once`。
+- #10 的 `Config({})` 从 `{policy:'ask'}` 变 `{policy:'never'}`。
+
+### 为什么只覆盖 12/86
+
+能轻量对拍的只有两类：可 await 调用的 Config schema、纯函数与类原型。只导出 `apply`/`inject`/`name` 的插件（dsh-skill-badge、dsh-harness-dev-context、dsh-sandbox-local）需要真 cordis ctx；提示词类补丁的「行为」是最终 prompt 文本，得先起一个 SystemPrompt 实例。这 74 条不是不做，是还没找到便宜的观测点——`--json` 输出里逐条列着 `uncovered`，下一步按收益排。
 ## 已知盲区
 
 - `--dump-config` 只描述 profile 配置层加载的插件。运行时动态注册、或由用户 profile 另行 `cordis.patch.yml` 加进来的，扫不到。
 - 形状扫描是正则级的，认的是调用写法。宿主换一套 API（比如把 `ctx.approval.request` 换成事件总线）就得补形状，否则会静默漏掉。
 - 五态判定依赖基线树。没有基线树时 `native` / `stale` / `drifted` 都无从区分，脚本返回 `unknown` 而不是猜。
-- 行为证据（真的会放行 / 真的会拦）不在本阶段范围内，见后续行为对拍阶段。
+- 行为对拍只覆盖能 import 的 12 条。剩余 74 条（提示词改写、需要真 ctx 的插件、桌面壳）目前仍只有文本级证据。
+- 行为观测点写死在 scripts/patch-behaviors.mjs 里。上游一旦重命名导出函数，这条会掉成 `inert` 而不是 `broken`——`inert` 是「要看一眼」，不是「没事」。
 
 ## 相关设计
 
