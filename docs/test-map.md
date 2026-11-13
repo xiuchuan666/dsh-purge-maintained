@@ -312,6 +312,7 @@
 | `cleanupLegacyRestartScripts` 只删 24h 前的 `dsh-purge-official-restart(?:-[0-9a-f-]+)?\.(js|cmd|log)`，新文件与无关名字一律不动 | `test-desktop-relaunch.mjs` | 同上 |
 | 九个原本私有的帮手（`officialRestartScript` / `systemPromptFiles` / `dshHomeForRelaunch` / `officialExeFromProcess` / `helperEnv` / `helperNodePath` / `unpackedHostIsClean` / `officialRestartLogState` / `probeWshJsEngine`）加 `export` 才能被单独验；公开行为零变化 | `test-plugin-surface.mjs` 之外的导出面 | 同上 |
 | `patchReplacements` / `matchesPattern` 只在 `lib/patch-outcome.mjs` 里定义一次：`scripts/verify-target-lib.mjs` 只做 `import` + 转出，源码形状断言钉住「这里不许再长出同名函数」（两份实现已经能从单数 `pattern` / `null` patch / 空串 pattern 三处分叉） | `test-verify-target-lib.mjs` | 仅 `scripts/` 与 `lib/patch-outcome.mjs`，后者 100% |
+| 目标宿主声明与宿主版本门禁：`HOST_TARGETS` / `HOST_TARGET` / `hostCompat` 的 known·ok·host 三态、预发布后缀原样相等、`dshTargets` 含 `dshTarget` 且无重复、每一项都能被 `parseHostVersion` 解析 | `test-host-target-decl.mjs`（9 条）/ `test-package-integrity.mjs`（13 条） | `lib/core.js` 宿主门禁段 100% |
 | 官方 CLI 三件套（`resources/runtime/cli/bin` 下的 `dsh` / `dsh.cmd` / `dsh.ps1`）：首装现场生成、已有就只打回退块、打完留 `.dsh-purge.bak`、`app/runtime` junction 指向 `../runtime` 且目标非空才回 `already` | `test-desktop-cli-repair.mjs` | `lib/desktop.js` 行 71% → **79.8%**（1624 → 1812 / 2273） |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
@@ -477,6 +478,20 @@ RED 演练 **41 条突变 → 41/41 全红**（`{"restored":true,"total":41,"red
 覆盖率：`lib/desktop.js` 行 1624 → **1812/2273（79.8%）**、函数 93 → 103、分支 378 → 466（共 601）；全仓行 **87.92% → 88.43%**、函数 79.78% → **79.95%**、分支 83.20% → **83.64%**。全量 **2864 条用例 / 2862 过 / 0 失败 / 2 跳过**（Windows 与伪装 linux 各跑一遍）。
 
 仍然测不到的（写进第十节）：`restartOfficialHarness`（125 行）、`scheduleAsarSwapRestart`（78）、`scheduleRestart`（53）、`spawnHelper`（24）—— 都会真 spawn 进程或改 `app.asar`，在这台机器上跑一次就等于重启一次宿主。
+
+**二十三补**：`dshTarget` 从 `0.2.2-rc.1` 推到 `0.2.2-rc.2`。这件事看起来只是改一处字符串，实际是「声明」与「产物」两条独立的线：补丁 registry 的 rc.2 锚点在更早的那一批里已经补齐（六条 drifted 逐条加了 replacement，minified 的 client.js 用整块注释绕开 225984 字符的超长行），所以**打得动**这件事已经成立；但 `hostCompat()` 比的是 `package.json` 里声明的版本，声明停在 rc.1 的话，桌面版真升到 rc.2 之后状态页会一直喊「← 未适配：插件声明 0.2.2-rc.1 / …」，而补丁其实全都打上了。反过来说，声明推到 rc.2 而本机装的是 rc.1，`ok` 仍然为真 —— 因为比较对象是整张 `dshTargets` 列表，不是单个目标。
+
+只动四处：`package.json` 的 `dshTarget`（rc.2）与 `dshTargets`（首位插 rc.2，rc.1 / rc.5 / rc.2 三条历史一个不删）、`README.md` 的第 3 行与版本表那一行、`scripts/test-package-integrity.mjs` 那条用例，加上新增的 `scripts/test-host-target-decl.mjs`。**`docs/patch-gates.json` 与 `docs/host-baseline.json` 都不动**：前者继续 pin 在 rc.1，`npm run host:gates -- --verify` 对着 rc.2 树会报「3 needle(s) moved between 0.2.2-rc.1 and 0.2.2-rc.2」，那正是这张表的语义 —— 它记录的是「这批 needle 是在哪一版上取的」，跨版缺失就是 bump `dshTarget` 时的返工量；跟着一起刷会把 26 条纯行号漂移也写进去，反而把「哪三条真变了」淹掉。后者是观测快照（capturedAt 2026-11-11，本机安装确实还是 rc.1），手改它就等于伪造观测。
+
+`HOST_TARGETS` 的「谁在最前」这件事以前没有任何文档写过，只存在于 `lib/core.js:2937-2946` 那五行 IIFE 里：`dshTargets.slice()` 之后 `dshTarget` 会被 **unshift** 到最前，所以 `dshTargets[0]` 写的是谁都不影响 `HOST_TARGETS[0]`。`scripts/test-host-target-decl.mjs` 第一条就把这条钉住（`HOST_TARGETS[0] === manifest.dshTarget`），否则以后有人以为「改数组顺序就能换主目标」，会在真机上得到一个永远对不上的声明。
+
+`hostCompat` 有三个字段容易被混着读，这一批各钉一条：`known` 说的是「读到了宿主版本」，`ok` 说的是「声明里认它」，`host` 是读到的原文。没声明过的版本必须 `known: true` + `ok: false`（判成 `known: false` 会让状态页什么都不显示，比报警更糟）；读不到宿主或版本解析不了必须 `ok: null`（`gatherState` 用的是 `ok !== false`，也就是 null 算支持 —— 没有 aiBase 的机器不该满天报警）；预发布后缀必须原样相等，`0.2.2-RC.2` 与 `0.2.2-rc.2` 也**不**相等（`parseHostVersion` 保留原样，比较时不做 lowerCase）。
+
+用例共 9 条（另 `test-package-integrity.mjs` 从 12 条变 13 条）。其中一条是 `HOST_TARGETS` 每一项都必须能被 `parseHostVersion` 解析 —— `hostCompat` 里的 `Boolean(b)` 会把解析不了的目标静默跳过，等于「声明了一个打错的版本」就是「少声明一个版本」，只在升级当天才暴露。另加一条 `dshTargets` 无重复项：`HOST_TARGETS` 侧有 `new Set` 兜着，重复在那边是静默的，得在 `package.json` 侧先拦。
+
+RED 演练 22 条突变全红（`restored: true`，`{"total":22,"red":22,"green":[],"anchor":[]}`）：`unshift` 改 `push` / 去掉 `new Set` / 去掉字符串过滤 / `HOST_TARGET` 取末位 / `parseHostVersion` 不收 `v` 前缀 / `pre` 不按点拆 / 接受四段版本 / `looksLikeHostPackage` 不再排除本插件 / 接受空版本 / `readHostVersion` 空 aiBase 不早退 / `hostCompat` 用 `every` / 不比预发布后缀 / 读不到宿主也回 `known:true` / 空目标列表也给结论 / 解析不了版本时 `ok:true` / `target` 标签只放首个 / `dshTarget` 退回 rc.1 / `dshTargets` 首位改写 / 删掉 rc.1 / 删掉 rc.5 / 写入重复项 / 写一个不能解析的版本。跨两平台各 21/21 全绿（`node --test` 与 `node --import ./.tmp-linux-preload.mjs --test`）。
+
+`npm run check` 六道闸：`[syntax] 234 files` / `[metadata] patches=86 tests=93` / `[eol] 304 文件（CRLF 140 / LF 162 / 混合 2）` / `[client] PASS` / `[gates] 86 rows, 58 gated` / `[test] 2874 / 2872 过 / 0 失败 / 2 跳过`。覆盖率 `[coverage] PASS 未跌破基线`，全仓行 88.43% / 函数 79.89% / 分支 83.64%（分支总数在 `core.js` +2、`preset-default.js` +3、`store-core.js` +4，都是执行路径变化带来的 `BRF` 波动，`HIT_METRICS` 只对 `lh/fnh/brh` 判红）。
 
 ---
 

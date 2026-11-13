@@ -24,8 +24,23 @@ test('版本号是 1.1.x 且不小于 1.1.93', () => {
   assert.ok(Number(manifest.version.split('.')[2]) >= 93)
 })
 
-test('目标宿主版本仍声明 0.2.2-rc.1', () => {
-  assert.ok(manifest.dshTargets.includes('0.2.2-rc.1'))
+test('目标宿主声明：dshTarget 是 rc.2，且历史版本仍列在 dshTargets 里', () => {
+  // 2026-11 之前这里钉的是「dshTargets 含 0.2.2-rc.1」。那条断言在推 rc.2 之后
+  // 依然为绿（rc.1 还留在数组里），但用例名会骗人：真正的契约是三条 ——
+  //   1) dshTarget 就是这个版本，2) 它必定出现在 dshTargets 里（check-lib 的硬约束），
+  //   3) 老版本不被顺手删掉（删了会让「用户降级回 rc.1」变成状态页报未适配）。
+  assert.equal(manifest.dshTarget, '0.2.2-rc.2')
+  assert.ok(manifest.dshTargets.includes(manifest.dshTarget), 'dshTargets must include dshTarget')
+  assert.equal(manifest.dshTargets[0], manifest.dshTarget, '首个目标应当是最新版本')
+  for (const still of ['0.2.2-rc.1', '0.2.1-rc.5', '0.2.1-rc.2']) {
+    assert.ok(manifest.dshTargets.includes(still), `${still} must stay listed`)
+  }
+})
+
+test('目标宿主声明没有重复项', () => {
+  // lib/core.js 的 HOST_TARGETS 用 new Set 去重，重复项在那里是静默的；
+  // 但 package.json 里重复说明有人「追加时没看原来有没有」，先在这里拦。
+  assert.equal(new Set(manifest.dshTargets).size, manifest.dshTargets.length)
 })
 
 test('files 收进了运行时需要的目录', () => {

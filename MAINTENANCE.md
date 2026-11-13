@@ -509,6 +509,16 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 `.github/workflows/release.yml` 在发布前运行相同的 `npm run check`，但**不再由 push 触发**：本副本不发 GitHub Release（仓库私有、包标 `private`、分发只走本机 `npm pack` 产物），保留 `workflow_dispatch` 手动入口以便临时出包。仓库条件写成 `xiuchuan666/dsh-purge-maintained`，并有一条测试（`scripts/test-upstream-refs.mjs`）盯着它不要退回上游仓库名。
 
+## 版本声明（dshTarget）与「打得动」是两件事
+
+补丁 registry 打不打得动，看的是 pattern 能不能在宿主源码里命中；状态页报不报「未适配」，看的是 `package.json` 里 `dshTarget` / `dshTargets` 声明的版本。**这两件事互不影响，改一件不会带动另一件**，所以宿主升版时必须分别确认，不能因为 `npm run host:preview` 说 compatible 就以为状态页也会变绿。
+
+- `HOST_TARGETS` 在 `lib/core.js:2937-2946` 现读 `package.json`：先 `dshTargets.slice()`，再把 `dshTarget` **unshift** 到最前，最后 `new Set` 去重。所以 `HOST_TARGETS[0]` 恒等于 `dshTarget`，`dshTargets` 的数组顺序不决定主目标。`HOST_TARGET` 就是 `HOST_TARGETS[0]`。
+- `hostCompat()` 的三个字段别混着读：`known` = 读到宿主版本了吗；`ok` = 声明里认这个版本吗；`host` = 读到的原文。没声明过的版本必须 `known:true` + `ok:false`（判成 `known:false` 会让状态页什么都不显示）；读不到宿主 / 版本解析不了必须 `ok:null`，因为 `gatherState()` 用的是 `hostInfo.ok !== false`，也就是 null 算支持。
+- `host_supported === false` 只影响状态页那一行（`lib/status-render.js:77-82` 打「← 未适配」），**不阻断 apply**。所以「未适配」不是故障，是提示。
+- 预发布后缀必须原样相等：`0.2.2-RC.2` 与 `0.2.2-rc.2` 不相等（`parseHostVersion` 保留原样，比较时不做 lowerCase）。`hostCompat` 里 `Boolean(b) && …` 会把解析不了的目标**静默跳过** —— 等于「声明里写错一个版本」就是「少声明一个版本」，只在升级当天才暴露。`test-host-target-decl.mjs` 因此有一条「每一项都必须能被 `parseHostVersion` 解析」。
+- 推 `dshTarget` 时**不要顺手刷 `docs/patch-gates.json`**。那张表的 `tree.version` 记录的是「这批 needle 是在哪一版上取的」，跨版缺失就是 bump 时的返工量；跟着一起 `--write` 会把几十条纯行号漂移也写进去，把「哪几条 needle 真的变了」淹掉。`docs/host-baseline.json` / `docs/host-contract.json` 同理 —— 它们是观测快照，手改等于伪造观测。
+
 包本身已标 `"private": true`，`npm publish` 会直接拒绝。对外发布渠道只有本地 `npm pack` 产物（`$DSH_HOME/plugins/*.tgz`）。
 
 ## 更新链路（已固定为离线）
