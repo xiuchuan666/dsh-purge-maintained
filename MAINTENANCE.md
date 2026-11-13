@@ -138,6 +138,17 @@ test("缓存命中时不再重建", () => {
 
   注意预加载只能伪造 `process.platform`，**伪造不了文件系统语义**：NTFS 大小写不敏感、`chmod 0o444` 挡不住写入，所以那几个「靠 Linux 才测得到」的用例在本地仍然会红（`adaptInDir` 的小写匹配、只读文件写失败），那是仿真的边界，不是新问题。
 
+- **只改 `PATH` 的沙箱不叫沙箱，npm 的全局前缀探测会绕出去。** `findNpmPrefix()` 的退路是 `npmQuery(["prefix", "-g"])`，问的是 npm 自己 —— 也就是说 `PATH` 上没有 `dsh` 启动器时，它会读回本机真实的 `%APPDATA%\npm`。批62 就是这么把用户的启动器改坏的：`scripts/test-backup-revert.mjs` 里一条 `revertAllShims()` 用例，跑一次把 `dsh`（1214B → 834B）和 `dsh.ps1`（1310B → 873B）剥回未注入状态、还删了两份 bak。凡是会遍历 `listShimDirsForPatch()` / `findNpmPrefix()` / `listDesktopCommandRuntimeDirs()` 的测试，沙箱里这四项都要钉：
+
+  ```js
+  process.env.PATH = path.join(root, "plainbin");
+  process.env.APPDATA = path.join(root, "appdata");
+  process.env.LOCALAPPDATA = path.join(root, "localapp");
+  process.env.npm_config_prefix = path.join(root, "npm-prefix"); // npm 会听这个变量
+  ```
+
+  验法是跑前跑后对本机启动器做 SHA-256 比对，变了就是又漏出去了。这条只在「`PATH` 干净但 npm 全局存在」的机器上暴露 —— CI 的 ubuntu-latest 恰好是这种机器，而开发机常常不是，所以本地全绿不代表没漏。
+
 
 还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
 
