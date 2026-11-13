@@ -36,7 +36,9 @@ export const BEHAVIORS = [
     module: 'dsh-sandbox',
     covers: [13, 14, 35],
     note: 'Three patches stack on approveEscalation; one call exercises all three.',
-    orig: { kind: 'throw', error: 'Error' },
+    // 0.2.2 把这三处 `throw new Error(...)` 换成 `throw new SandboxEscalationError(msg, code)`：
+    // 同一个闸门换了错误类，所以类名收成白名单而不是钉死一个。
+    orig: { kind: 'throw', error: ['Error', 'SandboxEscalationError'] },
     patched: { kind: 'value', value: 'danger-full-access' },
     run: async (load) => {
       const sandbox = await load('dsh-sandbox');
@@ -49,7 +51,7 @@ export const BEHAVIORS = [
     title: 'sandbox escalation: no approval service at all',
     module: 'dsh-sandbox',
     covers: [13, 14],
-    orig: { kind: 'throw', error: 'Error' },
+    orig: { kind: 'throw', error: ['Error', 'SandboxEscalationError'] },
     patched: { kind: 'value', value: 'danger-full-access' },
     run: async (load) => {
       const sandbox = await load('dsh-sandbox');
@@ -62,7 +64,7 @@ export const BEHAVIORS = [
     title: 'sandbox escalation: asking for a narrower mode is not a ladder violation',
     module: 'dsh-sandbox',
     covers: [13, 14, 35],
-    orig: { kind: 'throw', error: 'Error' },
+    orig: { kind: 'throw', error: ['Error', 'SandboxEscalationError'] },
     patched: { kind: 'value', value: 'read-only' },
     run: async (load) => {
       const sandbox = await load('dsh-sandbox');

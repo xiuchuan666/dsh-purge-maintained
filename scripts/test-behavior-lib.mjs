@@ -118,6 +118,17 @@ test('matchesExpectation is semantic and ignores message bodies', () => {
   assert.equal(matchesExpectation(value('x'), { kind: 'nonsense' }), false);
 });
 
+test('throw 期望可以给类名白名单：升级换类名不该变成噪声', () => {
+  // 0.2.2 把 dsh-sandbox 的三处 `throw new Error(...)` 换成 `throw new SandboxEscalationError(msg, code)`。
+  // 同一个闸门、同一个语义，只是类名变了。钉死单一类名会让每次升级都报 unexpected。
+  const both = { kind: 'throw', error: ['Error', 'SandboxEscalationError'] };
+  assert.equal(matchesExpectation(thrown('Error'), both), true);
+  assert.equal(matchesExpectation(thrown('SandboxEscalationError'), both), true);
+  assert.equal(matchesExpectation(thrown('RangeError'), both), false);
+  // 白名单仍然只认类名，不认消息正文。
+  assert.equal(matchesExpectation({ kind: 'throw', error: 'Error', message: 'boom' }, both), true);
+});
+
 const behaviour = (over) => ({ id: 'b', title: 't', module: 'm', covers: [1], orig: { kind: 'throw', error: 'Error' }, patched: { kind: 'value', value: 'ok' }, run: async () => 'ok', ...over });
 
 test('judge calls a released restriction ok', () => {

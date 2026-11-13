@@ -106,7 +106,13 @@ export function matchesExpectation(observation, expect) {
   if (expect.kind === 'missing') return observation.kind === 'missing';
   if (expect.kind === 'throw') {
     if (observation.kind !== 'throw') return false;
-    return expect.error === undefined || observation.error === expect.error;
+    if (expect.error === undefined) return true;
+    // 类名可以给一个白名单：上游升级时会把同一个闸门换一个错误类
+    // （0.2.2 就把 `throw new Error(...)` 换成 `throw new SandboxEscalationError(msg, code)`），
+    // 而「拦住了」这件事没变。收窄成单一类名会让每次升级都报 unexpected，
+    // 那不是发现，是噪声。仍然只认类名，绝不比消息正文。
+    const allowed = Array.isArray(expect.error) ? expect.error : [expect.error];
+    return allowed.indexOf(observation.error) !== -1;
   }
   if (observation.kind !== 'value') return false;
   if (expect.kind === 'value') return observation.value === expect.value;

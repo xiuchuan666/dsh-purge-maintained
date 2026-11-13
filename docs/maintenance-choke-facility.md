@@ -129,6 +129,8 @@ npm run host:outcome -- --baseline-tree .tmp-tree/rc1/node_modules/@deepseek-ai
 
 观测值只记 `{kind: value|throw, value|error: 类名}`，**绝不比对错误消息正文**——消息随上游漂移（#12 就是这么坏的），拿它当断言等于把易碎品钉进 CI。
 
+类名可以给白名单：`orig: { kind: 'throw', error: ['Error', 'SandboxEscalationError'] }`。0.2.2 把 dsh-sandbox 的三处 `throw new Error(...)` 换成 `throw new SandboxEscalationError(msg, code)`，同一个闸门换了类型，收窄成单一类名会让每次升级都多三条假警报（详见「升级预演」那一章）。
+
 ### 实测（真宿主 vs rc1 基线）
 
 ```
@@ -200,6 +202,44 @@ npm run host:new-patch -- --patch 12 --json                     # 改已有补�
 `--patch` 的回退链是「补丁自己的 pattern → gate needle」：pattern 已死时（#12 的情形）仍能靠闸门找回该行，这正是改锚点的起点。
 
 **不唯一就不产草稿**：跨行才唯一（两行完全重复）或行内有多处时，脚本打印原因并退出 1。放它过去，等于让人把一条会编辑三处的 pattern 粘进注册表。
+
+## 升级预演：把整棵树打一遍，再看四条独立证据
+
+上面所有命令都是**读**：判定现状、对比两棵树、算锚点。升级前还缺一步**写**的演练——在一份纯净的新版宿主副本上真的把 86 条打下去，然后看结果。这比任何文本级推断都直接：补丁要么把文件改了，要么没有。
+
+```bash
+# 1. 装一棵目标版本（这里是 0.2.2-rc.2），并且另存一份副本用来动手
+mkdir -p .tmp-tree/rc2 && cd .tmp-tree/rc2
+node "$(npm root -g)/npm/bin/npm-cli.js" install --no-save --ignore-scripts --no-audit --no-fund @deepseek-ai/dsh@0.2.2-rc.2
+# 2. 复制成演练树（原件留着当基线，绝不能在原件上打补丁）
+cp -r node_modules/@deepseek-ai .tmp-tree/rc2-ai
+# 3. 打补丁（一行脚本，导入 lib/core.js 调 applyPatches）
+node -e "const c=await import('file:///.../lib/core.js');console.log(JSON.stringify((await c.applyPatches('.../.tmp-tree/rc2-ai')).reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{})))"
+```
+
+然后四条独立证据，各自回答不同的问题：
+
+| 命令 | 在演练树上问什么 | rc.2 实测 |
+| --- | --- | --- |
+| `applyPatches` 的 report | 打完之后的**状态分布**——有没有 `missing_file` / `skipped` 大面积出现 | `applied 64 / already 4 / missing_file 10 / skipped 1 / na 7` |
+| `host:outcome` | 打完之后的**七态**——`drifted`/`stale`/`unknown` 必须都是 0 | `applied 64 / pending 0 / native 3 / stale 0 / drifted 0 / na 19 / unknown 0` |
+| `test:behavior` | **行为**是否真的变了（不是「文件里有我的字」） | `ok 15 / broken 0 / already 0 / inert 0 / unexpected 0` |
+| `host:choke` | 新版**新增了哪些闸门**、我一条都没管 | 形状命中 10 类共 245 处；未覆盖且会加载的拦点 **0 组** |
+
+四条一起绿才算「升上去不坏」。任一条红都有具体坐标：`missing_file` 是文件被搬走或改名（rc.2 上那 10 条全是桌面壳与 hooks，包树外，预期如此），`drifted` 是锚点过期要改，`broken` 是补丁打了但没效果，`unexpected` 是新的拦截形态没有对应期望。
+
+### 一个真实踩到的坑：升级换错误类
+
+0.2.2 把 `dsh-sandbox/lib/index.js` 里三处 `throw new Error(...)` 换成了 `throw new SandboxEscalationError(msg, code)`。补丁照样打得上（`ok` 12 条），但三条 escalation 行为对拍立刻报 `unexpected`：
+
+```
+baseline threw SandboxEscalationError (the user rejected escalating this command to ...),
+which no expectation of this behaviour covers
+```
+
+原因是期望里钉死了 `error: 'Error'`。**同一个闸门换了错误类，拦住了这件事没变**——把它当成失败只会让每次升级都多三条假警报。修法是把 `expect.error` 收成类名白名单（`['Error', 'SandboxEscalationError']`），语义不变、仍然绝不比消息正文。修后 rc.1 与 rc.2 两棵树都是 `ok 15 / unexpected 0`。
+
+这条教训值得单独记：**对拍的成本不在写期望，在维护期望的判别力**。太松（只判「抛了没」）就分不清是哪个闸门；太紧（钉死类名、比对消息）就在上游每次换措辞时失灵。类名白名单是这两头的中间点——它区分「换了个错误类型」与「闸门真的没了」。
 
 ## CI 里查什么：`npm run check:gates`
 
