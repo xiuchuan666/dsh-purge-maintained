@@ -288,6 +288,7 @@
 | 备份的三种跳过与占位清理：目标不存在直接跳（不建空 bak）、用户配置层 `profiles/*/cordis.patch.yml` 记 `skippedUser` 不备份、`openSync(bak,"wx")` 撞 EEXIST 视为已有备份跳过；`atomicCopyFile` 失败时**必须删掉自己刚建的占位**，否则下次 revert 会把 0 字节当有效备份 | `test-backup-revert.mjs`（6 条） | `lib/core.js` 78.1% |
 | 重启前的地板：清洗没写完不许重启 | 8 条（目录解析失败/缺目录/仍有 pending/有失败项/flash 回退/标记没写进全部宿主/前两道闸门/成功出口），逐条断文案与字段 | `lib/host-clean-floor.js` 98.6% |
 | 密封桌面重启前的目录记忆与 asar 交接 | 6 条（缺 exe/缺 asar/asar 已不在/官方 exe 走官方重启器/其它走换名脚本/两条路都必须先落盘安装目录） | `lib/host-clean-floor.js` 98.6% |
+| 重启前的地板：跨平台用例拆分 | 2 条（大小写去重跨平台 / 斜杠方向去重仅 Windows —— `path.normalize` 在 POSIX 上不折反斜杠） | `lib/host-clean-floor.js` 98.6% |
 | `revertAll` 的五条判定：先补回缺失原件、`.bad` 残骸先清、`preserveClientBundles` 只跳过 client.js、0 字节 bak 改名 `.bad` 并记 `empty_backup`、**字节相同只 skip 且保留 bak**、没有 bak 时绝不删目标（#41） | `test-backup-revert.mjs`（10 条） | 同上 |
 | `restoreFromBak` 的三态：0 字节 → `*_skipped_empty` 并改名 `.bad`、目标是符号链接 → `*_skipped_symlink` 并删 bak（#88：旧 bak 会写穿进新版本）、正常 → 拷回并删 bak | `test-backup-revert.mjs`（4 条） | 同上 |
 | `revertShim` 的五态与优先级：外置 bak > bin 里的 legacy bak > 有注入就剥 > 文件不在 `missing` > 否则 `no_backup`；密封目录里遇到真符号链接要按**真身**算摘要名（否则永远找不到外置 bak） | `test-backup-revert.mjs`（8 条） | 同上 |

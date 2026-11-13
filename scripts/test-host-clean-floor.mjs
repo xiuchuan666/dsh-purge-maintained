@@ -312,12 +312,26 @@ test("ensureHostClean：当前宿主不在枚举结果里时排到最前面一�
   assert.equal(only(d, "allPatchHostsWritten").at(-1)[1].length, 2, "最后那次复检用打完之后的清单");
 });
 
-test("ensureHostClean：同一棵宿主用另一种写法（大小写/斜杠）出现时不会重复加一遍", async () => {
+test("ensureHostClean：同一棵宿主只差大小写时不会重复加一遍", async () => {
   const d = deps();
-  d.state.bases = ["c:\\host\\@deepseek-ai"];
+  d.state.bases = ["C:/HOST/@DeepSeek-AI"];
   const r = await d.api.ensureHostClean();
-  assert.deepEqual(r.hosts, ["c:\\host\\@deepseek-ai"], "不该变成两个");
+  assert.deepEqual(r.hosts, ["C:/HOST/@DeepSeek-AI"], "不该变成两个");
   assert.equal(only(d, "patchStatus").length, 1);
+});
+
+test("ensureHostClean：同一棵宿主只差斜杠方向时不会重复加一遍", () => {
+  // 去重那句是 path.normalize(b).toLowerCase() === path.normalize(aiBase).toLowerCase()，
+  // 而 path.normalize 只在 Windows 上把 \ 折成 / —— POSIX 上两者是不同字符串，
+  // 这条判据本就只在 Windows 成立，所以只能在真 Windows 上验。
+  if (!IS_WINDOWS) return;
+  return asPlatform("win32", async () => {
+    const d = deps();
+    d.state.bases = ["c:\\host\\@deepseek-ai"];
+    const r = await d.api.ensureHostClean();
+    assert.deepEqual(r.hosts, ["c:\\host\\@deepseek-ai"], "不该变成两个");
+    assert.equal(only(d, "patchStatus").length, 1);
+  });
 });
 
 test("ensureHostClean：applyPatchesAllHosts 没回宿主列表时沿用枚举出来的那批", async () => {
