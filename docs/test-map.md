@@ -406,14 +406,6 @@ RED 演练 `.tmp57-red.mjs` 用 `git show HEAD:lib/core.js` 当 BASE、29 条注
 
 **十八补**：`scripts/verify-target-lib.mjs`（186 行 / 25 条）把 `verify-target` 的判定层从 CLI 里拆出来。拆的理由不是行数，是**这个文件里曾经有三份判定**：`scripts/verify-target.mjs` 自己的 `patchApplied()` 与 `remainingWork()`，加上 `lib/core.js` 的 `patchApplied()`。CLI 后来改成直接问 `core.filePatchOutcome()`，那两份就没人调用了 —— 但它们仍在文件里、仍长得像权威。加 #42 的两条 legacy 守卫（`legacyApplyPathStarts(hay) > 1` 与 `STALE_LEGACY_APPLY_CALL`）时，core 那份被改了，CLI 那两份没有；如果哪天有人照着 CLI 那份再抄一遍，「#42 在已经升过级的树上算不算完成」立刻分叉。所以这一批把判定收敛成一份，并留了一条源码形状断言：这四个函数名不许再出现在 `verify-target.mjs` 里。
 
-**十九补**：把 `lib/core.js` 的「重启地板」三个函数搬进 `lib/host-clean-floor.js`（142 行 / 29 条）。`ensureHostClean()`、`restartSealedDesktopIfNeeded()`、`rememberDesktopInstallForHandoff()` 原来零覆盖（1/65、1/20、1/18），坏法全是静默的：清洗没写完却照常重启（用户看到宿主半打状态）、`app.asar` 还在就重启（补丁在 `resources/app`，重启完等于没打）、自定义安装目录没记下来（下次再也定位不到 exe，只能重装）。三个函数只在「用户点重启 / 后台自愈要重启」那一刻跑，平时跑测试一条都不会经过，所以必须靠注入把每个出口拨开。做法照 `lib/boot-settle.js` 的工厂范式：新模块**只 import `node:path`**，其余 19 个依赖（含 `hostCleanMarkersPresent` 这种容易漏的）由 `createHostCleanFloor(deps)` 传入，`lib/core.js` 留三个同名薄包装，导出面与调用方一行不改。逐行对拍结果是 **3 条 diff，全是签名行少了 `export ` 前缀**（body 65/20/18 行逐字相同），`lib/core.js` 144 个导出数量不变。
-
-三条被现实纠正的地方值得单独记。第一，**工厂在创建时就把 deps 解构走了**，所以测试里想「换个实现」不能写 `d.resolveOfficialAiBase = async () => {...}` —— 那改的是对象属性，工厂手里仍是旧的那份；必须把可拨的开关放进工厂闭包能看见的 `state` 里，由 deps 里的转发函数去读。第二，**假实现返回的形状要照抄真实那条路的形状**：`applyPatchesAllHosts` 每台宿主都带 `report/summary/hostWritten/flash`（`lib/core.js:2035-2041`），少造 `flash` 会让打完之后的 flash 复检永远判不过，四条用例接连假红。第三，**「当前宿主不在枚举结果里就排到最前」这条只对第一次 `patchStatus` 生效**：`applyPatchesAllHosts` 内部自己又枚举了一遍（`lib/core.js:2022`），不吃外面补的那一份，所以打完之后的宿主清单里不会有它 —— 真实现就是这样，断言要照着真实现写，别照着想象写。
-
-RED 演练 46 条突变跑完 **46/46 全红**，`restored byte-identical: true`。第一轮 47 条里 4 条 GREEN，处置：①`pending 统计把任何状态都算` —— `status` 的对象形态是按 aiBase 索引的，我写 `{1:'settled'}` 得到的其实是「这台宿主上没有任何状态」，改成函数形态才真的喂到 `settled/native/na`（补了一条用例，现在红）。②`needsApply 不看 hostWritten` —— 原用例只查了两句文案，没查「标记没写进宿主本身就该触发重打」，补断言 `applyPatchesAllHosts` 被调 1 次。③`不记安装目录` —— 原来靠 `isDesktopExecutable` 的调用顺序间接看，改成直接断言 `atomicWriteSync` 被调 1 次且早于重启（两条路各一条）。④`成功时把 pending 也带出去` —— 相等价突变（走到那个出口时 `pending` 必然已是 `[]`），写在 drill 里注明，不留成永远 GREEN 的条目。
-
-判定口径**逐条对齐、一条不改**：`na` → `no-file` → `hit-mismatch` 记 drifted → `changed` 之后复查 `filePatchOutcome`（不完全就记 `partial`，仍算 drifted）→ 一条 pattern 都不中时问引擎（`applied`/`pending`/`skipped` 三支）→ 软键 `soft-moved` → 其余 drifted。合并前先用同一棵真宿主树跑过新旧两版对拍：`would-apply=67 / settled=5 / drifted=0 / no-file=7 / na=7`，86 行逐行 `[id, status, files]` **完全一致**；再造一棵含 drifted 的 fixture 树（缺 needle、缺 marker、`#42` 只留 marker）跑 `--pad`，两版 stdout **逐字节相同**（diff 为空）。`detail` 的截断长度也保留了原样：`hitMismatch` 那条只截 120 字，其余截 200。
-
 **RED 演练 24 条突变 → 24/24 全红**（`{"restored":true,"total":24,"red":24,"green":0,"anchor":0}`）。两轮才收敛，留下的教训有两条：
 
 1. **多行锚点必须用 `sub` 不用 `line`**。第一轮 5 条 ANCHOR 全是把两行源码写成一行字符串塞给 `line()`（它是整行精确匹配）。改成 `sub()` 之后立刻命中。
@@ -424,6 +416,14 @@ RED 演练 46 条突变跑完 **46/46 全红**，`restored byte-identical: true`
 另外顺手补了 `pathsOf` 的一条真空白：原用例只测「键不存在」，没测「值是 `null` / 空串」——少了 `if (!value) return []` 会返回 `[null]`，再往下 `readText(null)` 直接抛。这条不是从 drill 里来的，是加 mutation 时发现 `!value` 这句没有对应的 fixture。
 
 于是本轮有两条纪律，都来自同一个地方：**RED 演练的结果只对「跑那一刻的测试文件」有效**。① 报 GREEN 时先怀疑 fixture 不够毒（兄弟目录那条就靠一个对齐后正好成 `dsh-` 的路径戳穿了两条互为备份的守卫），再怀疑守卫真没用；② 测试文件改过之后必须重跑 drill，否则手上那份 55 红 / 32 红是上一版文件的历史成绩，不证明现在这套判定还钉得住。
+
+判定口径**逐条对齐、一条不改**：`na` → `no-file` → `hit-mismatch` 记 drifted → `changed` 之后复查 `filePatchOutcome`（不完全就记 `partial`，仍算 drifted）→ 一条 pattern 都不中时问引擎（`applied`/`pending`/`skipped` 三支）→ 软键 `soft-moved` → 其余 drifted。合并前先用同一棵真宿主树跑过新旧两版对拍：`would-apply=67 / settled=5 / drifted=0 / no-file=7 / na=7`，86 行逐行 `[id, status, files]` **完全一致**；再造一棵含 drifted 的 fixture 树（缺 needle、缺 marker、`#42` 只留 marker）跑 `--pad`，两版 stdout **逐字节相同**（diff 为空）。`detail` 的截断长度也保留了原样：`hitMismatch` 那条只截 120 字，其余截 200。
+
+**十九补**：把 `lib/core.js` 的「重启地板」三个函数搬进 `lib/host-clean-floor.js`（142 行 / 30 条）。`ensureHostClean()`、`restartSealedDesktopIfNeeded()`、`rememberDesktopInstallForHandoff()` 原来零覆盖（1/65、1/20、1/18），坏法全是静默的：清洗没写完却照常重启（用户看到宿主半打状态）、`app.asar` 还在就重启（补丁在 `resources/app`，重启完等于没打）、自定义安装目录没记下来（下次再也定位不到 exe，只能重装）。三个函数只在「用户点重启 / 后台自愈要重启」那一刻跑，平时跑测试一条都不会经过，所以必须靠注入把每个出口拨开。做法照 `lib/boot-settle.js` 的工厂范式：新模块**只 import `node:path`**，其余 19 个依赖（含 `hostCleanMarkersPresent` 这种容易漏的）由 `createHostCleanFloor(deps)` 传入，`lib/core.js` 留三个同名薄包装，导出面与调用方一行不改。逐行对拍结果是 **3 条 diff，全是签名行少了 `export ` 前缀**（body 65/20/18 行逐字相同），`lib/core.js` 144 个导出数量不变。
+
+三条被现实纠正的地方值得单独记。第一，**工厂在创建时就把 deps 解构走了**，所以测试里想「换个实现」不能写 `d.resolveOfficialAiBase = async () => {...}` —— 那改的是对象属性，工厂手里仍是旧的那份；必须把可拨的开关放进工厂闭包能看见的 `state` 里，由 deps 里的转发函数去读。第二，**假实现返回的形状要照抄真实那条路的形状**：`applyPatchesAllHosts` 每台宿主都带 `report/summary/hostWritten/flash`（`lib/core.js:2035-2041`），少造 `flash` 会让打完之后的 flash 复检永远判不过，四条用例接连假红。第三，**「当前宿主不在枚举结果里就排到最前」这条只对第一次 `patchStatus` 生效**：`applyPatchesAllHosts` 内部自己又枚举了一遍（`lib/core.js:2022`），不吃外面补的那一份，所以打完之后的宿主清单里不会有它 —— 真实现就是这样，断言要照着真实现写，别照着想象写。
+
+RED 演练 46 条突变跑完 **46/46 全红**，`restored byte-identical: true`。第一轮 47 条里 4 条 GREEN，处置：①`pending 统计把任何状态都算` —— `status` 的对象形态是按 aiBase 索引的，我写 `{1:'settled'}` 得到的其实是「这台宿主上没有任何状态」，改成函数形态才真的喂到 `settled/native/na`（补了一条用例，现在红）。②`needsApply 不看 hostWritten` —— 原用例只查了两句文案，没查「标记没写进宿主本身就该触发重打」，补断言 `applyPatchesAllHosts` 被调 1 次。③`不记安装目录` —— 原来靠 `isDesktopExecutable` 的调用顺序间接看，改成直接断言 `atomicWriteSync` 被调 1 次且早于重启（两条路各一条）。④`成功时把 pending 也带出去` —— 相等价突变（走到那个出口时 `pending` 必然已是 `[]`），写在 drill 里注明，不留成永远 GREEN 的条目。
 
 ---
 

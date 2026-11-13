@@ -138,6 +138,9 @@ test("缓存命中时不再重建", () => {
 
   注意预加载只能伪造 `process.platform`，**伪造不了文件系统语义**：NTFS 大小写不敏感、`chmod 0o444` 挡不住写入，所以那几个「靠 Linux 才测得到」的用例在本地仍然会红（`adaptInDir` 的小写匹配、只读文件写失败），那是仿真的边界，不是新问题。
 
+- **路径 fixture 一律正斜杠：改成「只在 Windows 上跑」不算修。** `ddfcd58` 就是这么红的：`scripts/test-host-clean-floor.mjs` 里三条 `rememberDesktopInstallForHandoff` 用例拿 `"C:\\Program Files\\Harness\\app\\DeepSeek Harness.exe"` 当输入，本机全绿，到 `ubuntu-latest` 上 `path.dirname` 不认反斜杠、返回 `"."`，于是「写盘内容」断言拿到 `".\n"`。正确的做法是**把 fixture 改成正斜杠**（被测代码在两边都认），只有「反斜杠要归一成正斜杠」本身是测点时，才单列一条 `if (!IS_WINDOWS) return;` 的用例。判据同第 105 条：`grep -n '\\\\' scripts/test-*.mjs`，凡是出现在路径字面量里的反斜杠，都要能说清「为什么这条只能在 Windows 上跑」。
+  同一个 bug 还有第二面：`rememberDesktopInstallForHandoff` 写进 `DSH_DESKTOP_INSTALL` 的是**未归一**的 `installDir`（只有落盘那份把 `\\` 换成 `/`），所以 Windows 上这个环境变量是反斜杠形态。断言不能写死正斜杠，要写 `path.dirname(path.normalize(exe))` —— 让期望值按本机算，而不是按记忆算。
+
 - **只改 `PATH` 的沙箱不叫沙箱，npm 的全局前缀探测会绕出去。** `findNpmPrefix()` 的退路是 `npmQuery(["prefix", "-g"])`，问的是 npm 自己 —— 也就是说 `PATH` 上没有 `dsh` 启动器时，它会读回本机真实的 `%APPDATA%\npm`。批62 就是这么把用户的启动器改坏的：`scripts/test-backup-revert.mjs` 里一条 `revertAllShims()` 用例，跑一次把 `dsh`（1214B → 834B）和 `dsh.ps1`（1310B → 873B）剥回未注入状态、还删了两份 bak。凡是会遍历 `listShimDirsForPatch()` / `findNpmPrefix()` / `listDesktopCommandRuntimeDirs()` 的测试，沙箱里这四项都要钉：
 
   ```js

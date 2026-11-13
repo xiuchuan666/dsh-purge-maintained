@@ -428,36 +428,51 @@ test("rememberDesktopInstallForHandoff：缺 exe / 不是桌面壳可执行文�
   }
 });
 
-test("rememberDesktopInstallForHandoff：把安装目录写成正斜杠并留一个换行", () => {
+test("rememberDesktopInstallForHandoff：把安装目录写进 DSH_HOME，末尾留一个换行", () => {
   const d = deps();
   d.state.fileExists = false;
-  d.api.rememberDesktopInstallForHandoff({ exe: "C:\\Program Files\\Harness\\app\\DeepSeek Harness.exe" });
+  // 路径一律用正斜杠：这个文件在 Windows 与 ubuntu-latest 上都要跑，
+  // 而 path.dirname 在 Linux 上不把反斜杠当分隔符（会得到 "."），
+  // 反斜杠归一那一格另有 Windows 专属用例。
+  d.api.rememberDesktopInstallForHandoff({ exe: "C:/Program Files/Harness/app/DeepSeek Harness.exe" });
   const write = only(d, "atomicWriteSync")[0];
   assert.equal(write[1], path.join(d.state.home, "dsh-purge", "desktop-install.txt"));
   assert.equal(write[2], "C:/Program Files/Harness/app\n");
   assert.equal(write[3], "utf8");
 });
 
-test("rememberDesktopInstallForHandoff：内容没变（大小写与斜杠不同也算没变）就不重写", () => {
+test("rememberDesktopInstallForHandoff：Windows 盘符路径里的反斜杠要归一成正斜杠", () => {
+  if (!IS_WINDOWS) return; // path.dirname 在 POSIX 上不认反斜杠，这条只能在 Windows 上验
+  const d = deps();
+  d.state.fileExists = false;
+  d.api.rememberDesktopInstallForHandoff({ exe: "C:\\Program Files\\Harness\\app\\DeepSeek Harness.exe" });
+  assert.equal(only(d, "atomicWriteSync")[0][2], "C:/Program Files/Harness/app\n");
+});
+
+test("rememberDesktopInstallForHandoff：内容没变（大小写不同也算没变）就不重写", () => {
   const d = deps();
   d.state.fileExists = true;
   d.state.fileText = "c:/program files/harness/app\n";
-  d.api.rememberDesktopInstallForHandoff({ exe: "C:\\Program Files\\Harness\\app\\DeepSeek Harness.exe" });
+  d.api.rememberDesktopInstallForHandoff({ exe: "C:/Program Files/Harness/app/DeepSeek Harness.exe" });
   assert.equal(only(d, "atomicWriteSync").length, 0);
 });
 
 test("rememberDesktopInstallForHandoff：只在本机没设 DSH_DESKTOP_INSTALL 时才补环境变量", () => {
   const saved = process.env.DSH_DESKTOP_INSTALL;
+  // 写进环境变量的是 path.dirname(path.normalize(exe)) 的原样结果 ——
+  // 它在 Windows 上仍是反斜杠（只有落盘那一份归一再写），所以断言要按本机算。
+  const exe = "C:/Apps/H/DeepSeek Harness.exe";
+  const expected = path.dirname(path.normalize(exe));
   try {
     delete process.env.DSH_DESKTOP_INSTALL;
     const d1 = deps();
-    d1.api.rememberDesktopInstallForHandoff({ exe: "C:\\Apps\\H\\DeepSeek Harness.exe" });
-    assert.equal(process.env.DSH_DESKTOP_INSTALL, "C:\\Apps\\H");
+    d1.api.rememberDesktopInstallForHandoff({ exe });
+    assert.equal(process.env.DSH_DESKTOP_INSTALL, expected);
 
-    process.env.DSH_DESKTOP_INSTALL = "D:\\already-set";
+    process.env.DSH_DESKTOP_INSTALL = "already-set";
     const d2 = deps();
-    d2.api.rememberDesktopInstallForHandoff({ exe: "C:\\Apps\\H\\DeepSeek Harness.exe" });
-    assert.equal(process.env.DSH_DESKTOP_INSTALL, "D:\\already-set", "已经设过就不许覆盖");
+    d2.api.rememberDesktopInstallForHandoff({ exe });
+    assert.equal(process.env.DSH_DESKTOP_INSTALL, "already-set", "已经设过就不许覆盖");
   } finally {
     if (saved === undefined) delete process.env.DSH_DESKTOP_INSTALL;
     else process.env.DSH_DESKTOP_INSTALL = saved;
@@ -469,7 +484,7 @@ test("rememberDesktopInstallForHandoff：写盘抛错也不能冒出来（这条
   d.atomicWriteSync = () => {
     throw new Error("EPERM");
   };
-  assert.doesNotThrow(() => d.api.rememberDesktopInstallForHandoff({ exe: "C:\\Apps\\H\\DeepSeek Harness.exe" }));
+  assert.doesNotThrow(() => d.api.rememberDesktopInstallForHandoff({ exe: "C:/Apps/H/DeepSeek Harness.exe" }));
 });
 
 test("rememberDesktopInstallForHandoff：读旧值抛错也照样吞掉，不阻断重启流程", () => {
@@ -480,7 +495,7 @@ test("rememberDesktopInstallForHandoff：读旧值抛错也照样吞掉，不阻
       throw new Error("EACCES");
     },
   };
-  assert.doesNotThrow(() => d.api.rememberDesktopInstallForHandoff({ exe: "C:\\Apps\\H\\DeepSeek Harness.exe" }));
+  assert.doesNotThrow(() => d.api.rememberDesktopInstallForHandoff({ exe: "C:/Apps/H/DeepSeek Harness.exe" }));
 });
 
 test("源码形状：三个函数体只在 lib/host-clean-floor.js 里，core.js 只留薄包装", () => {
@@ -535,5 +550,4 @@ test("源码形状：门板函数仍然是 async/同步，调用方 await 的写
   assert.equal(/export function rememberDesktopInstallForHandoff\(handoff\)/.test(CORE_SRC), true);
   assert.equal(/async function ensureHostClean\(\)/.test(FLOOR_SRC), true);
   assert.equal(/function restartSealedDesktopIfNeeded\(input = \{\}\)/.test(FLOOR_SRC), true);
-  assert.equal(IS_WINDOWS || true, true);
 });
