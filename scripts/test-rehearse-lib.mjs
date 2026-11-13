@@ -19,6 +19,7 @@ import {
   outcomeVerdict,
   renderRehearsal,
   summarizeRehearsal,
+  surfaceVerdict,
   tallyBuckets,
 } from "./rehearse-lib.mjs";
 import { STATE_LIST, UNKNOWN } from "../lib/patch-outcome.mjs";
@@ -717,4 +718,29 @@ test("gateVerdict：读不到的文件只算提醒，不拦；全绿时两个数
   assert.deepEqual(clean, { ok: true, blocking: [], warn: [] });
 
   assert.deepEqual(gateVerdict(null), { ok: true, blocking: [], warn: [] });
+});
+
+test("surfaceVerdict：声明过的差异放行，没声明的差异逐条拼成阻塞项", () => {
+  const clean = surfaceVerdict({
+    expected: [{ pkg: "dsh-settings", name: "SettingsForms", change: "proto", detail: "+get", patches: [42] }],
+    unexpected: [],
+  });
+  assert.deepEqual(clean, { ok: true, blocking: [], warn: [] });
+
+  const dirty = surfaceVerdict({
+    expected: [{ pkg: "dsh-settings", name: "SettingsForms", change: "proto", detail: "+get", patches: [42] }],
+    unexpected: [
+      { pkg: "dsh-tools", name: "ToolContextUnavailableError", change: "added", detail: "class/2", patches: [60, 62] },
+      { pkg: "dsh-sandbox", name: "SANDBOX_PREPARATION_ERROR_CODES", change: "removed", detail: "array/2", patches: [] },
+    ],
+  });
+  assert.equal(dirty.ok, false);
+  assert.equal(dirty.blocking.length, 2);
+  assert.equal(dirty.blocking[0], "dsh-tools ToolContextUnavailableError added class/2 (patches 60,62)");
+  assert.equal(dirty.blocking[1], "dsh-sandbox SANDBOX_PREPARATION_ERROR_CODES removed array/2 (patches -)");
+});
+
+test("surfaceVerdict：没有不变量结果时也不崩，空对象与 null 都算通过", () => {
+  assert.deepEqual(surfaceVerdict({}), { ok: true, blocking: [], warn: [] });
+  assert.deepEqual(surfaceVerdict(null), { ok: true, blocking: [], warn: [] });
 });

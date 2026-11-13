@@ -220,18 +220,18 @@ npm run host:new-patch -- --patch 12 --json                     # 改已有补�
 
 **不唯一就不产草稿**：跨行才唯一（两行完全重复）或行内有多处时，脚本打印原因并退出 1。放它过去，等于让人把一条会编辑三处的 pattern 粘进注册表。
 
-## 升级预演：一条命令跑完五步，五份证据各自独立
+## 升级预演：一条命令跑完六步，六份证据各自独立
 
 上面所有命令都是**读**：判定现状、对比两棵树、算锚点。升级前还缺一步**写**的演练——在一份纯净的新版宿主副本上真的把 86 条打下去，然后看它是不是真的改了。这比任何文本级推断都直接：补丁要么把文件改了，要么没有。
 
 ```bash
 # 版本号仍需人来定：先把目标版本装成基线
 node "$(npm root -g)/npm/bin/npm-cli.js" install --no-save --ignore-scripts --no-audit --no-fund @deepseek-ai/dsh@0.2.2-rc.2
-# 然后一条命令：复制演练树 → 五步证据 → 删掉演练树
+# 然后一条命令：复制演练树 → 六步证据 → 删掉演练树
 npm run host:rehearse -- --baseline-tree node_modules/@deepseek-ai --json .tmp-tree/rehearse-rc2.json
 ```
 
-五步各自回答不同的问题，任一步都不能代替另一步：
+六步各自回答不同的问题，任一步都不能代替另一步：
 
 | 步骤 | 在演练树上问什么 | rc.2 实测 |
 | --- | --- | --- |
@@ -240,8 +240,10 @@ npm run host:rehearse -- --baseline-tree node_modules/@deepseek-ai --json .tmp-t
 | `behaviour` | **行为**是否真的变了（不是「文件里有我的字」） | `ok 15 / broken 0 / already 0 / inert 0 / unexpected 0` |
 | `choke` | 新版**新增了哪些闸门**、我一条都没管 | `gaps 0 / watch 4 / targets 10 / ignored 115` |
 | `gates` | `docs/patch-gates.json` 还描不描述这棵树 | `present 55 / missing 3 / unreadable 0 / skipped 28`（表 pin 在 rc.1，树是 rc.2） |
+| `surfaces` | 打完补丁之后，有哪个模块**导出面**变了 | `42 package(s) / changed 1 / known 1 / unexpected 0` |
 
-结论行只有两种：`[rehearse] PASS  五条证据全绿` 或 `[rehearse] FAIL  N 处要先处理`。退出码 0 = 全绿、1 = 有阻塞、2 = 用法或环境失败，方便挂进发版前的流水线。
+结论行只有两种：`[rehearse] PASS  6 步证据全绿` 或 `[rehearse] FAIL  N 处要先处理  6 步`。步数是**实际跑了多少步**，不是清单长度——用 `--skip` 跳过两步时它会说「4 步（跳过 2 步）证据全绿」。跳过两步还印「六条证据全绿」，正是这个工具存在的理由的反面。
+退出码 0 = 全绿、1 = 有阻塞、2 = 用法或环境失败，方便挂进发版前的流水线。
 
 ### 第五步 gates：表 pin 在哪一版，决定了 missing 是什么意思
 
@@ -258,6 +260,25 @@ npm run host:rehearse -- --baseline-tree node_modules/@deepseek-ai --json .tmp-t
 第三档是 `unreadable`：表里有这一行，但这棵树里没有那个文件（`lib/main.js` 这类桌面壳入口在 npm 包树里根本不存在）。它说明不了限制还在不在，所以只算提醒，也不并进 `missing`——否则每次预演都会因为桌面壳凭空多出十条「漂移」。
 
 这一步只读文件，从不去看演练副本：闸门问的是「上游这版还长这样吗」，与我们打没打补丁无关。
+
+### 第六步 surfaces：补丁不该改导出面，除非那正是它的目的
+
+前五步都在看**文本**与**行为**，中间有一大块没人看：补丁会不会顺手改掉某个模块的导出面（多一个方法、少一个常量、把一个函数从 1 参变 2 参）。这件事平时没人管，因为它平时也没出过事——而「平时没出过事」不是证据。
+
+所以第六步把**纯净基线**与**打过补丁的副本**逐包 import 一遍，把导出面描述成数据再比：`function/2`、`class/2`、`array/4`、`object{a,b,+N}`，绝不按 identity 比。两侧是同一个上游版本，因此任何差异都只能是补丁造成的，与上游漂移无关（这也是为什么这一步只在演练副本上做，而不像 `gates` 那样对着纯净树下判断）。rc.2 的实测是 `42 package(s) / changed 1 / unchanged 41 / unreadable 0 / known 1 / unexpected 0`。
+
+唯一的 `changed` 是 `dsh-settings` 的 `SettingsForms` 多了五个原型方法（`commitLegacy` / `ensureLegacyDocument` / `get` / `persistLegacy` / `register`），它来自 `#42 SETTINGS_LEGACY_API`——那条补丁的目的就是把官方砍掉的旧文档 API 装回去。所以它是 **declared**，写在 `scripts/surface-lib.mjs` 的 `KNOWN_SURFACE_CHANGES` 里，按 `pkg|name|change|detail` 四元组精确匹配（`detail` 不同也不算通过，防止「多几个方法」被含糊放过）。没写进这张表的差异一律 blocking。
+
+这一步看到的东西有个明确边界：**它只看得见导出面**。只改函数体内部的补丁（改写措辞、抬高常量、把某条路径提前返回）在这里完全隐形——那部分仍然只能靠行为对拍或文本级五态。反过来说，它也补上了行为对拍覆盖不到的地方：行为断言只写了 12 条（`covers 12/86`），而导出面这一步一次能看 42 个包，不需要任何人为某个补丁想观测点。
+
+| 差异类型 | 判据 | 为什么 |
+| --- | --- | --- |
+| 在 `KNOWN_SURFACE_CHANGES` 里，四元组逐字段相同 | 记为 `known`，不阻塞 | 这是补丁的既定目的，写下来才算数 |
+| 任何未登记的 `added` / `removed` / `kind` / `statics` / `proto` / `keys` | **blocking** | 导出面变化会让下游调用方在运行期才炸，发版前必须解释清楚 |
+| 某侧 `lib/index.js` 不存在或 import 失败 | 计入 `unreadable`，不阻塞 | 桌面壳这类包在包树里没有入口，说明不了补丁有问题 |
+
+方向不能反：`before` 必须是纯净树、`after` 必须是打过补丁的副本。反了以后报告全是负号，`expected` 永远 0，看起来「什么都没变」。
+
 ### 预演的阈值必须比 apply 自己更严
 
 `lib/core.js` 的 `isPatchResultSoftOk` 故意让 `drifted` 通过：用户机器上不能因为一条旧 marker 挡住重启。但那套宽容在发版前是错的——`drifted` 正是要修的东西。所以 `scripts/rehearse-lib.mjs` 自带一套判定，不和 core 共用：
@@ -342,6 +363,7 @@ which no expectation of this behaviour covers
 - 行为对拍只覆盖能 import 的 12 条。剩余 74 条（提示词改写、需要真 ctx 的插件、桌面壳）目前仍只有文本级证据。
 - `check:gates` 只查表的自洽，不查闸门是否真的还在上游——那需要宿主树。表写对而 needle 已被上游改写的情况，CI 是绿的。
 - 行为观测点写死在 scripts/patch-behaviors.mjs 里。上游一旦重命名导出函数，这条会掉成 `inert` 而不是 `broken`——`inert` 是「要看一眼」，不是「没事」。
+- `surfaces` 只看导出面：`function/<arity>`、`class/<arity>`、`array/<len>`、`object{keys}` 这一层。只改函数体内部的补丁（改写措辞、抬高常量、提前返回）在这里完全隐形，`arity` 相同的换实现也看不见。它补的是「没人给这条补丁想观测点」的洞，不是行为对拍的替代品。
 
 ## 相关设计
 

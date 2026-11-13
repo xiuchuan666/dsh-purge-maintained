@@ -30,7 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { ALL_PATCHES } from '../lib/patches/index.mjs';
 import * as core from '../lib/core.js';
@@ -44,12 +44,13 @@ import {
 } from './chokepoints-lib.mjs';
 import { readHostVersion } from './host-snapshot-lib.mjs';
 import { verifyGates } from './gate-verify-lib.mjs';
+import * as surfaces from './surface-lib.mjs';
 import { findAiBase, resolveAiBase } from './host-baseline-lib.mjs';
 import * as lib from './rehearse-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const STEP_IDS = ['apply', 'outcome', 'behaviour', 'choke', 'gates'];
+const STEP_IDS = ['apply', 'outcome', 'behaviour', 'choke', 'gates', 'surfaces'];
 
 function usage(message) {
   if (message) console.error('[rehearse] ' + message);
@@ -364,6 +365,68 @@ function stepGates(baseline, version) {
   };
 }
 
+// Sixth question: did applying the patches change what any module exports? The project assumes it
+// never does, and that assumption is what lets a behaviour assertion survive a version bump. This
+// step compares the PRISTINE baseline with the PATCHED copy - both the same upstream version - so
+// every difference is the patches' doing, not upstream drift.
+async function stepSurfaces(baseline, work) {
+  const label = 'compare the export surface of the patched copy with the pristine tree';
+  const targets = core.targetFiles(baseline);
+  const idsByKey = new Map();
+  for (const patch of ALL_PATCHES) {
+    for (const key of (Array.isArray(patch.file) ? patch.file : [patch.file])) {
+      if (!idsByKey.has(key)) idsByKey.set(key, new Set());
+      idsByKey.get(key).add(patch.id);
+    }
+  }
+  const rows = [];
+  for (const [pkg, entry] of surfaces.packageTargets(targets, baseline)) {
+    const ids = new Set();
+    for (const key of entry.keys) for (const id of (idsByKey.get(key) || [])) ids.add(id);
+    const left = path.join(baseline, pkg, 'lib', 'index.js');
+    const right = path.join(work, pkg, 'lib', 'index.js');
+    const item = { pkg: pkg, patches: [...ids].sort((a, b) => a - b), rows: [] };
+    if (!fs.existsSync(left) || !fs.existsSync(right)) {
+      item.error = fs.existsSync(left) ? 'not in the patched copy' : 'not in the pristine tree';
+      rows.push(item);
+      continue;
+    }
+    try {
+      const before = surfaces.describeModule(await import(pathToFileURL(left).href));
+      const after = surfaces.describeModule(await import(pathToFileURL(right).href));
+      item.rows = surfaces.diffSurface(before, after);
+    } catch (error) {
+      item.error = String(error && error.message ? error.message : error).slice(0, 120);
+    }
+    rows.push(item);
+  }
+  const invariant = surfaces.checkInvariant(rows);
+  const tally = surfaces.tallySurfaces(rows);
+  const flat = invariantsToRows(invariant, rows);
+  return {
+    id: 'surfaces',
+    label: label,
+    summary: tally.packages + ' package(s) / changed ' + tally.changed + ' / unchanged ' + tally.unchanged + ' / unreadable ' + tally.unreadable + ' / known ' + invariant.expected.length + ' / unexpected ' + invariant.unexpected.length,
+    verdict: lib.surfaceVerdict(invariant),
+    rows: flat,
+    tally: tally,
+  };
+}
+
+// Both 'this is the one reshape we mean' and 'nobody declared this' are worth printing; only the
+// second one blocks, but hiding the first would make the declared exception invisible in the report.
+function invariantsToRows(invariant, packages) {
+  const patchesOf = new Map((packages || []).map((pkg) => [pkg.pkg, pkg.patches || []]));
+  const rows = [];
+  for (const item of invariant.expected) {
+    rows.push({ id: (patchesOf.get(item.pkg) || [])[0], name: item.pkg + ' ' + item.name, status: item.change, bucket: lib.BUCKETS.ok, why: item.detail + ' (declared)' });
+  }
+  for (const item of invariant.unexpected) {
+    rows.push({ id: (item.patches || [])[0], name: item.pkg + ' ' + item.name, status: item.change, bucket: lib.BUCKETS.blocking, why: item.detail });
+  }
+  return rows;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const baseline = resolveBaseline(args);
@@ -382,6 +445,7 @@ async function main() {
   if (wanted('behaviour')) steps.push(await stepBehaviour(baseline, work));
   if (wanted('choke')) steps.push(await stepChoke(baseline, profile));
   if (wanted('gates')) steps.push(stepGates(baseline, version));
+  if (wanted('surfaces')) steps.push(await stepSurfaces(baseline, work));
   const verdict = lib.summarizeRehearsal(steps);
   const report = { schema: lib.REHEARSE_SCHEMA, kind: 'dsh-rehearse', capturedAt: new Date().toISOString(), baseline: baseline, baselineVersion: version, work: work, mirrored: prepared.mirrored, skipped: args.skip, steps: steps, verdict: verdict };
   console.log('');

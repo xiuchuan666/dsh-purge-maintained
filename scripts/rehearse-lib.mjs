@@ -209,7 +209,18 @@ export function gateVerdict(result) {
   return { ok: blocking.length === 0, blocking: blocking, warn: warn };
 }
 
-// One rehearsal report: five steps, each with a verdict and the rows behind it.
+// The invariant the whole project rests on: a patch rewrites text, it does not reshape what a module
+// exports. One declared exception exists (#42 restores the legacy settings API). Any other difference
+// between a pristine tree and the patched copy of the SAME version is an accident: it means the
+// assertions and the docs describe an API that no longer exists.
+export function surfaceVerdict(invariant) {
+  const unexpected = (invariant && invariant.unexpected) || [];
+  const expected = (invariant && invariant.expected) || [];
+  const blocking = unexpected.map((item) => item.pkg + ' ' + item.name + ' ' + item.change + ' ' + item.detail + ' (patches ' + ((item.patches || []).join(',') || '-') + ')');
+  return { ok: blocking.length === 0, blocking: blocking, warn: [] };
+}
+
+// One rehearsal report: six steps, each with a verdict and the rows behind it.
 export function summarizeRehearsal(steps) {
   const reds = [];
   const warns = [];
@@ -264,7 +275,7 @@ export function renderRehearsal(report, options = {}) {
 
 export default {
   REHEARSE_SCHEMA, BUCKETS, BUCKET_LIST, keyFacts, isSoftPatch, classifyApplyRow, tallyBuckets, bucketsVerdict,
-  classifyOutcomeState, outcomeVerdict, classifyBehaviourState, behaviourVerdict, chokeVerdict, summarizeRehearsal,
+  classifyOutcomeState, outcomeVerdict, classifyBehaviourState, behaviourVerdict, chokeVerdict, surfaceVerdict, summarizeRehearsal,
   coveredPackages, escapedTargets, renderRehearsal,
   classifyGateState, gateVerdict,
 };

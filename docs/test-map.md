@@ -295,6 +295,8 @@
 | 沙箱必须钉住 `npm_config_prefix`：只改 `PATH` 时 `findNpmPrefix()` 会退到 `npm prefix -g` 读回本机真实的 `%APPDATA%\npm`，测试就会去改用户的启动器 | `test-backup-revert.mjs`（`sandbox()` 里一行） | 同上 |
 | 预演结论的四个纯函数：apply 行分桶（`drifted` 在预演里是 blocking 而在 apply 里是 soft-ok）、七态 outcome 定级、五态 behaviour 定级、卡点缺口计数；只有 warn 时 `ok` 仍为真 | `test-rehearse-lib.mjs`（共 59 条） | `rehearse-lib.mjs` 全绿 |
 | 两个词表跨模块对齐：`STATE_LIST` 与 `BEHAVIOR_STATE_LIST` 必须与 `rehearse-lib` 的判定表逐状态一致 —— 上游新增一个状态时判定会静默变绿，靠这两条让改动在 CI 上直接炸 | `test-rehearse-lib.mjs`（2 条） | 同上 |
+| 第五步 gates：`docs/patch-gates.json` 还描不描述这棵树。表 pin 在同一版掉针是 **blocking**（表与树互相矛盾），跨版掉针只是 warn（漂移，条数就是 bump `dshTarget` 时的重推量），`unreadable` 单列（这棵树里没那个文件，比如桌面壳） | `test-gate-verify-lib.mjs`（13 条）+ `test-rehearse-lib.mjs`（6 条） | 仅 `scripts/`，不进覆盖率基线 |
+| 四步证据各自的定级：apply 只看 blocking、outcome 里 `pending/drifted/unknown` 必须为 0、behaviour 里 `broken/unexpected` 是红而 `inert` 只是黄、gate 的跨版降级；**不认识的枚举值按最坏算**，新状态默认成绿等于默认为安全 | `test-rehearse-lib.mjs`（6 条） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -381,6 +383,24 @@ RED 演练 `.tmp57-red.mjs` 用 `git show HEAD:lib/core.js` 当 BASE、29 条注
 **十五补**补的是预演结论层（`scripts/rehearse-lib.mjs`，198 行纯函数，59 条）。它跟 `lib/core.js::isPatchResultSoftOk()` 的阈值**故意不同**：apply 在用户机器上让 `drifted` 通过（陈旧 marker 不该挡重启），而预演是发版前，`drifted` 正是要修的东西，所以这里判 blocking。三处判定表（apply 四桶 / outcome 七态 / behaviour 五态）各自都有「只有 warn 时整体仍算绿」的语义，容易被写成「有 warn 就红」。RED 演练 55 条突变 **55/55 全红**；第一轮 51 红 4 绿，四条绿全靠补「正向命名之外的输入」转红（候选数组里混空串/null、AI 的别处副本必须判 outside、`drifted:write_error` 不得被 HARD_FAILURE 行首锚定误伤、Windows 反斜杠路径）。
 
 **两个词表的跨模块契约**值得单说：`classifyOutcomeState` 对不认识的 state 一律判 blocking（偏保守，不会漏红），但这意味着上游新增第七个状态时，名字会从 tally 里静默消失、没人读。所以 `test-rehearse-lib.mjs` 里有两条断言把 `STATE_LIST` / `BEHAVIOR_STATE_LIST` 与判定表**逐状态**对上 —— 那种改动应该在 CI 上直接炸，而不是等发版预演时才发现。
+
+**十六补**：`scripts/gate-verify-lib.mjs`（104 行）给预演加了第五步 —— 「`docs/patch-gates.json` 还描不描述这棵树」。这一步的存在理由是前四步各自的盲点：apply 只证明「文本被改了」，outcome 只证明「七态里没有坏的」，behaviour 只覆盖 12 条能观测的，choke 只看得见它有形状的那些闸门。而闸门表是**对某一版上游文本的观测**，它自己不带着「还能不能对上」的答案。
+
+判定分三档，关键在版本关系：**同一版**掉针 = 表与树互相矛盾（其中一个旧了）→ blocking；**跨版**掉针 = 漂移，条数恰好是 bump `dshTarget` 时要重推几条 needle → warn，摘要里带上「from X to Y」；**任一侧版本未知** = 无法判断 → 按同版算，偏保守。第三档 `unreadable`（表里有这行、这棵树没这文件，典型是桌面壳 `lib/main.js`）单列不并进 `missing` —— 否则每次预演都会因为桌面壳凭空多出十条「漂移」，那条证据就废了。
+
+把这套写进测试时，`test-rehearse-lib.mjs` 从 59 条补到 70 条，补的 6 条正好是原来一个都没覆盖的四个判定（`bucketsVerdict` / `classifyBehaviourState` / `classifyGateState` / `gateVerdict`）：它们各自都是「上游改了枚举值就静默变绿」的那一类，其中 `classifyBehaviourState` 对不认识的态返回 blocking 这一条最该钉死 —— 新状态默认为绿等于默认为安全。drill 注入 8 条，8/8 全红。
+
+**顺手逮到一个行尾问题**：`scripts/rehearse-lib.mjs` 里有一行被写成了 CRLF（其余 265 行都是 LF）—— 是上一次编辑时混进去的。`check:eol` 没报，因为那个文件当时还没入库；`git add` 之后它就变成了「新文件里混行尾」。真正让它暴露的是 drill：按 `split("\n")` 取行时，那一行带着 `\r`，`line()` 的精确匹配直接 miss。修掉之后 8/8 一次全红。
+
+**十七补**：`scripts/surface-lib.mjs`（247 行 / 32 用例）与预演的第六步 `surfaces`。前五步都只看文本与行为，中间漏掉一整块：补丁会不会顺手改掉某个模块的**导出面**（多一个方法、少一个常量、函数从 1 参变 2 参）。这一步把纯净基线与打过补丁的副本逐包 `import`，把导出面描述成数据（`function/<arity>`、`class/<arity>`、`array/<len>`、`object{keys}`，绝不按 identity 比）再逐项对比。rc.2 实测 42 个包 / `changed 1` / `known 1` / `unexpected 0`，唯一变化是 `#42` 有意装回去的五个 `SettingsForms` 原型方法。
+
+它的边界必须写在那里：**只看得见导出面**。只改函数体内部的补丁（改写措辞、抬高常量、提前返回）完全隐形，`arity` 相同的换实现也看不见。所以它不是行为对拍的替代品，而是补上「有人根本没给这条补丁想观测点」那个洞 —— 行为对拍覆盖 12/86，这一步一次看 42 个包，不需要任何人手写期望。
+
+**这里又逮到一次「两条守卫互为备份」**：变异演练 32 条注入，首轮 30 RED / 2 GREEN，两条都出在 `packageTargets`。`不挡兄弟目录` 一条尤其值得记 —— 原有 fixture 是 `D:/host-extra/dsh-sandbox/...`，把它按 base 长度切掉后剩下 `-extra/dsh-sandbox/...`，名字不以 `dsh-` 开头，于是它在下一道 `dsh-` 前缀过滤就被拦了。两条守卫在这条 fixture 上互为备份，删掉任何一条测试都还是绿的。换成 `D:/hostXdsh-zzz/lib/index.js`（切片后正好对齐成 `dsh-zzz/lib/index.js`）才真正钉住尾随分隔符这一条。重跑 32/32 全红。
+
+另一条 GREEN 是 `不合并重复键`，它的解释完全不同，而且更值得记：那条注入删掉去重之后，今天重跑**立刻红**（`fail=1`，用例 `packageTargets lists each registry key once even when two of its files land in one package`）。也就是说首轮 drill 跑的时候，测试文件里还没有这条 fixture —— 首轮 drill 与后来的补测本来就是两次不同的实验，把它们的结果并列读会得出错误结论。
+
+于是本轮有两条纪律，都来自同一个地方：**RED 演练的结果只对「跑那一刻的测试文件」有效**。① 报 GREEN 时先怀疑 fixture 不够毒（兄弟目录那条就靠一个对齐后正好成 `dsh-` 的路径戳穿了两条互为备份的守卫），再怀疑守卫真没用；② 测试文件改过之后必须重跑 drill，否则手上那份 55 红 / 32 红是上一版文件的历史成绩，不证明现在这套判定还钉得住。
 
 ---
 
