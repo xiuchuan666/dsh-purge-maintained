@@ -182,7 +182,34 @@ export function chokeVerdict(gaps) {
     : { ok: false, blocking: [n + ' uncovered chokepoint group(s)'] , warn: [] };
 }
 
-// One rehearsal report: four steps, each with a verdict and the rows behind it.
+// The gate table is pinned to the version its needles were read from (docs/patch-gates.json
+// carries that version). One needle gone on a DIFFERENT version is drift: expected, and the count
+// is exactly the re-derive job when dshTarget moves. The same needle gone on the SAME version means
+// the table and the tree stopped describing each other, which is a real problem - one is stale.
+// A row whose file is not in this tree at all (desktop shell) says nothing either way.
+export function classifyGateState(row, drift) {
+  const state = row && row.state;
+  if (state === 'present' || state === 'skipped') return BUCKETS.ok;
+  if (state === 'missing') return drift ? BUCKETS.warn : BUCKETS.blocking;
+  return BUCKETS.warn;
+}
+
+export function gateVerdict(result) {
+  const tally = (result && result.tally) || {};
+  const drift = Boolean(result && result.drift);
+  const missing = tally.missing || 0;
+  const unreadable = tally.unreadable || 0;
+  const blocking = [];
+  const warn = [];
+  if (missing > 0) {
+    if (drift) warn.push(missing + ' needle(s) moved between ' + result.tableVersion + ' and ' + result.version + ': re-derive when you bump dshTarget');
+    else blocking.push(missing + ' needle(s) missing on the pinned version: the table and the tree disagree');
+  }
+  if (unreadable > 0) warn.push(unreadable + ' gate row(s) point at a file this tree does not contain');
+  return { ok: blocking.length === 0, blocking: blocking, warn: warn };
+}
+
+// One rehearsal report: five steps, each with a verdict and the rows behind it.
 export function summarizeRehearsal(steps) {
   const reds = [];
   const warns = [];
@@ -224,7 +251,7 @@ export function renderRehearsal(report, options = {}) {
   }
   const summary = report.verdict;
   lines.push('');
-  lines.push(summary.ok ? '[rehearse] PASS  四条证据全绿' : '[rehearse] FAIL  ' + summary.reds.length + ' 处要先处理');
+  lines.push(summary.ok ? '[rehearse] PASS  五条证据全绿' : '[rehearse] FAIL  ' + summary.reds.length + ' 处要先处理');
   for (const red of summary.reds) lines.push('[rehearse]   ! ' + red);
   for (const warn of summary.warns) lines.push('[rehearse]   ~ ' + warn);
   return lines;
@@ -234,4 +261,5 @@ export default {
   REHEARSE_SCHEMA, BUCKETS, BUCKET_LIST, keyFacts, isSoftPatch, classifyApplyRow, tallyBuckets, bucketsVerdict,
   classifyOutcomeState, outcomeVerdict, classifyBehaviourState, behaviourVerdict, chokeVerdict, summarizeRehearsal,
   coveredPackages, escapedTargets, renderRehearsal,
+  classifyGateState, gateVerdict,
 };

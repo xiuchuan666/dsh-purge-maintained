@@ -12,10 +12,17 @@
 //   node scripts/patch-gates.mjs                       # derive from .tmp-tree/rc1, print the table
 //   node scripts/patch-gates.mjs --write docs/patch-gates.json
 //   node scripts/patch-gates.mjs --tree rc2=.tmp-tree/rc2/node_modules/@deepseek-ai --compare
+//   node scripts/patch-gates.mjs --verify docs/patch-gates.json --tree rc2=DIR
+//
+// --verify answers a different question than --compare. --compare derives gates on both trees and
+// reports which needles changed; --verify takes the COMMITTED table and asks whether it still
+// describes this tree. A miss on a different version is drift (a number: the re-derive job when
+// dshTarget moves); a miss on the pinned version means the table and the tree disagree.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as gateLib from './patch-gate-lib.mjs';
+import { verifyGates, renderGateVerify } from './gate-verify-lib.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -25,7 +32,7 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const opts = { trees: [], write: '', compare: false, only: '', limit: 0, reasons: false };
+  const opts = { trees: [], write: '', compare: false, only: '', limit: 0, reasons: false, verify: '' };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = () => {
@@ -43,12 +50,14 @@ function parseArgs(argv) {
     else if (arg === '--only') opts.only = next();
     else if (arg === '--limit') opts.limit = Number(next());
     else if (arg === '--reasons') opts.reasons = true;
+    else if (arg === '--verify') opts.verify = next();
     else if (arg === '--help' || arg === '-h') {
       process.stdout.write([
-        'usage: patch-gates.mjs [--tree name=DIR]... [--write FILE] [--compare] [--only NAME|ID] [--limit N] [--reasons]',
+        'usage: patch-gates.mjs [--tree name=DIR]... [--write FILE] [--compare] [--verify FILE] [--only NAME|ID] [--limit N] [--reasons]',
         '',
         '  --write FILE   write the side table (docs/patch-gates.json)',
         '  --compare      show gates that differ between trees (needle moved or disappeared)',
+        '  --verify FILE  check a committed table against a tree: drift vs a stale table',
         '  --reasons      also list patches that have no gate, with the reason',
       ].join('\n') + '\n');
       process.exit(0);
@@ -89,6 +98,29 @@ for (const tree of opts.trees) {
 
 const names = opts.trees.map((t) => t.name);
 const primary = names[names.length - 1];
+
+// --verify reads the committed table and never re-derives it: the question is whether the file we
+// shipped still describes this tree, not what a fresh derivation would say.
+if (opts.verify) {
+  const file = path.resolve(opts.verify);
+  if (!fs.existsSync(file)) fail('no such table: ' + opts.verify);
+  let table = null;
+  try {
+    table = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    fail('cannot read ' + opts.verify + ': ' + error.message);
+  }
+  const dir = meta[primary].dir;
+  const result = verifyGates(table, {
+    dir: dir,
+    version: meta[primary].version,
+    readFile: (rel) => gateLib.readFileFrom(dir)(rel),
+  });
+  for (const line of renderGateVerify(result, { limit: opts.limit })) process.stdout.write(line + '\n');
+  const drift = Boolean(result.drift);
+  process.exit(result.tally.missing > 0 && !drift ? 1 : 0);
+}
+
 const gates = perTree.get(primary);
 const tally = gateLib.tallyGates(gates);
 

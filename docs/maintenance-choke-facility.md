@@ -179,6 +179,23 @@ host:gates   gated 58 / no-target 14 / trace-anchored 12 / native 2
 
 `stale` 与 `dead` 都是 0——rc.1 上没有「限制真被删掉」的补丁，也没有「锚点死了要改」的补丁了。这就是「哪些旧补丁不用打了」的答案：现在一条都不用退役。曾经唯一那条 `stale`（#12）走完了完整的改锚点流程，见上一节。`host:gates` 的数字没变，因为 #12 的手写闸门仍然指着同一个常量：自动推导现在也能定位到它，但手写那条更短、更抗改写，留着更好。
 
+### `--verify`：拿已入库的侧表去问一棵树
+
+`--compare` 在两棵树上**各推一遍**闸门再比，回答的是「推导结果会不会变」；`--verify` 读**已提交的那份表**，回答的是另一个问题：**我发出去的表，还描不描述这棵树？**
+
+```bash
+npm run host:gates -- --verify docs/patch-gates.json --tree rc2=node_modules/@deepseek-ai
+```
+
+三种结局，实测都跑过：
+
+| 场景 | 输出 | 退出码 |
+| --- | --- | --- |
+| 表 pin rc.1，树 rc.1 | `present 58 / missing 0` | 0 |
+| 表 pin rc.1，树 rc.2 | `present 55 / missing 3` + `3 needle(s) moved between 0.2.2-rc.1 and 0.2.2-rc.2: re-derive when you bump dshTarget` | **0**（漂移是数量，不是错误） |
+| 表自称 rc.2，树 rc.2，其中一条 needle 被改坏 | `present 57 / missing 1`，无重建横幅 | **1**（表与树矛盾） |
+
+第二行那个 0 是刻意的：跨版掉针是预期漂移，条数就是 `dshTarget` 一动时的返工量。要是它也返回 1，每次升级流水线都红一次，然后所有人都学会加 `|| true`。第三行才是真问题——同版掉针意味着表和树有一个是旧的，而这正是 CI 抓不到、只有本机能抓的那种腐烂。
 ### 写侧表时不能做的两件事（都是踩过的）
 
 1. **前缀阶梯**：想让闸门在换行重排后仍能定位，按 120/80/60/… 逐级截断前缀去 `indexOf`。实测 #2 的 pattern 指名 `REPLACEMENT_WORKSPACE_CONTEXT_INTRO`，上游改名为 `REPLACEMENT_AGENT_INSTRUCTIONS_INTRO`，前缀命中了**改名后的相邻常量**，闸门被挂在错误的常量上，永远报「限制还在」。已删除。
@@ -203,18 +220,18 @@ npm run host:new-patch -- --patch 12 --json                     # 改已有补�
 
 **不唯一就不产草稿**：跨行才唯一（两行完全重复）或行内有多处时，脚本打印原因并退出 1。放它过去，等于让人把一条会编辑三处的 pattern 粘进注册表。
 
-## 升级预演：一条命令跑完四步，四份证据各自独立
+## 升级预演：一条命令跑完五步，五份证据各自独立
 
 上面所有命令都是**读**：判定现状、对比两棵树、算锚点。升级前还缺一步**写**的演练——在一份纯净的新版宿主副本上真的把 86 条打下去，然后看它是不是真的改了。这比任何文本级推断都直接：补丁要么把文件改了，要么没有。
 
 ```bash
 # 版本号仍需人来定：先把目标版本装成基线
 node "$(npm root -g)/npm/bin/npm-cli.js" install --no-save --ignore-scripts --no-audit --no-fund @deepseek-ai/dsh@0.2.2-rc.2
-# 然后一条命令：复制演练树 → 四步证据 → 删掉演练树
+# 然后一条命令：复制演练树 → 五步证据 → 删掉演练树
 npm run host:rehearse -- --baseline-tree node_modules/@deepseek-ai --json .tmp-tree/rehearse-rc2.json
 ```
 
-四步各自回答不同的问题，任一步都不能代替另一步：
+五步各自回答不同的问题，任一步都不能代替另一步：
 
 | 步骤 | 在演练树上问什么 | rc.2 实测 |
 | --- | --- | --- |
@@ -222,9 +239,25 @@ npm run host:rehearse -- --baseline-tree node_modules/@deepseek-ai --json .tmp-t
 | `outcome` | 打完之后的**七态**——`pending`/`drifted`/`unknown` 必须都是 0 | `applied 67 / pending 0 / native 3 / stale 0 / drifted 0 / na 16 / unknown 0` |
 | `behaviour` | **行为**是否真的变了（不是「文件里有我的字」） | `ok 15 / broken 0 / already 0 / inert 0 / unexpected 0` |
 | `choke` | 新版**新增了哪些闸门**、我一条都没管 | `gaps 0 / watch 4 / targets 10 / ignored 115` |
+| `gates` | `docs/patch-gates.json` 还描不描述这棵树 | `present 55 / missing 3 / unreadable 0 / skipped 28`（表 pin 在 rc.1，树是 rc.2） |
 
-结论行只有两种：`[rehearse] PASS  四条证据全绿` 或 `[rehearse] FAIL  N 处要先处理`。退出码 0 = 全绿、1 = 有阻塞、2 = 用法或环境失败，方便挂进发版前的流水线。
+结论行只有两种：`[rehearse] PASS  五条证据全绿` 或 `[rehearse] FAIL  N 处要先处理`。退出码 0 = 全绿、1 = 有阻塞、2 = 用法或环境失败，方便挂进发版前的流水线。
 
+### 第五步 gates：表 pin 在哪一版，决定了 missing 是什么意思
+
+`docs/patch-gates.json` 每次 `--write` 都会记下它是从哪一版读出来的（`tree.version`）。这条版本号看起来是元数据，其实是判据的一半——同一个「needle 不在了」，在两种版本关系下意思完全不同：
+
+| 表 pin 的版本 | 树是 | missing 的含义 | 预演怎么算 |
+| --- | --- | --- | --- |
+| 同一版 | 同一版 | 表与树互相矛盾，其中一个旧了 | **blocking** |
+| 不同版 | 新一版 | 漂移：上游改了这几行，needle 该重推了 | warn，并给出条数 |
+| 任一未知 | 任一 | 无法判断 | 按同版处理（偏保守） |
+
+把跨版缺失也判红，命令会在每次 `dshTarget` 一动就红一遍，然后被所有人学会忽略——那等于把这条证据废掉。跨版的条数不是噪声，它恰好是「bump `dshTarget` 时要重推几条 needle」的返工量。rc.2 的实测就是这种形态：表 pin 在 `0.2.2-rc.1`，树是 `0.2.2-rc.2`，`missing 3`——`#13`（`dsh-sandbox` 的三处 `throw new Error` 换成了 `throw new SandboxEscalationError`）、`#56` 与 `#77`（`dsh-client-ui-conversation/lib/client.js` 的两个函数签名改了）。三条都是 warn，预演仍然 PASS，但摘要里带着那句 `3 needle(s) moved between 0.2.2-rc.1 and 0.2.2-rc.2: re-derive when you bump dshTarget`。
+
+第三档是 `unreadable`：表里有这一行，但这棵树里没有那个文件（`lib/main.js` 这类桌面壳入口在 npm 包树里根本不存在）。它说明不了限制还在不在，所以只算提醒，也不并进 `missing`——否则每次预演都会因为桌面壳凭空多出十条「漂移」。
+
+这一步只读文件，从不去看演练副本：闸门问的是「上游这版还长这样吗」，与我们打没打补丁无关。
 ### 预演的阈值必须比 apply 自己更严
 
 `lib/core.js` 的 `isPatchResultSoftOk` 故意让 `drifted` 通过：用户机器上不能因为一条旧 marker 挡住重启。但那套宽容在发版前是错的——`drifted` 正是要修的东西。所以 `scripts/rehearse-lib.mjs` 自带一套判定，不和 core 共用：
@@ -274,7 +307,7 @@ which no expectation of this behaviour covers
 - **GREEN** —— 守卫已死，或测试有盲点，两种都必须解释清楚（也可能确实是等价改动，那要写下来为什么等价）。
 - **ANCHOR** —— 注入脚本自己的定位串没匹配上（缩进或多行拼接抄错），是演练脚本的 bug。必须重写注入位置，不能当成通过。
 
-这条纪律沿用自 `docs/test-map.md` 里 `.tmp61-drill.mjs` 的记录（当时 18 条注入 18 红，其中两条 ANCHOR 就是缩进抄错）。**判据本身也要有证据**，否则四条证据全绿只是四条自己觉得自己绿。
+这条纪律沿用自 `docs/test-map.md` 里 `.tmp61-drill.mjs` 的记录（当时 18 条注入 18 红，其中两条 ANCHOR 就是缩进抄错）。**判据本身也要有证据**，否则五条证据全绿只是五条自己觉得自己绿。
 
 ## CI 里查什么：`npm run check:gates`
 

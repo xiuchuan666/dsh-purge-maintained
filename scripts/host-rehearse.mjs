@@ -2,15 +2,19 @@
 // Rehearsal: run the upgrade before it happens.
 //
 // A rehearsal takes a PRISTINE install of the next host version, patches a throwaway COPY of it
-// with the whole registry, and then asks four independent questions about the result:
+// with the whole registry, and then asks five independent questions about the result:
 //
 //   apply      did every anchor still land?            (core.applyPatches + rehearse-lib buckets)
 //   outcome    is each patch applied, native, stale?   (lib/patch-outcome.mjs, seven states)
 //   behaviour  does the restriction actually go away?  (scripts/behavior-lib.mjs, cross-tree)
 //   choke      did the new version grow a gate we do not cover?  (chokepoints-lib gaps)
+//   gates      does docs/patch-gates.json still describe this tree?  (gate-verify-lib)
 //
 // Any one of these alone lies. Markers in files prove the text changed, not that the behaviour did;
 // behaviour only covers 12 of 86 patches; the choke scan cannot see what it has no shape for.
+// the gate table is an observation of one version's text, so a miss on another version is drift
+// (expected, and the count is the re-derive job) while a miss on the pinned version means the
+// table and the tree stopped describing each other;
 // Together they are the answer to 'can we ship this version'.
 //
 // Usage:
@@ -18,10 +22,10 @@
 //   node scripts/host-rehearse.mjs --version rc2          # baseline .tmp-tree/rc2/node_modules/@deepseek-ai
 //   node scripts/host-rehearse.mjs --baseline-tree DIR    # explicit pristine @deepseek-ai tree
 //   node scripts/host-rehearse.mjs --work DIR --keep      # where the patched copy goes, and keep it
-//   node scripts/host-rehearse.mjs --skip choke,behaviour # run a subset
+//   node scripts/host-rehearse.mjs --skip choke,gates   # run a subset
 //   node scripts/host-rehearse.mjs --json out.json --limit 10
 //
-// Exit codes: 0 = all four green / 1 = something blocks the upgrade / 2 = usage or environment.
+// Exit codes: 0 = all five green / 1 = something blocks the upgrade / 2 = usage or environment.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,12 +43,13 @@ import {
   scanShapes, parseDumpConfig, findShortCircuits, correlate, findGaps,
 } from './chokepoints-lib.mjs';
 import { readHostVersion } from './host-snapshot-lib.mjs';
+import { verifyGates } from './gate-verify-lib.mjs';
 import { findAiBase, resolveAiBase } from './host-baseline-lib.mjs';
 import * as lib from './rehearse-lib.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const STEP_IDS = ['apply', 'outcome', 'behaviour', 'choke'];
+const STEP_IDS = ['apply', 'outcome', 'behaviour', 'choke', 'gates'];
 
 function usage(message) {
   if (message) console.error('[rehearse] ' + message);
@@ -303,6 +308,62 @@ async function stepChoke(baseline, profile) {
   };
 }
 
+// The gate table is pinned to one version's text. On a different version a missing needle is
+// drift (the count is the re-derive job when dshTarget moves); on the SAME version it means the
+// table and the tree stopped describing each other. Reading files is all this step needs, so it
+// never looks at the patched copy.
+function stepGates(baseline, version) {
+  const file = path.join(ROOT, 'docs', 'patch-gates.json');
+  const label = 'check the gate table against this tree';
+  if (!fs.existsSync(file)) {
+    return {
+      id: 'gates',
+      label: label,
+      summary: 'no docs/patch-gates.json - run npm run host:gates -- --write docs/patch-gates.json',
+      verdict: { ok: false, blocking: ['docs/patch-gates.json is missing: the rehearsal has no gate evidence'], warn: [] },
+      rows: [],
+      tally: {},
+    };
+  }
+  let table = null;
+  try {
+    table = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    return {
+      id: 'gates',
+      label: label,
+      summary: 'docs/patch-gates.json is not readable JSON',
+      verdict: { ok: false, blocking: ['docs/patch-gates.json: ' + error.message], warn: [] },
+      rows: [],
+      tally: {},
+    };
+  }
+  const result = verifyGates(table, {
+    dir: baseline,
+    version: version,
+    readFile: (rel) => readMaybe(path.join(baseline, rel)),
+  });
+  const rows = result.rows
+    .map((row) => ({
+      id: row.patch,
+      name: row.name || '',
+      status: row.state,
+      bucket: lib.classifyGateState(row, result.drift),
+      why: row.state + (row.reason ? ' (' + row.reason + ')' : '') + (row.rel ? ' ' + row.rel + ':' + row.line : ''),
+    }))
+    .filter((row) => row.bucket !== lib.BUCKETS.ok);
+  const t = result.tally;
+  return {
+    id: 'gates',
+    label: label,
+    summary: 'pinned to ' + result.tableVersion + ' / tree ' + result.version + ' / present ' + t.present + ' / missing ' + t.missing + ' / unreadable ' + t.unreadable + ' / skipped ' + t.skipped,
+    verdict: lib.gateVerdict(result),
+    rows: rows,
+    tally: t,
+    drift: result.drift,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const baseline = resolveBaseline(args);
@@ -320,6 +381,7 @@ async function main() {
   if (wanted('outcome')) steps.push(stepOutcome(baseline, work));
   if (wanted('behaviour')) steps.push(await stepBehaviour(baseline, work));
   if (wanted('choke')) steps.push(await stepChoke(baseline, profile));
+  if (wanted('gates')) steps.push(stepGates(baseline, version));
   const verdict = lib.summarizeRehearsal(steps);
   const report = { schema: lib.REHEARSE_SCHEMA, kind: 'dsh-rehearse', capturedAt: new Date().toISOString(), baseline: baseline, baselineVersion: version, work: work, mirrored: prepared.mirrored, skipped: args.skip, steps: steps, verdict: verdict };
   console.log('');

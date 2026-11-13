@@ -5,11 +5,15 @@ import {
   BUCKET_LIST,
   REHEARSE_SCHEMA,
   behaviourVerdict,
+  bucketsVerdict,
   chokeVerdict,
   classifyApplyRow,
+  classifyBehaviourState,
+  classifyGateState,
   classifyOutcomeState,
   coveredPackages,
   escapedTargets,
+  gateVerdict,
   isSoftPatch,
   keyFacts,
   outcomeVerdict,
@@ -448,7 +452,7 @@ test("renderRehearsal 每步两行：状态 + 标题、缩进的摘要，末尾�
   assert.equal(lines[0], "[ok] apply  重打");
   assert.equal(lines[1], "       86 条");
   assert.equal(lines[2], "");
-  assert.equal(lines[3], "[rehearse] PASS  四条证据全绿");
+  assert.equal(lines[3], "[rehearse] PASS  五条证据全绿");
 });
 
 test("renderRehearsal 有拦路时状态写 FAIL，末尾列出条数与每一条", () => {
@@ -519,7 +523,7 @@ test("renderRehearsal 的 limit 非整数时退回 20", () => {
 
 test("renderRehearsal 对空报告只给一句 PASS，不抛", () => {
   const lines = renderRehearsal({ steps: [], verdict: { ok: true, reds: [], warns: [] } });
-  assert.deepEqual(lines, ["", "[rehearse] PASS  四条证据全绿"]);
+  assert.deepEqual(lines, ["", "[rehearse] PASS  五条证据全绿"]);
 });
 
 test("renderRehearsal 缺 rows / warn 也不抛（步骤只做了半套证据）", () => {
@@ -530,6 +534,46 @@ test("renderRehearsal 缺 rows / warn 也不抛（步骤只做了半套证据）
   assert.equal(lines[0], "[ok] choke  卡点");
 });
 
+// ---------- 十三、闸门侧表：跨版缺失是漂移，同版缺失是矛盾 ----------
+
+test("闸门行四态到桶的映射：present/skipped 绿，unreadable 只是看一眼，missing 看版本", () => {
+  // 这条映射的好坏决定了 host:rehearse 的第五步是可信信号还是永久的红。跨版把 missing 判红，
+  // 每次 dshTarget 一动命令就红一遍，然后所有人都学会忽略它。
+  assert.equal(classifyGateState({ state: "present" }, false), BUCKETS.ok);
+  assert.equal(classifyGateState({ state: "skipped" }, false), BUCKETS.ok);
+  assert.equal(classifyGateState({ state: "unreadable" }, false), BUCKETS.warn);
+  assert.equal(classifyGateState({ state: "missing" }, false), BUCKETS.blocking);
+  assert.equal(classifyGateState({ state: "missing" }, true), BUCKETS.warn);
+  assert.equal(classifyGateState(null, false), BUCKETS.warn);
+});
+
+test("跨版缺失只出 warn，且说清这是 bump dshTarget 时的返工量", () => {
+  const verdict = gateVerdict({ drift: true, tableVersion: "0.2.2-rc.1", version: "0.2.2-rc.2", tally: { present: 55, missing: 3, unreadable: 0, skipped: 28 } });
+  assert.equal(verdict.ok, true);
+  assert.deepEqual(verdict.blocking, []);
+  assert.equal(verdict.warn.length, 1);
+  assert.match(verdict.warn[0], /3 needle\(s\) moved between 0\.2\.2-rc\.1 and 0\.2\.2-rc\.2/);
+  assert.match(verdict.warn[0], /re-derive when you bump dshTarget/);
+});
+
+test("同版缺失是 blocking：表与树不再互相描述，其中一个旧了", () => {
+  const verdict = gateVerdict({ drift: false, tableVersion: "0.2.2-rc.2", version: "0.2.2-rc.2", tally: { present: 57, missing: 1, unreadable: 0, skipped: 28 } });
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.blocking[0], /the table and the tree disagree/);
+});
+
+test("一条都没掉就完全绿，unreadable 单独计数不混进 missing", () => {
+  const clean = gateVerdict({ drift: true, tableVersion: "a", version: "b", tally: { present: 58, missing: 0, unreadable: 0, skipped: 28 } });
+  assert.deepEqual(clean, { ok: true, blocking: [], warn: [] });
+  const blind = gateVerdict({ drift: true, tableVersion: "a", version: "b", tally: { present: 44, missing: 0, unreadable: 14, skipped: 28 } });
+  assert.equal(blind.ok, true);
+  assert.match(blind.warn[0], /14 gate row\(s\) point at a file this tree does not contain/);
+});
+
+test("缺 tally 或空结果不抛，按全绿处理（预演被 --skip 掉时也走这条）", () => {
+  assert.deepEqual(gateVerdict(null), { ok: true, blocking: [], warn: [] });
+  assert.deepEqual(gateVerdict({}), { ok: true, blocking: [], warn: [] });
+});
 // ---------- 十二、跨模块契约：词表不能与产生它的模块走散 ----------
 
 test("七态词表与 lib/patch-outcome.mjs 的 STATE_LIST 完全对齐（多一个少一个都要先改这里）", () => {
@@ -571,4 +615,85 @@ test("五态词表与 scripts/behavior-lib.mjs 的 BEHAVIOR_STATE_LIST 完全对
   for (const state of BEHAVIOR_STATE_LIST) {
     assert.deepEqual(behaviourVerdict({ [state]: 1 }), verdictFor[state], state);
   }
+});
+
+// ---------- 十三、五步报告里另外四个判定：只有 blocking 才拦发版 ----------
+// bucketsVerdict / classifyBehaviourState / classifyGateState / gateVerdict 原来一条都没有，
+// 而它们各自都是「上游改了枚举值就会静默变绿」的那一类。
+
+test("bucketsVerdict 只认 blocking 拦路，warn 与 expected 都不拦", () => {
+  assert.deepEqual(bucketsVerdict({ ok: 80, expected: 3, warn: 2, blocking: 0 }), {
+    ok: true,
+    blocking: [],
+    warn: ["2 warn row(s)"],
+  });
+  assert.deepEqual(bucketsVerdict({ ok: 80, expected: 3, warn: 0, blocking: 1 }), {
+    ok: false,
+    blocking: ["1 blocking row(s)"],
+    warn: [],
+  });
+});
+
+test("bucketsVerdict 对空表、缺字段、null 都给绿灯（一行都没跑不等于红）", () => {
+  const green = { ok: true, blocking: [], warn: [] };
+  assert.deepEqual(bucketsVerdict(null), green);
+  assert.deepEqual(bucketsVerdict({}), green);
+  assert.deepEqual(bucketsVerdict({ expected: 5 }), green);
+});
+
+test("classifyBehaviourState：broken 与 unexpected 是红，inert 只是黄", () => {
+  assert.equal(classifyBehaviourState("ok"), "ok");
+  assert.equal(classifyBehaviourState("already"), "ok");
+  assert.equal(classifyBehaviourState("inert"), "warn");
+  assert.equal(classifyBehaviourState("broken"), "blocking");
+  assert.equal(classifyBehaviourState("unexpected"), "blocking");
+  // 不认识的态按最坏算 —— 这条比什么都重要：新状态默认为绿就等于默认为安全。
+  assert.equal(classifyBehaviourState("something-new"), "blocking");
+  assert.equal(classifyBehaviourState(""), "blocking");
+});
+
+test("classifyGateState：同一版本掉针是红，跨版本掉针只是黄", () => {
+  assert.equal(classifyGateState({ state: "present" }, false), "ok");
+  assert.equal(classifyGateState({ state: "skipped" }, false), "ok");
+  assert.equal(classifyGateState({ state: "missing" }, false), "blocking");
+  // drift=true 意思是「表钉的版本与这棵树不同」，掉针是预期内的重算工作量。
+  assert.equal(classifyGateState({ state: "missing" }, true), "warn");
+  // unreadable（这棵树里没有那个文件，比如桌面壳）什么都不能说明。
+  assert.equal(classifyGateState({ state: "unreadable" }, false), "warn");
+  assert.equal(classifyGateState(null, false), "warn");
+});
+
+test("gateVerdict：同版本掉针拦路，跨版本掉针给重算提示", () => {
+  const pinned = gateVerdict({
+    version: "0.2.2-rc.1",
+    tableVersion: "0.2.2-rc.1",
+    drift: false,
+    tally: { present: 50, missing: 3, unreadable: 0, skipped: 0 },
+  });
+  assert.equal(pinned.ok, false);
+  assert.deepEqual(pinned.blocking, ["3 needle(s) missing on the pinned version: the table and the tree disagree"]);
+  assert.deepEqual(pinned.warn, []);
+
+  const drifted = gateVerdict({
+    version: "0.2.2-rc.2",
+    tableVersion: "0.2.2-rc.1",
+    drift: true,
+    tally: { present: 50, missing: 3, unreadable: 0, skipped: 0 },
+  });
+  assert.equal(drifted.ok, true);
+  assert.deepEqual(drifted.blocking, []);
+  assert.equal(drifted.warn.length, 1);
+  assert.match(drifted.warn[0], /3 needle\(s\) moved between 0\.2\.2-rc\.1 and 0\.2\.2-rc\.2/);
+});
+
+test("gateVerdict：读不到的文件只算提醒，不拦；全绿时两个数组都空", () => {
+  const partial = gateVerdict({ version: "x", tableVersion: "x", drift: false, tally: { present: 40, missing: 0, unreadable: 7, skipped: 2 } });
+  assert.equal(partial.ok, true);
+  assert.deepEqual(partial.blocking, []);
+  assert.deepEqual(partial.warn, ["7 gate row(s) point at a file this tree does not contain"]);
+
+  const clean = gateVerdict({ version: "x", tableVersion: "x", drift: false, tally: { present: 58, missing: 0, unreadable: 0, skipped: 0 } });
+  assert.deepEqual(clean, { ok: true, blocking: [], warn: [] });
+
+  assert.deepEqual(gateVerdict(null), { ok: true, blocking: [], warn: [] });
 });
