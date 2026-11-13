@@ -392,7 +392,7 @@ RED 演练 `.tmp57-red.mjs` 用 `git show HEAD:lib/core.js` 当 BASE、29 条注
 
 **顺手逮到一个行尾问题**：`scripts/rehearse-lib.mjs` 里有一行被写成了 CRLF（其余 265 行都是 LF）—— 是上一次编辑时混进去的。`check:eol` 没报，因为那个文件当时还没入库；`git add` 之后它就变成了「新文件里混行尾」。真正让它暴露的是 drill：按 `split("\n")` 取行时，那一行带着 `\r`，`line()` 的精确匹配直接 miss。修掉之后 8/8 一次全红。
 
-**十七补**：`scripts/surface-lib.mjs`（247 行 / 32 用例）与预演的第六步 `surfaces`。前五步都只看文本与行为，中间漏掉一整块：补丁会不会顺手改掉某个模块的**导出面**（多一个方法、少一个常量、函数从 1 参变 2 参）。这一步把纯净基线与打过补丁的副本逐包 `import`，把导出面描述成数据（`function/<arity>`、`class/<arity>`、`array/<len>`、`object{keys}`，绝不按 identity 比）再逐项对比。rc.2 实测 42 个包 / `changed 1` / `known 1` / `unexpected 0`，唯一变化是 `#42` 有意装回去的五个 `SettingsForms` 原型方法。
+**十七补**：`scripts/surface-lib.mjs`（269 行 / 32 用例）与预演的第六步 `surfaces`。前五步都只看文本与行为，中间漏掉一整块：补丁会不会顺手改掉某个模块的**导出面**（多一个方法、少一个常量、函数从 1 参变 2 参）。这一步把纯净基线与打过补丁的副本逐包 `import`，把导出面描述成数据（`function/<arity>`、`class/<arity>`、`array/<len>`、`object{keys}`，绝不按 identity 比）再逐项对比。rc.2 实测 42 个包 / `changed 1` / `known 1` / `unexpected 0`，唯一变化是 `#42` 有意装回去的五个 `SettingsForms` 原型方法。
 
 它的边界必须写在那里：**只看得见导出面**。只改函数体内部的补丁（改写措辞、抬高常量、提前返回）完全隐形，`arity` 相同的换实现也看不见。所以它不是行为对拍的替代品，而是补上「有人根本没给这条补丁想观测点」那个洞 —— 行为对拍覆盖 12/86，这一步一次看 42 个包，不需要任何人手写期望。
 
