@@ -48,6 +48,9 @@
     "host:capture": "node scripts/host-baseline.mjs --capture",
     "host:sandbox": "node scripts/sandbox-apply.mjs",
     "host:preview": "node scripts/host-preview.mjs",
+    "host:snapshot": "node scripts/host-snapshot.mjs",
+    "host:choke": "node scripts/scan-chokepoints.mjs",
+    "host:outcome": "node scripts/patch-outcome-report.mjs",
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "build:client": "node scripts/build-client.mjs",
     "postinstall": "node scripts/ensure-profile-bundle.mjs"

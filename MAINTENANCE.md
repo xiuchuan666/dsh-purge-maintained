@@ -438,4 +438,4 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
-详细设计与本阶段边界见 [测试地图](docs/test-map.md)、[统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)，以及[测试机制设计](docs/superpowers/specs/2026-11-11-test-mechanism-design.md)。
+详细设计与本阶段边界见 [测试地图](docs/test-map.md)、[统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)，以及[测试机制设计](docs/superpowers/specs/2026-11-11-test-mechanism-design.md)、[拦截面定位与五态判定设计](docs/maintenance-choke-facility.md)。

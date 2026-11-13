@@ -53,3 +53,6 @@ default-prompt-inject.md
 
 # 真宿主重打前的自建快照（119 个目标文件的 sha256 副本，不依赖 .dshpurge.bak）
 /.tmp-realhost-snapshot/
+
+# 纯净上游树（npm 装出来的 rc.N，用于当独立基线做两版对拍，每个 1.5GB）
+/.tmp-tree/
