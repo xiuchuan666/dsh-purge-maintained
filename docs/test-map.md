@@ -497,6 +497,25 @@ RED 演练 22 条突变全红（`restored: true`，`{"total":22,"red":22,"green"
 
 ---
 
+**二十四补**：`lib/update.js` 的下载与 git 那一层，从「只能读源码钉形状」变成**真跑**。这一层在本维护副本里是死路（`ONLINE_UPDATES_ENABLED = false`，`_applyUpdateImpl` 第一句就抛），恰恰因此，它保存着**只在开关打开那天才会执行的安全护栏**：https 强制、跳转白名单、跳数与自环、50MB 上限、超时文案、`git` 覆盖前的脏检查。这些护栏坏掉时用户看不到任何报错 —— 点了更新但什么都没下载、或者回退版本时把工作区覆盖了。批44 之前这里只有 4 条源码形状断言，现在两个文件 **102 条**：`test-update-net.mjs`（47 条，假 `https.request` 驱动整条请求链）+ `test-update-state.mjs`（55 条，真磁盘 / 真 git / 真 zip）。`lib/update.js` 行覆盖 **55% → 87.46%**（1011/1156），函数 109/120，分支 465/542。
+
+做法一：**给 26 个原本私有的函数加 `export`**（`^export function|^export async function` 22 → 48，公开面一行没改），否则整层没法从外面驱动。
+
+做法二：**假 `https.request`**。`https.request` 是可写可配置的数据属性，`lib/update.js` 里 `import https from "node:https"` 拿到的是同一个模块对象、调用时才读属性，所以「先替换 `https.request` 再 `await import`」就能整条链跑起来。假的 `req` 要有 `EventEmitter` 的 `on`、`destroy(err)`（内部 `setImmediate(() => req.emit("error", err))`）、`setTimeout(ms, fn)` 记下超时回调、`end()` 里造 `Readable` 当 `res`。四个坑：
+
+1. **`res.resume()` 不能覆成空函数。** 第一版为了观察 302 有没有被消费写成 `res.resume = () => {}`，结果 `Readable` 永远进不了 flowing 态、`'end'` 不触发，`requestBuffer` 的 Promise 永挂 —— 表现为四条 `cancelled`（每条 15 秒超时），而不是失败。正确形态是 `const base = res.resume.bind(res); res.resume = () => { base(); }`。
+2. **302 分支的剧本每跳必须给不同 `location`。** 六次都回同一个 URL 时，第二次请求 `candidate === url` 会先撞上自环闸 `if (!candidate || candidate === url) reject(http ${status})`，于是「跳数用尽」那条用例测到的是自环而不是跳数上限。
+3. **`fetchRes` 会预改写下载地址**（`const started = rewriteDownloadUrl(url) || url`），所以 `requestBuffer` 里「失败后退回改写 URL」的分支经 `fetchText`/`fetchRes` 永远走不到 —— 那两条必须直接调 `requestBuffer`。
+4. **`async` 函数的入参炸出来是 rejected promise，不是同步 throw。** `overlayFromZip(null)` 里 `dests.filter` 立刻 TypeError，但断言必须写 `await assert.rejects(...)`。
+
+做法三：**真 git + 真 zip**。`gitTrackedDirty` / `gitResetTo` 用 `git init -q -b main` + `git clone --bare` 当 origin 的真仓库测；`overlayFromZip` 用手拼的 store-方法 zip（本地头 30 字节 + 中央目录 46 字节 + EOCD 22 字节，`zlib.crc32` 必须写对）喂给假 `https.request`。三条实测结论：①`gitTrackedDirty` 只 `--untracked-files=no` 加 COPY_NAMES 白名单，**未跟踪文件不算脏**（连 `client.js` 这种刚解压出来的新文件也不算），少了这个开关每次更新都会以为自己有未提交改动；②`gitResetTo(dir, '')` 不报「未知版本」—— 源码是 `safeUpdateRef(ref || STABLE_REF)`，空串先回落 `main`，于是只有真去 fetch 时才炸 `fatal: 'origin' does not appear to be a git repository`（**这条是现状，别当 bug 改掉**）；③`overlayFromZip([])` / `['']` / `[null]` 都早退，只有 `null` / `undefined` 才炸。
+
+RED 演练 **39 条突变 → 39/39 全红**（`restored: true`）。首轮 38 条里 5 GREEN / 7 ANCHOR 的处置值得记：GREEN 的「删掉 jsdelivr 白名单」「不再拦自环」「archiveZipUrl 不再编码斜杠」「markCurrent 丢掉第一档同提交」「gitTrackedDirty 把未跟踪文件算脏」都是**测试漏了某条路径**，补用例后转红（不是等价突变）；7 条 ANCHOR 全是**锚点抄错**——`isAbortError` 只有一条 `return` 行、`rewriteDownloadUrl` 没有 codeload 特判、`versionFromPackageText` 没有 BOM 处理、`listRemoteVersions` 是跨行三元、`describeLane` 的 pin 判断带 `onLane &&`、`hasRemote` 用的是 `versions.some(...)`。教训：**锚点必须从源码真实行抄，凭记忆写必 MIS**。
+
+`npm run check` 六道闸：`[syntax] 236 files` / `[metadata] patches=86 tests=95` / `[eol] 306 文件` / `[client] PASS` / `[gates] 86 rows, 58 gated` / `[test] 2976 / 2974 过 / 0 失败 / 2 跳过`（两平台各 102/102）。覆盖率 `[coverage] PASS`，全仓行 **89.44%** / 函数 80.45% / 分支 84.74%。
+
+顺带修掉一条**老测试的隐藏缺陷**：`scripts/test-update.mjs` 的 `bodyOf(signature, nextSignature)` 用 `SRC.indexOf(nextSignature, from)` 切函数体，而下一个签名现在带 `export ` 前缀 —— `indexOf` 命中的位置在 `export ` 之后，于是上一段的尾巴留着 `export `，`body.trimEnd().endsWith('}')` 变成 false。修法是在切之前 `to = SRC.lastIndexOf('\n', to) + 1` 退到行首。**加 `export` 之前没人踩到，因为当时所有函数都没有前缀。**
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -594,7 +613,8 @@ RED 演练 22 条突变全红（`restored: true`，`{"total":22,"red":22,"green"
 | 缺什么才算不可用：`process.env.X` 与 `${X:?}` 算必需、`os.environ.get` 不算；说明文件（`.md`/`.txt`/`.json`）与跨系统二进制不计入「路径缺失」 | 同上 | 同上 |
 | 官方技能库的扫描：跳过 `.system` 与点开头、扁平 `.md` 不收 `SKILL.md`、同名去重且 redteam 优先 | 同上 | 同上 |
 | `checkSkill` 的判定：正文在手但文件不在只记 `file-stale`（仍算 available）、正文与文件都读不到才 broken、VPS 占位符在 `REDTEAM_VPS_HOST` 已配时不算缺 | 同上 | 同上 |
-| 在线更新保持关闭（不指回已删库的 `HunYiSage/dsh-purge`） | `test-update-source.mjs` | `lib/update.js` 55% |
+| 在线更新的下载链与 git 落版：https 强制、七个主机白名单、跳数与自环、50MB 上限、超时统一成「GitHub 超时」、302 消费与不消费、`archiveZipUrl`/`archiveTarballUrl`/`rewriteDownloadUrl`/`versionFromPackageText`/`isAbortError` 全形态、`describeLane` 的 hasUpdate/hasRemote/sha 三支、`markCurrent` 四档、`gitTrackedDirty`/`gitResetTo` 真仓库、`overlayFromZip` 真 zip | `test-update-net.mjs`（47 条）+ `test-update-state.mjs`（55 条） | `lib/update.js` 87% |
+| 在线更新保持关闭（不指回已删库的 `HunYiSage/dsh-purge`） | `test-update-source.mjs` | `lib/update.js` 87% |
 | 出厂面里没有残留的上游地址与渠道（含成品 `client.js` 的欢迎页链接、演练台兜底仓库、Release 工作流） | `test-upstream-refs.mjs` | — |
 | `package.json` 的 `files` / `dsh.install` / `private` 不回退 | `test-package-integrity.mjs` | — |
 | `npm pack` 产物里不含 `.bak`、`default-prompt-inject.md` | `test-package-integrity.mjs` | — |
@@ -621,10 +641,10 @@ RED 演练 22 条突变全红（`restored: true`，`{"total":22,"red":22,"green"
 | 设置读写：文件值赢过配置值、非布尔被忽略、坏 JSON/数组/`"false"` 三种回落、写盘两空格+结尾换行、patch 非布尔保留旧值、目录自建且不留 `.tmp` | `test-hooks-deny.mjs`（8 条） | 同上 |
 | 原子写失败要往上抛且收走 `.tmp`（落点被目录占住 → rename EPERM） | `test-hooks-deny.mjs`（1 条） | 同上 |
 | `selectPatches`：旁路开着照常、关掉四条一个不留且顺序不变、四条 id 与常量一致、只认数字 id | `test-hooks-deny.mjs`（4 条） | 同上 |
-| 通道状态：坏 `channel.json` 回落 stable、beta pin 清空并回写 | `test-self-update.mjs` | `lib/update.js` 55% |
+| 通道状态：坏 `channel.json` 回落 stable、beta pin 清空并回写 | `test-self-update.mjs` | `lib/update.js` 87% |
 | 版本比较与筛选：`versionIsNewer`、`latestStableVersion`、`hideListedVersion` | `test-self-update.mjs` | 同上 |
 | 更新 ref 白名单（`safeUpdateRef` 挡住路径穿越与命令拼接） | `test-self-update.mjs` | 同上 |
-| 更新地址改写：`archiveZipUrl` / `archiveTarballUrl` 认 40 位 sha 走裸路径、`v?数字` 走 `refs/tags`、其余走 `refs/heads` 且 ref 要编码；`rewriteDownloadUrl` 只把 `github.com/.../archive/...` 改写到 `codeload`（源码形状钉，含 `{7,40}` 与 `decodeURIComponent`） | `test-update.mjs`（6 条） | `lib/update.js` 55% |
+| 更新地址改写：`archiveZipUrl` / `archiveTarballUrl` 认 40 位 sha 走裸路径、`v?数字` 走 `refs/tags`、其余走 `refs/heads` 且 ref 要编码；`rewriteDownloadUrl` 只把 `github.com/.../archive/...` 改写到 `codeload`（源码形状钉，含 `{7,40}` 与 `decodeURIComponent`） | `test-update.mjs`（6 条） | `lib/update.js` 87% |
 | 通道与历史落盘：无文件回 stable **且不写盘**、坏 pin（beta 名 / `beta` 分支）清掉**并回写**、`switchChannel apply:false` 的落盘是两空格缩进 + 结尾换行、`channelPublic` 未知通道回落 stable、`pushHistory` 上限 20 条且同 ref 去重、`writeStamp` 空值不写 | `test-update.mjs`（9 条） | 同上 |
 | profile 扫描与钉版本：`findPurgeProfiles` 只认 `dependencies`/`devDependencies`（**不认 optional**）、`profilePluginDir` 判存在、`pinInstalledSpec` 只改三个依赖段里已存在的 `dsh-purge` 键、注释里留着「不手改 `pnpm-lock.yaml`」的原因与当年报错 | `test-update.mjs`（6 条） | 同上 |
 | `checkUpdate` 的两条短路：beta 通道没有远端时回「还没有测试版」而不是抛错；stable 没有远端时抛 `UPDATES_DISABLED_MESSAGE`，且**抛错不覆盖** `lastUpdateResult()` | `test-update.mjs`（4 条） | 同上 |

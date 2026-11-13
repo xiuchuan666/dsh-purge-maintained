@@ -521,6 +521,17 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 包本身已标 `"private": true`，`npm publish` 会直接拒绝。对外发布渠道只有本地 `npm pack` 产物（`$DSH_HOME/plugins/*.tgz`）。
 
+### 假外部依赖：先问「它是不是可写数据属性」
+
+`lib/update.js` 的下载链要在开关关着的情况下测，唯一的办法是把 `https.request` 换掉。能不能换、怎么换，有三条实测规则：
+
+- **`https.request` 是 `{ writable: true, configurable: true }` 的数据属性**，可以直接赋值。`lib/update.js` 里 `import https from "node:https"` 拿到的是同一个模块对象，调用时才读属性，所以「替换后 `await import`」与「import 后替换」都生效。但**测试文件必须自己 `finally` 还原**，否则同进程里后面跑的测试会撞上一个假网络。
+- **假的 `res` 不要覆写 `resume`。** 为了观察 302 有没有被消费而写成 `res.resume = () => {}`，会让 `Readable` 永远进不了 flowing 态、`'end'` 不触发，于是 Promise 永挂 —— `node --test` 报的是 `cancelled`（超时）而不是 `fail`，看起来像环境问题。要观察就 `const base = res.resume.bind(res); res.resume = () => { base(); }`。
+- **`async` 函数的入参炸出来是 rejected promise。** `overlayFromZip(null)` 里 `dests.filter` 立刻 TypeError，但断言必须 `await assert.rejects(...)`；写 `assert.throws` 会红在「没有同步抛」。
+- **改函数签名前先看有没有测试按「签名文本」切函数体。** `scripts/test-update.mjs` 的 `bodyOf(sig, nextSig)` 用 `SRC.indexOf(nextSig, from)` 切片；给下一个函数加上 `export ` 前缀后，`indexOf` 命中位置在 `export ` 之后，上一段的尾巴留下一个 `export `，`body.trimEnd().endsWith('}')` 就变成 false。修法是切之前 `to = SRC.lastIndexOf("\n", to) + 1` 退到行首。
+
+一个提醒：这一层在本副本里是**死路**（`ONLINE_UPDATES_ENABLED = false`），所以它坏掉时用户看不到任何报错 —— 点了更新什么都没下载、或者回退版本时把工作区覆盖了。正因为它平时不跑，才更需要有测试盯着那几条护栏（https 强制、跳转白名单、跳数与自环、50MB 上限、`git` 覆盖前的脏检查）。
+
 ## 更新链路（已固定为离线）
 
 维护仓库是私有的，GitHub 的 `codeload` / `api` / `raw` / `jsdelivr` 对匿名请求全部 404。因此：

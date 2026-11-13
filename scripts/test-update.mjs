@@ -135,8 +135,11 @@ function lineContaining(needle) {
 function bodyOf(signature, nextSignature) {
   const from = SRC.indexOf(signature)
   assert.ok(from >= 0, `找不到函数签名：${signature}`)
-  const to = nextSignature ? SRC.indexOf(nextSignature, from) : SRC.length
+  let to = nextSignature ? SRC.indexOf(nextSignature, from) : SRC.length
   assert.ok(to > from, `找不到下一个函数签名：${nextSignature}`)
+  // 下一个签名的前面可能还有修饰词（`export ` / `async `），按 indexOf 切会把它们
+  // 尾巴留在上一段的末尾。退到行首再切，函数体才不会被这些词污染。
+  if (to < SRC.length) to = SRC.lastIndexOf('\n', to) + 1
   return SRC.slice(from, to)
 }
 
