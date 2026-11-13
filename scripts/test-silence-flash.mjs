@@ -146,7 +146,7 @@ test("silenceCmdFlash 在非 win32 汇总成 ok:true，各段都是 skipped_not_
 
 // -------------------------------------------- worseLiangshenHit 的聚合口径（真怪癖）
 
-test("聚合返回值只可能是 missing / pattern_miss / error:*：patched 永远显示不出来", () => {
+test("聚合返回值只可能是 missing / pattern_miss / error:*：patched 永远显示不出来", () => asPlatform("win32", () => {
   const sb = sandbox("rank-patched");
   const fp = put(
     path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-liangshen", "presets", "liangshen", "custom-bash.mjs"),
@@ -155,9 +155,9 @@ test("聚合返回值只可能是 missing / pattern_miss / error:*：patched 永
   const ret = core.silenceLiangshenCustomBashFlash(sb.home);
   assert.equal(ret, "missing", "文件确实改了，聚合值仍是初值 missing");
   assert.match(read(fp), /\[dsh-purge\] never fall back to WSL System32 bash/, "改是改了");
-});
+}));
 
-test("already 也显示不出来：二次调用仍回 missing，且不再改文件", () => {
+test("already 也显示不出来：二次调用仍回 missing，且不再改文件", () => asPlatform("win32", () => {
   const sb = sandbox("rank-already");
   const fp = put(
     path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-liangshen", "presets", "liangshen", "custom-bash.mjs"),
@@ -169,9 +169,9 @@ test("already 也显示不出来：二次调用仍回 missing，且不再改文�
   assert.equal(core.silenceLiangshenCustomBashFlash(sb.home), "missing");
   assert.equal(read(fp), once, "二次调用不重写");
   assert.equal(fs.statSync(fp).mtimeMs, mtime);
-});
+}));
 
-test("只有一个文件打不上时 pattern_miss 胜出，但已经改过的文件不回滚", () => {
+test("只有一个文件打不上时 pattern_miss 胜出，但已经改过的文件不回滚", () => asPlatform("win32", () => {
   const sb = sandbox("rank-miss");
   const a = put(
     path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-liangshen", "presets", "liangshen", "custom-bash.mjs"),
@@ -197,17 +197,17 @@ test("只有一个文件打不上时 pattern_miss 胜出，但已经改过的文
   assert.equal(core.silenceLiangshenCustomBashFlash(sb.home), "pattern_miss");
   assert.match(read(a), /WSL bash launcher is not Git Bash/, "打上的那条保留");
   assert.equal(read(b), "const unrelated = 1" + N, "打不上的那条一字不动");
-});
+}));
 
-test("一个候选文件都没有时回 missing，也不新建文件", () => {
+test("一个候选文件都没有时回 missing，也不新建文件", () => asPlatform("win32", () => {
   const sb = sandbox("rank-none");
   assert.equal(core.silenceLiangshenCustomBashFlash(sb.home), "missing");
   assert.equal(fs.existsSync(path.join(sb.home, "profiles")), false, "不许顺手建目录");
-});
+}));
 
 // ------------------------------------------------- silenceLiangshenCustomBashFlash
 
-test("custom-bash 的注入了三条防线：marker、WSL 路径正则、返回 resolved", () => {
+test("custom-bash 的注入了三条防线：marker、WSL 路径正则、返回 resolved", () => asPlatform("win32", () => {
   const sb = sandbox("cb-body");
   const fp = put(
     path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-liangshen", "presets", "liangshen", "custom-bash.mjs"),
@@ -221,9 +221,9 @@ test("custom-bash 的注入了三条防线：marker、WSL 路径正则、返回 
   assert.match(text, /WSL bash launcher is not Git Bash/);
   assert.match(text, /return resolved/);
   assert.equal(text.split("resolveExecutable('bash'").length - 1, 1, "解析调用只留一次（改写成 const resolved = …）");
-});
+}));
 
-test("custom-bash 只认 web 与 web-all 嵌套两处，.dsh-module-fallback 里的不算", () => {
+test("custom-bash 只认 web 与 web-all 嵌套两处，.dsh-module-fallback 里的不算", () => asPlatform("win32", () => {
   const sb = sandbox("cb-paths");
   const fallback = put(
     path.join(
@@ -242,29 +242,30 @@ test("custom-bash 只认 web 与 web-all 嵌套两处，.dsh-module-fallback 里
   );
   assert.equal(core.silenceLiangshenCustomBashFlash(sb.home), "missing");
   assert.doesNotMatch(read(fallback), /dsh-purge/);
-});
+}));
 
-test("写盘失败回 error: 前缀（本平台不允许写只读文件时才校验）", (t) => {
-  const sb = sandbox("cb-error");
-  const fp = put(
-    path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-liangshen", "presets", "liangshen", "custom-bash.mjs"),
-    "    try {" + N + "      return await ctx.subprocess.resolveExecutable('bash', undefined, signal)" + N + "    } catch (error) {" + N,
-  );
-  fs.chmodSync(fp, 0o444);
-  let writable = true;
-  try {
-    fs.writeFileSync(fp, "probe", "utf8");
-  } catch {
-    writable = false;
-  }
-  if (writable) {
-    t.skip("当前账号/文件系统允许写只读文件，这条分支测不出来");
-    return;
-  }
-  const ret = core.silenceLiangshenCustomBashFlash(sb.home);
-  assert.match(ret, /^error:/);
-  assert.match(ret, /Error: /, "String(Error) 带 Error: 前缀");
-});
+test("写盘失败回 error: 前缀（本平台不允许写只读文件时才校验）", (t) =>
+  asPlatform("win32", () => {
+    const sb = sandbox("cb-error");
+    const fp = put(
+      path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-liangshen", "presets", "liangshen", "custom-bash.mjs"),
+      "    try {" + N + "      return await ctx.subprocess.resolveExecutable('bash', undefined, signal)" + N + "    } catch (error) {" + N,
+    );
+    fs.chmodSync(fp, 0o444);
+    let writable = true;
+    try {
+      fs.writeFileSync(fp, "probe", "utf8");
+    } catch {
+      writable = false;
+    }
+    if (writable) {
+      t.skip("当前账号/文件系统允许写只读文件，这条分支测不出来");
+      return;
+    }
+    const ret = core.silenceLiangshenCustomBashFlash(sb.home);
+    assert.match(ret, /^error:/);
+    assert.match(ret, /Error: /, "String(Error) 带 Error: 前缀");
+  }));
 
 // ------------------------------------------------------- silenceLiangshenPhase1Strip
 
@@ -556,7 +557,7 @@ const MNEMON_BODY =
   "const tail = 1" +
   N;
 
-test("mnemon：resolveGitBranch 被换成读 .git 的实现，不再 spawn git", () => {
+test("mnemon：resolveGitBranch 被换成读 .git 的实现，不再 spawn git", () => asPlatform("win32", () => {
   const sb = sandbox("mnemon");
   const fp = put(path.join(sb.home, "profiles", "web", "node_modules", "dsh-mnemon", "lib", "index.js"), MNEMON_BODY);
   assert.equal(core.silenceMnemonGitFlash(sb.home), "missing");
@@ -565,17 +566,17 @@ test("mnemon：resolveGitBranch 被换成读 .git 的实现，不再 spawn git",
   assert.match(text, /不在这里 spawn git\.exe/);
   assert.match(text, /for \(let i = 0; i < 64; i\+\+\)/);
   assert.match(text, /\/\/#region src\/memory-view\.ts/, "region 注释要保住");
-});
+}));
 
-test("mnemon：replacement 里没有 marker，所以二次调用报 pattern_miss（现状锁定）", () => {
+test("mnemon：replacement 里没有 marker，所以二次调用报 pattern_miss（现状锁定）", () => asPlatform("win32", () => {
   const sb = sandbox("mnemon-twice");
   const fp = put(path.join(sb.home, "profiles", "web", "node_modules", "dsh-mnemon", "lib", "index.js"), MNEMON_BODY);
   core.silenceMnemonGitFlash(sb.home);
   assert.equal(read(fp).includes("dsh-purge: never spawn git.exe here"), false, "replacement 里确实没有 marker");
   assert.equal(core.silenceMnemonGitFlash(sb.home), "pattern_miss");
-});
+}));
 
-test("mnemon：dsh-web-all 嵌套副本也在候选里", () => {
+test("mnemon：dsh-web-all 嵌套副本也在候选里", () => asPlatform("win32", () => {
   const sb = sandbox("mnemon-nested");
   const fp = put(
     path.join(sb.home, "profiles", "web", "node_modules", "dsh-web-all", "node_modules", "dsh-mnemon", "lib", "index.js"),
@@ -583,7 +584,7 @@ test("mnemon：dsh-web-all 嵌套副本也在候选里", () => {
   );
   core.silenceMnemonGitFlash(sb.home);
   assert.equal(read(fp).includes('execFileSync("git", ['), false);
-});
+}));
 
 // ------------------------------------------------- silenceSubprocessLocalFlash
 
@@ -603,7 +604,7 @@ const SUB_BODY = [
   "",
 ].join(N);
 
-test("subprocess-local：stdio 块后面补 windowsHide: true", () => {
+test("subprocess-local：stdio 块后面补 windowsHide: true", () => asPlatform("win32", () => {
   const sb = sandbox("subprocess");
   const fp = put(path.join(sb.ai, "dsh-subprocess-local", "lib", "index.js"), SUB_BODY);
   assert.equal(core.silenceSubprocessLocalFlash(sb.home), "missing");
@@ -611,14 +612,14 @@ test("subprocess-local：stdio 块后面补 windowsHide: true", () => {
   assert.match(text, /\/\/ \[dsh-purge\] subprocess-local windowsHide/);
   assert.match(text, /windowsHide: true/);
   assert.match(text, /detached: platform !== "win32",/);
-});
+}));
 
-test("subprocess-local：形态对不上时一字不动", () => {
+test("subprocess-local：形态对不上时一字不动", () => asPlatform("win32", () => {
   const sb = sandbox("subprocess-miss");
   const fp = put(path.join(sb.ai, "dsh-subprocess-local", "lib", "index.js"), "const child = spawn(x)" + N);
   core.silenceSubprocessLocalFlash(sb.home);
   assert.equal(read(fp), "const child = spawn(x)" + N);
-});
+}));
 
 // ------------------------------------------------- silenceDoctorSpawnFlash（三处）
 
@@ -640,7 +641,7 @@ const DOC_BODY = [
   "",
 ].join(N);
 
-test("doctor：spawn / dshSpawnSpec / stdio 三处都能注入", () => {
+test("doctor：spawn / dshSpawnSpec / stdio 三处都能注入", () => asPlatform("win32", () => {
   const sb = sandbox("doctor");
   const fp = put(path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-doctor", "lib", "cli.mjs"), DOC_BODY);
   core.silenceDoctorSpawnFlash(sb.home);
@@ -650,9 +651,9 @@ test("doctor：spawn / dshSpawnSpec / stdio 三处都能注入", () => {
   assert.match(text, /\[dsh-purge\] doctor launch stdio no-inherit/);
   assert.match(text, /windowsHide: true,/);
   assert.match(text, /"ignore",/);
-});
+}));
 
-test("doctor：三处都已打好时不再改文件（already 分支）", () => {
+test("doctor：三处都已打好时不再改文件（already 分支）", () => asPlatform("win32", () => {
   const sb = sandbox("doctor-already");
   const done = [
     'import { spawn as __dshPurgeSpawnOrig } from "node:child_process";',
@@ -666,14 +667,14 @@ test("doctor：三处都已打好时不再改文件（already 分支）", () => 
   assert.equal(core.silenceDoctorSpawnFlash(sb.home), "missing");
   assert.equal(read(fp), done);
   assert.equal(fs.statSync(fp).mtimeMs, mtime);
-});
+}));
 
-test("doctor：什么都不匹配时回 pattern_miss", () => {
+test("doctor：什么都不匹配时回 pattern_miss", () => asPlatform("win32", () => {
   const sb = sandbox("doctor-miss");
   const fp = put(path.join(sb.home, "profiles", "web", "node_modules", "@linxin666", "dsh-doctor", "lib", "cli.mjs"), "const x = 1" + N);
   assert.equal(core.silenceDoctorSpawnFlash(sb.home), "pattern_miss");
   assert.equal(read(fp), "const x = 1" + N);
-});
+}));
 
 // ------------------------------------------------ silenceDshmarketRestartFlash（两处）
 
@@ -687,7 +688,7 @@ const MARKET_BODY = [
   "",
 ].join(N);
 
-test("market：import 补 existsSync/dirname，respawn 改走 node bin.js", () => {
+test("market：import 补 existsSync/dirname，respawn 改走 node bin.js", () => asPlatform("win32", () => {
   const sb = sandbox("market");
   const fp = put(path.join(sb.home, "profiles", "web", "node_modules", "dshmarket", "lib", "restart.js"), MARKET_BODY);
   core.silenceDshmarketRestartFlash(sb.home);
@@ -696,9 +697,9 @@ test("market：import 补 existsSync/dirname，respawn 改走 node bin.js", () =
   assert.match(text, /import \{ dirname, join \} from 'node:path';/);
   assert.match(text, /\[dsh-purge\] market restart → node bin\.js/);
   assert.match(text, /resolveBin/);
-});
+}));
 
-test("market：缺 importNeedle 时 import 段不改，但 respawn 段照样打", () => {
+test("market：缺 importNeedle 时 import 段不改，但 respawn 段照样打", () => asPlatform("win32", () => {
   const sb = sandbox("market-noimport");
   const body = MARKET_BODY.split(N).slice(2).join(N);
   const fp = put(path.join(sb.home, "profiles", "web", "node_modules", "dshmarket", "lib", "restart.js"), body);
@@ -706,16 +707,16 @@ test("market：缺 importNeedle 时 import 段不改，但 respawn 段照样打"
   const text = read(fp);
   assert.equal(text.includes("import { existsSync }"), false);
   assert.match(text, /\[dsh-purge\] market restart → node bin\.js/);
-});
+}));
 
-test("market：respawnInvocation 形态对不上时回 pattern_miss", () => {
+test("market：respawnInvocation 形态对不上时回 pattern_miss", () => asPlatform("win32", () => {
   const sb = sandbox("market-miss");
   const fp = put(
     path.join(sb.home, "profiles", "web", "node_modules", "dshmarket", "lib", "restart.js"),
     "export function other() {" + N + "}" + N,
   );
   assert.equal(core.silenceDshmarketRestartFlash(sb.home), "pattern_miss");
-});
+}));
 
 // ------------------------------------------------------------------ silenceCmdFlash
 

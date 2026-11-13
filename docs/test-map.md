@@ -317,6 +317,8 @@ RED 演练 `.tmp57-red.mjs` 用 `git show HEAD:lib/core.js` 当 BASE、29 条注
 
 **两条测试自己写错、被现实纠正的地方值得单独记**：①`worseLiangshenHit` 的用例原来只钉「五个 `if` 的文本顺序」，把 `missing` 与 `patched` 的返回值互换（2↔3）文本顺序一点没变 → 改成 `deepEqual` 逐行钉数值；②CRLF 那条原来写 `KEEP_BARE + "\\r\\n"`，那会往文件里塞**反斜杠**而不是回车换行，`text.includes("\r\n")` 恒假、写回永远走 LF 那侧，等于什么都没测 → 改成真 `"\r\n"`。
 
+**这一批还踩了一脚跨平台地雷，值得写进纪律**：推到 CI 后 **一次红 17 条**（`e3761ab`，run 43360375646，`ℹ fail 17`）。原因不在产品代码——`scripts/test-silence-flash.mjs` 里 18 条用例直接调五个 `silence*` 与 `stubDoctorSupervisor`，其中只有 3 条显式伪造了平台，剩下 15 条靠「开发机恰好是 Windows」通过。到 `ubuntu-latest` 上闸门早退 `skipped_not_win32`，目标文件一个字节没改，断言集体失败。绿的那批恰好就是**没有平台闸门**的三组（phase1 9 条、official 4 条、`liangshenPromptFilterText` 2 条、`keepLiangshenOperatorPrompt` 4 条），这直接指认了病因。修法：把这 15 条统一包 `asPlatform("win32", () => { … })`（外加带 `(t)` 形参的「写盘失败」那条改写成 `(t) => asPlatform(...)`），然后在本地跑 `node --import ./.tmp-linux-preload.mjs --test scripts/test-silence-flash.mjs` 确认 **51/51 依然全绿**。真 CI 上仍会有 2 条红是仿真边界造不出来的（NTFS 大小写不敏感、`chmod 0o444` 挡不住写入），属于预加载伪造不了文件系统语义，不是新问题。
+
 ---
 
 ## 五、前端产物链（client.js）

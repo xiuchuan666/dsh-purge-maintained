@@ -133,6 +133,10 @@ test("缓存命中时不再重建", () => {
 
   两个细节：`--import` 必须排在 `--test` 前面；预加载里**不能**在 `finally` 还原，否则 `test()` 的回调执行时平台已经变回 win32，等于没测。别用「先 `await import()` 测试文件、再还原」的写法——那只覆盖模块求值期，回调在还原之后才跑，会得到一堆看不懂的假红。
 
+  **这条要按函数而不是按「我记得」执行。** `e3761ab` 就是漏了：`scripts/test-silence-flash.mjs` 里 18 条用例直接调五个 `silence*` 与 `stubDoctorSupervisor`，只有 3 条显式伪造了平台，其余靠开发机恰好是 Windows 通过；推到 `ubuntu-latest` 上闸门早退、文件一个字节没改，**一次红 17 条**。所以写完一批用例，先把「被测函数里有没有 `if (process.platform !== "win32") return …`」列一遍（`grep -n 'process.platform' lib/<file>.js`），有闸门的函数**每一条**用例都包 `asPlatform("win32", …)`，然后在本地跑一次 `node --import ./.tmp-linux-preload.mjs --test scripts/<file>.mjs` 才算验完。
+
+  注意预加载只能伪造 `process.platform`，**伪造不了文件系统语义**：NTFS 大小写不敏感、`chmod 0o444` 挡不住写入，所以那几个「靠 Linux 才测得到」的用例在本地仍然会红（`adaptInDir` 的小写匹配、只读文件写失败），那是仿真的边界，不是新问题。
+
 
 还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
 
