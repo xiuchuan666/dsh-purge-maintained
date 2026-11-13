@@ -52,7 +52,7 @@
     "host:snapshot": "node scripts/host-snapshot.mjs",
     "host:choke": "node scripts/scan-chokepoints.mjs",
     "host:outcome": "node scripts/patch-outcome-report.mjs",
-    "test:behavior": "node scripts/test-patch-behavior.mjs",
+    "test:behavior": "node scripts/patch-behavior.mjs",
     "host:matrix": "node scripts/patch-matrix.mjs",
     "host:gates": "node scripts/patch-gates.mjs",
     "host:new-patch": "node scripts/new-patch.mjs",

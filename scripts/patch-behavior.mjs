@@ -7,7 +7,7 @@
 // this is the only check that fails when a patch silently stops removing a restriction.
 //
 // Usage:
-//   node scripts/test-patch-behavior.mjs
+//   node scripts/patch-behavior.mjs
 //       --baseline-tree DIR   pristine upstream tree (…/node_modules/@deepseek-ai)
 //       --ai-base DIR         live host (default: auto-detected)
 //       --only NAME[,NAME]    run a subset
@@ -42,7 +42,7 @@ const DEFAULT_BASELINE = path.join(ROOT, '.tmp-tree', 'rc1', 'node_modules', '@d
 
 function usage(message) {
   if (message) console.error('[behaviour] ' + message);
-  console.error('[behaviour] usage: test-patch-behavior.mjs [--ai-base DIR] [--baseline-tree DIR] [--only NAME] [--json FILE] [--limit N]');
+  console.error('[behaviour] usage: patch-behavior.mjs [--ai-base DIR] [--baseline-tree DIR] [--only NAME] [--json FILE] [--limit N]');
   process.exit(2);
 }
 
