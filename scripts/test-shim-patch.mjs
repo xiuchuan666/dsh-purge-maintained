@@ -486,7 +486,7 @@ test("复制备份失败时记 bak_failed:…，但仍然照写（不阻断打�
   assert.equal(fs.existsSync(`${fp}.dshpurge.bak`), false);
 });
 
-test("写盘失败回 error: 前缀（本平台不允许写只读文件时才校验）", async (t) => {
+test("只读文件：Windows 上 rename 被 EPERM 挡住，POSIX 上 rename 只看目录权限（现状锁定）", async (t) => {
   const sb = sandbox("readonly");
   const fp = put(path.join(sb.bin, "dsh"), SHEBANG_SH);
   try {
@@ -496,18 +496,76 @@ test("写盘失败回 error: 前缀（本平台不允许写只读文件时才校
     return;
   }
   try {
-    fs.writeFileSync(fp, "probe");
-    t.skip("当前账号/文件系统允许写只读文件，这条分支测不出来");
-    return;
-  } catch {
-    // 期望：写不进去
+    // 前提校验：直接写确实进不去（否则这条用例什么都证明不了）。
+    let directWriteBlocked = false;
+    try {
+      fs.writeFileSync(fp, "probe");
+    } catch {
+      directWriteBlocked = true;
+    }
+    // 但 `atomicWriteFile` 是「写临时文件 + rename」，POSIX 上 rename 只要求
+    // 目录可写，目标文件自己的 mode 拦不住它 —— 所以这不是一条跨平台用例。
+    if (IS_WINDOWS) {
+      if (!directWriteBlocked) {
+        t.skip("当前账号能直接写只读文件（管理员），这条分支测不出来");
+        return;
+      }
+      const result = await core.patchShim(sb.bin);
+      assert.ok(String(result.dsh).startsWith("error:"), String(result.dsh));
+      assert.ok(String(result.dsh).includes("EPERM"), String(result.dsh));
+      // bak 在写入之前就落好了，所以失败也有回退路。
+      assert.ok(fs.existsSync(`${fp}.dshpurge.bak`));
+    } else {
+      // `directWriteBlocked` 在真 POSIX（CI 的 ubuntu，非 root）上是 true，
+      // 在「Windows 上伪造 process.platform」的本地仿真里是 false —— 预加载
+      // 伪造不了文件系统语义（rename 仍然按 Windows 规则报 EPERM）。所以这里
+      // 只钉两条跨文件系统都成立的不变量：①bak 在写之前就落好；②要么注入
+      // 成功，要么回 error: 且原文件一字不动。
+      const result = await core.patchShim(sb.bin);
+      assert.ok(fs.existsSync(`${fp}.dshpurge.bak`), "bak 必须先于写入落盘");
+      assert.equal(fs.readFileSync(`${fp}.dshpurge.bak`, "utf8"), SHEBANG_SH);
+      const hit = String(result.dsh);
+      if (hit === "patched") {
+        assert.ok(read(fp).includes("dsh-purge shim begin"));
+      } else {
+        assert.ok(hit.startsWith("error:") && hit.includes("EPERM"), hit);
+        assert.equal(read(fp), SHEBANG_SH);
+      }
+    }
+  } finally {
+    fs.chmodSync(fp, 0o666);
   }
-  const result = await core.patchShim(sb.bin);
-  assert.ok(String(result.dsh).startsWith("error:"), String(result.dsh));
-  assert.ok(String(result.dsh).includes("EPERM"), String(result.dsh));
-  // bak 在写入之前就落好了，所以失败也有回退路。
-  assert.ok(fs.existsSync(`${fp}.dshpurge.bak`));
-  fs.chmodSync(fp, 0o666);
+});
+
+test("目录不可写时回 error: 前缀，且备份失败不阻断写入尝试", async (t) => {
+  const sb = sandbox("rodir");
+  const fp = put(path.join(sb.bin, "dsh"), SHEBANG_SH);
+  try {
+    fs.chmodSync(sb.bin, 0o555);
+  } catch {
+    t.skip("当前文件系统不支持 chmod");
+    return;
+  }
+  try {
+    // 前提校验：目录确实建不出文件（root 或 Windows 上的目录 mode 不生效会跳过）。
+    let blocked = false;
+    try {
+      fs.writeFileSync(path.join(sb.bin, ".probe"), "x");
+    } catch {
+      blocked = true;
+    }
+    if (!blocked) {
+      t.skip("当前账号/平台允许往只读目录写文件，这条分支测不出来");
+      return;
+    }
+    const result = await core.patchShim(sb.bin);
+    // 备份与写盘都要在同一个目录里建文件，两处都失败：bak 记 bak_failed、正体记 error。
+    assert.ok(String(result["dsh#bak"]).startsWith("bak_failed:"), String(result["dsh#bak"]));
+    assert.ok(String(result.dsh).startsWith("error:"), String(result.dsh));
+    assert.equal(read(fp), SHEBANG_SH);
+  } finally {
+    fs.chmodSync(sb.bin, 0o755);
+  }
 });
 
 // ------------------------------------------------------- 密封桌面目录
