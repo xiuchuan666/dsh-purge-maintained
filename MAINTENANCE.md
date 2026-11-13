@@ -165,6 +165,21 @@ test("缓存命中时不再重建", () => {
 - **合并平行实现时，保留更宽的那一份，并让窄的那份只做转出。** `lib/patch-outcome.mjs` 的 `patchReplacements` 认单数 `pattern`、容忍 `null`、空串 pattern 判不命中；`verify-target-lib.mjs` 那份三条都不认。合并方向不是「取交集」也不是「抄一份更好的」，而是**把宽的那份当唯一实现**（宽 = 少一种静默丢证据的路径），窄的那边改成 `import` + `export { ... }`，公开面一行不改、调用点一行不改。等价性要三条独立证据：CLI 的 `--pad` 全文 stdout `diff` 为空、`--json` 的六个数与 86 行 `[id,status,files]` 三元组逐行相等、两平台测试全绿。
 - **转出型 helper 的用例要断言「是不是同一份」，不是「算出来对不对」。** 原来那两条用例断言 `patchReplacements({ patterns: ['x'], replace: 'z' })` 返回什么 —— 换成转出之后这种断言仍会绿（因为两份实现碰巧在这条输入上一致），**证明不了「只有一份」**。改成 `assert.equal(lib.patchReplacements, outcome.patchReplacements)` 用引用相等钉住，再补一条源码形状断言（本文件里不许再出现 `function patchReplacements(`，且 `import` 与 `export { ... }` 两行必须都在）。
 
+**两条纪律（批70 补，都是"测试会静默量错东西"这一类）：**
+
+- **模块顶层就算路径常量的模块，必须在改完环境变量之后才 `await import`。** `lib/desktop.js:19` 的 `const INTERNAL_LOG_PATH = path.join(os.tmpdir(), "dsh-purge-desktop.log")` 在**模块求值时**就定了，而 `os.tmpdir()` 读的是 `process.env.TEMP`。测试文件里写成静态 `import` 会被提升到所有赋值之前，日志于是落到全仓共用的那一份上——单跑一个文件时看不出来，`node --test` 并行跑 92 个文件时就会把别人的行算进 `logDelta()`。正确姿势是顶部先 `mkdtempSync` + 三个 `process.env.{TEMP,TMP,TMPDIR} = ...`，再 `const d = await import("../lib/desktop.js")`，`test.after` 里还原。判据：`grep -n "os.tmpdir()" lib/*.js` 出现在模块顶层（不在函数体里）就中招。
+- **自带「退读真机」兜底的函数，测试必须把兜底显式堵掉。** `healRuntimePayload(resources, options)` 的 `sources` 缺省时会走 `runtimeHealSources()`，也就是读本机 `~/.dsh/dsh-runtimes/dsh-primary-runtime` —— 于是"空树应当自愈失败"这条用例在有真机的机器上报 `ok:true, healed:true, source:C:\Users\...\.dsh\...`。这不是环境差异，是**测试没断奶**：它测的其实是"这台机器上恰好装过 DSH"。写法是 `healRuntimePayload(res, { sources: [] })` 并自己造源目录；反过来 `runtimeHealSources` 那条用例则要显式验「`DSH_HOME` 打头、空串被过滤」。判据：被测函数的签名里有没有 `= undefined` 的 options、函数体里有没有 `?? detectXxx()` 这类兜底。
+
+**第三条（批70 补）：行为层真的区分不了时，才退到源码形状断言，并把「为什么区分不了」写进注释。**
+
+批70 有三处走了这条路，每一处都是先试过行为断言、拿到 GREEN 之后才改的：
+
+1. **`fs.chmodSync(fp, 0o755)`** —— Windows 上 chmod 是空操作（只翻只读位），删掉它本机行为零变化。断言改成读源码：两处 `chmodSync(fp, 0o755)` 都在，且两处都在 `.cmd` 的 `continue` 之后。
+2. **非 win32 的链接目标 `"../runtime"`** —— 把 `process.platform` 伪造成 `linux` 走进 `"dir"` 那条分支后，Windows 的 `fs.symlinkSync` 会把目标里的 `/` **归一成 `\`**，`readlinkSync` 读回来是 `..\runtime`。也就是说在这台机器上，"写 `/`"和"写 `\`"产出的链接完全一样，行为层不可能区分。断言改成源码里两条字面量都在（`"../runtime"` 配 `"dir"`、`"..\\runtime"` 配 `"junction"`）。
+3. **`cmdEntryAlreadyGood` 末行的 `return /"%entry%"/.test(text)`** —— 它是**冗余守卫**：前一道"必须含 `if not exist "%entry%" set "entry=..."`"已经把 `"%entry%"` 带进来了，走到最后一句必然为真。这条不为它硬凑 fixture，只在注释里写明"这是冗余守卫，删掉它测试不会红"，因为按判据（改完之后用户会看到什么不同）它根本不算一条契约。
+
+配套的反面纪律照旧：**不要为了让 drill 全红就把断言改成读源码**。先问"这台机器上这两条实现的产出真的一样吗"，一样才写形状断言；不一样就说明有区分力，只是 fixture 还不够毒。
+
 还有一个坑值得记：**断言要查值，不只查形状。** 拆 `test-plugin-surface.mjs` 时发现过真实漏洞——把 `DEFAULTS.enabled` 从 `true` 改成 `false`，原来 13 条测试全绿，因为它们只断言「有 18 个键」「布尔键会收敛字符串」，从不查默认值本身。这类改动最该被看见：用户升级后会突然发现功能默认关掉了。
 
 ### RED 演练：反向验证怎么写（一条血教训）
