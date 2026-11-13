@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-13T05:37:17.814Z",
-  "commit": "1208966",
+  "capturedAt": "2026-11-13T06:17:08.324Z",
+  "commit": "19099d1",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -93,20 +93,20 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 3982,
+      "lh": 4117,
       "lf": 5274,
-      "fnh": 271,
-      "fnf": 335,
-      "brh": 1180,
-      "brf": 1535
+      "fnh": 283,
+      "fnf": 333,
+      "brh": 1317,
+      "brf": 1638
     },
     "lib/desktop.js": {
       "lh": 1431,
       "lf": 2272,
       "fnh": 75,
       "fnf": 108,
-      "brh": 327,
-      "brf": 435
+      "brh": 329,
+      "brf": 437
     },
     "lib/drill-grant.js": {
       "lh": 43,
@@ -221,12 +221,12 @@
       "brf": 45
     },
     "lib/patch-outcome.mjs": {
-      "lh": 320,
-      "lf": 325,
+      "lh": 325,
+      "lf": 330,
       "fnh": 24,
       "fnf": 24,
-      "brh": 111,
-      "brf": 130
+      "brh": 117,
+      "brf": 134
     },
     "lib/patches/code-patches.mjs": {
       "lh": 42,
@@ -237,8 +237,8 @@
       "brf": 1
     },
     "lib/patches/engine-patches.mjs": {
-      "lh": 307,
-      "lf": 307,
+      "lh": 322,
+      "lf": 322,
       "fnh": 0,
       "fnf": 0,
       "brh": 1,
@@ -290,7 +290,7 @@
       "fnh": 16,
       "fnf": 16,
       "brh": 85,
-      "brf": 101
+      "brf": 104
     },
     "lib/profile-insert.js": {
       "lh": 392,

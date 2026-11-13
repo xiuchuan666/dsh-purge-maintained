@@ -56,6 +56,7 @@
     "host:matrix": "node scripts/patch-matrix.mjs",
     "host:gates": "node scripts/patch-gates.mjs",
     "host:new-patch": "node scripts/new-patch.mjs",
+    "host:rehearse": "node scripts/host-rehearse.mjs",
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "build:client": "node scripts/build-client.mjs",
     "postinstall": "node scripts/ensure-profile-bundle.mjs"

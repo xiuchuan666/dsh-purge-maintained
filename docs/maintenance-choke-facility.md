@@ -203,30 +203,52 @@ npm run host:new-patch -- --patch 12 --json                     # 改已有补�
 
 **不唯一就不产草稿**：跨行才唯一（两行完全重复）或行内有多处时，脚本打印原因并退出 1。放它过去，等于让人把一条会编辑三处的 pattern 粘进注册表。
 
-## 升级预演：把整棵树打一遍，再看四条独立证据
+## 升级预演：一条命令跑完四步，四份证据各自独立
 
-上面所有命令都是**读**：判定现状、对比两棵树、算锚点。升级前还缺一步**写**的演练——在一份纯净的新版宿主副本上真的把 86 条打下去，然后看结果。这比任何文本级推断都直接：补丁要么把文件改了，要么没有。
+上面所有命令都是**读**：判定现状、对比两棵树、算锚点。升级前还缺一步**写**的演练——在一份纯净的新版宿主副本上真的把 86 条打下去，然后看它是不是真的改了。这比任何文本级推断都直接：补丁要么把文件改了，要么没有。
 
 ```bash
-# 1. 装一棵目标版本（这里是 0.2.2-rc.2），并且另存一份副本用来动手
-mkdir -p .tmp-tree/rc2 && cd .tmp-tree/rc2
+# 版本号仍需人来定：先把目标版本装成基线
 node "$(npm root -g)/npm/bin/npm-cli.js" install --no-save --ignore-scripts --no-audit --no-fund @deepseek-ai/dsh@0.2.2-rc.2
-# 2. 复制成演练树（原件留着当基线，绝不能在原件上打补丁）
-cp -r node_modules/@deepseek-ai .tmp-tree/rc2-ai
-# 3. 打补丁（一行脚本，导入 lib/core.js 调 applyPatches）
-node -e "const c=await import('file:///.../lib/core.js');console.log(JSON.stringify((await c.applyPatches('.../.tmp-tree/rc2-ai')).reduce((a,r)=>(a[r.status]=(a[r.status]||0)+1,a),{})))"
+# 然后一条命令：复制演练树 → 四步证据 → 删掉演练树
+npm run host:rehearse -- --baseline-tree node_modules/@deepseek-ai --json .tmp-tree/rehearse-rc2.json
 ```
 
-然后四条独立证据，各自回答不同的问题：
+四步各自回答不同的问题，任一步都不能代替另一步：
 
-| 命令 | 在演练树上问什么 | rc.2 实测 |
+| 步骤 | 在演练树上问什么 | rc.2 实测 |
 | --- | --- | --- |
-| `applyPatches` 的 report | 打完之后的**状态分布**——有没有 `missing_file` / `skipped` 大面积出现 | `applied 64 / already 4 / missing_file 10 / skipped 1 / na 7` |
-| `host:outcome` | 打完之后的**七态**——`drifted`/`stale`/`unknown` 必须都是 0 | `applied 64 / pending 0 / native 3 / stale 0 / drifted 0 / na 19 / unknown 0` |
-| `test:behavior` | **行为**是否真的变了（不是「文件里有我的字」） | `ok 15 / broken 0 / already 0 / inert 0 / unexpected 0` |
-| `host:choke` | 新版**新增了哪些闸门**、我一条都没管 | 形状命中 10 类共 245 处；未覆盖且会加载的拦点 **0 组** |
+| `apply` | 86 条真的打得下去吗，哪几条打不动、为什么 | `ok 79 / expected 0 / warn 7 / blocking 0` |
+| `outcome` | 打完之后的**七态**——`pending`/`drifted`/`unknown` 必须都是 0 | `applied 67 / pending 0 / native 3 / stale 0 / drifted 0 / na 16 / unknown 0` |
+| `behaviour` | **行为**是否真的变了（不是「文件里有我的字」） | `ok 15 / broken 0 / already 0 / inert 0 / unexpected 0` |
+| `choke` | 新版**新增了哪些闸门**、我一条都没管 | `gaps 0 / watch 4 / targets 10 / ignored 115` |
 
-四条一起绿才算「升上去不坏」。任一条红都有具体坐标：`missing_file` 是文件被搬走或改名（rc.2 上那 10 条全是桌面壳与 hooks，包树外，预期如此），`drifted` 是锚点过期要改，`broken` 是补丁打了但没效果，`unexpected` 是新的拦截形态没有对应期望。
+结论行只有两种：`[rehearse] PASS  四条证据全绿` 或 `[rehearse] FAIL  N 处要先处理`。退出码 0 = 全绿、1 = 有阻塞、2 = 用法或环境失败，方便挂进发版前的流水线。
+
+### 预演的阈值必须比 apply 自己更严
+
+`lib/core.js` 的 `isPatchResultSoftOk` 故意让 `drifted` 通过：用户机器上不能因为一条旧 marker 挡住重启。但那套宽容在发版前是错的——`drifted` 正是要修的东西。所以 `scripts/rehearse-lib.mjs` 自带一套判定，不和 core 共用：
+
+| apply 状态 | 预演怎么算 | 为什么 |
+| --- | --- | --- |
+| `applied` / `already` / `skipped` / `na` / `off` | ok | 正常落地 |
+| `drifted` | **blocking**，即便该补丁声明了 `optional` | 锚点没了还没留下 trace，说明它在这个版本上失效了 |
+| `pattern_not_found` | 软补丁 warn、必需补丁 blocking | 软补丁的锚点本来就允许不在 |
+| `missing_file` | 分三种（见下） | 包树副本里永远没有桌面壳与 per-user preset |
+| `write_error:*` / `read_error` / `hit_count_mismatch:*` | blocking | 真事故 |
+
+`missing_file` 的三分法靠 `keyFacts()` 算出的内外计数：全在包树外（`inside===0 && outside>0`）判 `expected`，因为 `desktop-shell`、`hooks-*`、`preset-*` 这些键在 npm 包树里根本不存在；一个候选都解析不出来（`inside===0`）判 `warn`，说明这个布局里没有它该落的地方；其余判 `blocking`。rc.2 那 7 条 warn 全是 `no candidate path in this layout`，摘要里会单独标一句「其中 N 条是这个包树里不存在的包（hooks/pi-ai/presets）」，免得七行一样的 warn 被读成损坏。
+
+### 演练树必须放在隔离 root 里，否则补丁会写到真机
+
+这是这套工具里唯一一次真的造成了污染，值得写清楚。`core.targetFiles()` 解析某些键时会往上找兄弟包（`lib/core.js` 的 `listPiAiApiFiles` 走 `path.join(aiBase, '..', ...)`）。第一版把演练副本放在 `node_modules/.dsh-purge-rehearse`，结果是：副本里的 `@deepseek-ai` 往上找一层就是**真实安装**的 `node_modules/@earendil-works/pi-ai`，预演把三条 pi-ai 补丁打在了真机上。补丁报告当然说 `applied`——它不知道自己在写哪儿。
+
+修法是两条一起用：
+
+1. **演练 root 独立**：`root = .tmp-tree/rehearse-<version>/work`，副本与镜像都放在 root 里面。`outsidePackages(baseline)` 从 `targetFiles` 反推「这个版本会写到哪些兄弟包」（rc.2 上只有 `@earendil-works/pi-ai`），`prepareWorkRoot()` 把它们逐个镜像进 root，于是「往上找」落在 root 内而不是真机。
+2. **写盘前先证明没逃逸**：`escapedTargets(targetMap, root)` 逐条判「每个要写的路径都以 root 开头」，命中任意一条就把整个 `apply` 步判 blocking 并且**一行都不写**。判据不用正则、不做前缀近似——`rehearse-2` 不许吞掉 `rehearse-20`，这条由结尾补 `'/'` 保证。
+
+一句话：预演的可信度不来自「补丁说它成功了」，来自「我事先知道它只会写这个目录」。
 
 ### 一个真实踩到的坑：升级换错误类
 
@@ -240,6 +262,19 @@ which no expectation of this behaviour covers
 原因是期望里钉死了 `error: 'Error'`。**同一个闸门换了错误类，拦住了这件事没变**——把它当成失败只会让每次升级都多三条假警报。修法是把 `expect.error` 收成类名白名单（`['Error', 'SandboxEscalationError']`），语义不变、仍然绝不比消息正文。修后 rc.1 与 rc.2 两棵树都是 `ok 15 / unexpected 0`。
 
 这条教训值得单独记：**对拍的成本不在写期望，在维护期望的判别力**。太松（只判「抛了没」）就分不清是哪个闸门；太紧（钉死类名、比对消息）就在上游每次换措辞时失灵。类名白名单是这两头的中间点——它区分「换了个错误类型」与「闸门真的没了」。
+
+### 判据自己的 RED 演练：55 次注入，55 次变红
+
+测试全绿只证明「当前实现能通过」，不证明测试抓得住错误实现。所以 `scripts/rehearse-lib.mjs` 写完后又做了一次变异演练：一个一次性脚本（`.tmp-rh-drill.mjs`，不入库）对被测文件逐条注入变异，每注入一次就跑一遍 `node --test scripts/test-rehearse-lib.mjs`，跑完在 `finally` 里按字节还原并校验 `restored byte-identical: true`。
+
+注入的都是「看起来合理但会让判据变松」的改动：换掉 `BUCKET_LIST` 的顺序、解冻 `BUCKETS`、把 `schema` 改成 2、`flatten` 不再过滤假值、`keyFacts` 的树内判定用 `includes` 而不是 `startsWith`（`/rehearse-2/x` 于是会吞掉 `/rehearse-20/x`）、`drifted` 改判 ok、`unknown` 改判 ok、`stale` 改判 blocking、`escapedTargets` 去掉尾随斜杠、`coveredPackages` 收所有 `dsh-` 前缀而不看是否在 `@deepseek-ai` 下……
+
+结果：**55 条注入 / 55 条 RED / 0 GREEN / 0 ANCHOR**。三种非红结果各自的含义要分清：
+
+- **GREEN** —— 守卫已死，或测试有盲点，两种都必须解释清楚（也可能确实是等价改动，那要写下来为什么等价）。
+- **ANCHOR** —— 注入脚本自己的定位串没匹配上（缩进或多行拼接抄错），是演练脚本的 bug。必须重写注入位置，不能当成通过。
+
+这条纪律沿用自 `docs/test-map.md` 里 `.tmp61-drill.mjs` 的记录（当时 18 条注入 18 红，其中两条 ANCHOR 就是缩进抄错）。**判据本身也要有证据**，否则四条证据全绿只是四条自己觉得自己绿。
 
 ## CI 里查什么：`npm run check:gates`
 
