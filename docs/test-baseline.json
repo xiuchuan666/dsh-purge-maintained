@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T21:24:31.223Z",
-  "commit": "c4d6bfd",
+  "capturedAt": "2026-11-13T01:04:07.045Z",
+  "commit": "c9df0b8",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -50,7 +50,7 @@
       "fnh": 9,
       "fnf": 9,
       "brh": 90,
-      "brf": 106
+      "brf": 104
     },
     "lib/capability-protocol.js": {
       "lh": 32,
@@ -93,20 +93,20 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 2694,
+      "lh": 2887,
       "lf": 5274,
-      "fnh": 201,
-      "fnf": 323,
-      "brh": 756,
-      "brf": 1035
+      "fnh": 220,
+      "fnf": 326,
+      "brh": 813,
+      "brf": 1120
     },
     "lib/desktop.js": {
-      "lh": 1386,
+      "lh": 1417,
       "lf": 2272,
-      "fnh": 72,
-      "fnf": 107,
-      "brh": 313,
-      "brf": 421
+      "fnh": 75,
+      "fnf": 108,
+      "brh": 318,
+      "brf": 427
     },
     "lib/drill-grant.js": {
       "lh": 43,
@@ -169,8 +169,8 @@
       "lf": 105,
       "fnh": 7,
       "fnf": 7,
-      "brh": 41,
-      "brf": 41
+      "brh": 42,
+      "brf": 42
     },
     "lib/identity.js": {
       "lh": 1133,
@@ -181,20 +181,20 @@
       "brf": 586
     },
     "lib/index.js": {
-      "lh": 352,
+      "lh": 403,
       "lf": 429,
-      "fnh": 20,
-      "fnf": 34,
-      "brh": 44,
-      "brf": 87
+      "fnh": 30,
+      "fnf": 39,
+      "brh": 67,
+      "brf": 110
     },
     "lib/inject-write.js": {
       "lh": 351,
       "lf": 363,
       "fnh": 20,
       "fnf": 23,
-      "brh": 115,
-      "brf": 145
+      "brh": 116,
+      "brf": 146
     },
     "lib/live-cache.js": {
       "lh": 84,
@@ -281,8 +281,8 @@
       "lf": 205,
       "fnh": 16,
       "fnf": 16,
-      "brh": 83,
-      "brf": 99
+      "brh": 85,
+      "brf": 104
     },
     "lib/profile-insert.js": {
       "lh": 392,
@@ -306,7 +306,7 @@
       "fnh": 28,
       "fnf": 29,
       "brh": 101,
-      "brf": 129
+      "brf": 127
     },
     "lib/redteam/atomic-write.js": {
       "lh": 28,
@@ -426,7 +426,7 @@
       "fnh": 233,
       "fnf": 258,
       "brh": 945,
-      "brf": 1255
+      "brf": 1256
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -497,16 +497,16 @@
       "lf": 690,
       "fnh": 20,
       "fnf": 23,
-      "brh": 178,
+      "brh": 179,
       "brf": 229
     },
     "lib/rules.js": {
-      "lh": 534,
+      "lh": 535,
       "lf": 560,
       "fnh": 45,
       "fnf": 48,
       "brh": 179,
-      "brf": 209
+      "brf": 208
     },
     "lib/session-access.js": {
       "lh": 159,

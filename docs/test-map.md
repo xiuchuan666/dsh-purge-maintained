@@ -245,6 +245,12 @@
 | ctx 在 await 期间被 dispose 的两次拦截：`reapplyInstalled` 之后一次、`patchesMatchInstallStrict` 之后（重启前）再一次——只留前一次会在已 dispose 的 ctx 上发起重启（命中 `INACTIVE_EFFECT`） | `test-boot-settle.mjs`（2 条） | 同上 |
 | `autoApply` 的九条出口：插件根找不到、hooksDeny 还原失败清单、cmd-flash 抛错与不完整、补丁齐了顺手补 shim、关掉时 `disabled`、写完后带 `:cmd_flash_incomplete`、外层 catch 回 `error:` | `test-boot-settle.mjs`（9 条） | 同上 |
 | `scheduleApplyRestart`：不需要重启时连宿主都不问、密封包走 `restartSealedDesktopIfNeeded` 且 `asarSwap` 也算 restarting（ctx 必须透传，否则清不掉 Electron）、普通面原样透出、什么都不返回兜成 `restarting:true`、抛错回 `{restarting:false,error}` | `test-boot-settle.mjs`（5 条） | 同上 |
+| `apply()` 的停用与重启用：`enabled:false` 清 6 个运行期钩子 + 把两个全局钩子换成空实现 + 置 `__dshPurgeDisabled`（隔离 loopCtx 上的 guard 一起失效）、重新启用时必须把 `__dshPurgeDisabled` 删掉 | `test-plugin-apply.mjs`（2 条） | 同上 |
+| 启动时 `$DSH_HOME/.hung-disabled` 必须删掉（否则注入一直关着、状态页不报错） | `test-plugin-apply.mjs`（1 条） | 同上 |
+| ctx 已 dispose 的三条早退：`watchContextLife` 报 inactive 立刻 return、登记 settleTimer 回收器失败时 `clearTimeout` 后 return、`applyHostHooks` 抛 inactive 时吞掉且不再注册 web server | `test-plugin-apply.mjs`（3 条，靠第几次 `ctx.effect` 抛错区分） | 同上 |
+| `apply()` 一共登记 **12** 个 effect 工厂（少一个就等于泄漏一个定时器或闭包；`applyHostHooks` 内部那 8 个各登记一个） | `test-plugin-apply.mjs`（1 条） | 同上 |
+| `watchWebTreeReady` 四条分支的对外读数：没有 connection → `/status` 503（唯一有可观察差异的一条）、服务缺失 → 走 `then` 的**失败回调**也是 mark → 200、非 thenable → 同步 mark → 200、起手必须 `webState.ready = false`（热重载复用旧 ready 会让第二次 inject 之前的 `/status` 说假话） | `test-plugin-apply.mjs`（4 条） | 同上 |
+| 桌面自愈只在 `desktop` 面排程（`if (hostctl.currentSurface() === "desktop")` 守卫、整套启动路径只有一处 `setImmediate`、且必须在守卫之后）+ `/purge` 的 deps 里 `scheduleApplyRestart` 必须是 `bootSettle.scheduleApplyRestart`、rules 带 refresh 而 skills 不带 | `test-plugin-apply.mjs`（2 条源码形状） | 同上 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -269,6 +275,14 @@
 **教训**：抽取脚本收窄 import 时必须逐个 grep 被搬走的每个名字，确认「要么已 import、要么块外零引用」——`node --check` 只验语法，不验名字解析。
 
 **2026-11-13 八补**：启动自愈这棵决策树（215 行，`shimNeedsPatch` / `currentSettleScope` / `settleInstalledPatches` / `autoApply` / `scheduleApplyRestart`）从 `lib/index.js` 抽到了 `lib/boot-settle.js`（246 行）。`lib/index.js` 633 → 429 行。
+
+**2026-11-13 九补**：`apply()` 主体这 115 行（`lib/index.js` 188-302）在批53 之前一条测试都没有——它唯一的守卫是 `test-plugin-boot.mjs` 的「装得上不抛」，而「每个 if 走哪边」全是空的。这一批补了 `scripts/test-plugin-apply.mjs`（**18 条**），并把 `lib/index.js` 的行覆盖从 352 推到 **403/429（93.9%）**、函数 20→30、分支 44→67。
+
+**这一批最有价值的两条不是行为断言，而是读数断言**：`watchWebTreeReady` 的四条分支里只有「没有 connection」会留在 503，其余三条在运行期全都等价于 200（`settled.then(onOk, mark)` 的**第二个参数就是 mark**，服务不齐也放行；非 thenable 会同步 mark；连 `42.then(...)` 抛出的 `TypeError` 都被外层 `catch { mark(); }` 接住）。所以「删掉非 thenable 的早退」不会让任何行为测试变红，只能靠 `/status` 的 503/200 读数 + 源码形状两条一起钉。
+
+**RED 演练 18/18 全红**（第一轮 16 条里 11 红 / 4 绿 / 1 ANCHOR 0，改完断言后全红）。三处第一轮漏掉的都是同一个毛病——**断言写的是「不抛就算过」**：①「服务缺失也能 mark」原来只 `assert.ok(ctx.registered.length >= 0)`，永远真；②「非 thenable 要 mark」与「失败回调要 mark」在行为上不可区分，只能读源码；③「桌面面才自愈」在本机 `healOfficeSkillsRuntimeOnDisk()` 直接回 `{ok:true,healed:false}`，没有可观察差异。
+
+**顺带确认的两个事实**：`ctx.specs` 在 effect 工厂跑之前是 0（路由是 effect 里注册的，所以必须先 `runEffects` 再断言）；`apply()` 之后 `ai_base` 落在 npm 全局那份 `AppData\Roaming\npm\...\@deepseek-ai`，与真实桌面宿主不是同一棵，但 `/status` 只回显、不影响本测试。
 
 这一段是**唯一一段不能靠 import 兄弟模块来测的**：它每一步都要摸真宿主目录（`gatherState` / `purgeStateDir` 里的戳 / `desktopAsarStillSealed`），14 个 return 分支各只在真主机上出现几分之一秒。所以 `lib/boot-settle.js` 不 import 任何本项目模块，全部依赖由 `createBootSettle(deps)` 注入（`core` / `hostctl` / `reapply` / `officialUpdate` / `updater` 五个命名空间 + `settleMayReapply` / `settleMayRestart` 两个纯函数 + `log` + `setBootFullQuit`），五个函数作为返回值交出。这是本项目第一次用工厂注入而不是直接 import。
 
@@ -620,6 +634,8 @@
     ③ 桌面面（`DSH_SURFACE=desktop`）会走 `healOfficeSkills` / `inspectRuntimePayload` 真碰安装目录，测试里固定成 `web`；
     ④ 名字缺失的源码断言只覆盖 `routeSpecs` 这一处 deps 对象，其它 deps 面（`installWebServer` 内部、`applyHostHooks`）还是靠 boot 测试「跑起来不抛」。
 54. **启动自愈能注出来，但「真读宿主」那一步仍然没有守卫**。`lib/boot-settle.js` 的全部 14 个 return 分支现在都能用假 deps 精确走到，可五个注入点本身（`core.gatherState` 返回什么、`reapply.patchesMatchInstallStrict` 怎么判、`hostctl.scheduleRestart` 真起来是什么形状）一行都没被执行。判坏的典型表现仍要人工确认：①启动后补丁过期却没自愈（`gatherState` 的 `patches_pending` 口径变了）；②自愈写完重启了但重启是空转（`scheduleRestart` 返回的 `restarting` 语义变了）；③密封桌面卡在「等 Apply」永远不动（`desktopAsarStillSealed` 判反）。检测办法：改一次宿主包里的某个 `[dsh-purge]` 标记，重启宿主看它是否自己修回来；`npm run host:status` 与 `npm run host:preview` 只验「补丁在不在」，验不到「自愈有没有跑」。另外 `apply()` 里那行 `setTimeout(settleInstalledPatches, settleDelayMs(surface))` 在 boot 测试里被同步 dispose 撤掉了，桌面面 4000ms 的真实时序也没进过测试。
+
+55. **`apply()` 的 12 个 effect 里，只有总数被钉住，顺序与相互依赖没钉**。`test-plugin-apply.mjs` 断言了「登记 12 个」，但谁先谁后、谁的 disposer 依赖谁的初始化，一条都没测——真实宿主里 `installWebServer` 必然最后（它要 `routeSpecs` 的 deps 全部就位），`installCwdCapture` 必须在 `installFreshFullAccess` 之后（否则第一条消息的 cwd 抓不到）。**仍然测不到的**：①`ctx.effect` 在真 Cordis 里是异步注册，同步跑工厂只是近似；②`enabled:false` 路径里 `clearOwnedSelectedDefault` / `removeStaleAgentPresetDir` 在本机都走 `catch`（`$DSH_HOME` 是临时目录），真实清默认有没有清干净只能手验；③`apply()` 之后 `ai_base` 的实测落点是 npm 全局那份，与桌面真实生效的那棵不是同一个——`/status` 会把它显示出来，这是已知的两棵树问题，不属于本批。
 
 ## 维护约定
 
