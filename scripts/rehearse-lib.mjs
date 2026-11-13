@@ -251,7 +251,12 @@ export function renderRehearsal(report, options = {}) {
   }
   const summary = report.verdict;
   lines.push('');
-  lines.push(summary.ok ? '[rehearse] PASS  五条证据全绿' : '[rehearse] FAIL  ' + summary.reds.length + ' 处要先处理');
+  // Count what actually ran. With --skip the report must not claim the evidence it did not gather -
+  // 'five green' after skipping two steps is the exact kind of sentence this tool exists to avoid.
+  const ran = (report.steps || []).length;
+  const skipped = (report.skipped || []).length;
+  const scope = ran + ' 步' + (skipped > 0 ? '（跳过 ' + skipped + ' 步）' : '');
+  lines.push(summary.ok ? '[rehearse] PASS  ' + scope + '证据全绿' : '[rehearse] FAIL  ' + summary.reds.length + ' 处要先处理  ' + scope);
   for (const red of summary.reds) lines.push('[rehearse]   ! ' + red);
   for (const warn of summary.warns) lines.push('[rehearse]   ~ ' + warn);
   return lines;

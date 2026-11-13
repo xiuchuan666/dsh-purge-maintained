@@ -452,7 +452,7 @@ test("renderRehearsal 每步两行：状态 + 标题、缩进的摘要，末尾�
   assert.equal(lines[0], "[ok] apply  重打");
   assert.equal(lines[1], "       86 条");
   assert.equal(lines[2], "");
-  assert.equal(lines[3], "[rehearse] PASS  五条证据全绿");
+  assert.match(lines[3], /\[rehearse\] PASS  1 步证据全绿/);
 });
 
 test("renderRehearsal 有拦路时状态写 FAIL，末尾列出条数与每一条", () => {
@@ -460,7 +460,7 @@ test("renderRehearsal 有拦路时状态写 FAIL，末尾列出条数与每一�
     reportOf([{ id: "apply", label: "重打", summary: "86 条", verdict: { ok: false, blocking: ["1 drifted"], warn: [] }, rows: [] }]),
   );
   assert.equal(lines[0], "[FAIL] apply  重打");
-  assert.equal(lines[lines.length - 2], "[rehearse] FAIL  1 处要先处理");
+  assert.match(lines[lines.length - 2], /\[rehearse\] FAIL  1 处要先处理/);
   assert.equal(lines[lines.length - 1], "[rehearse]   ! apply: 1 drifted");
 });
 
@@ -523,7 +523,7 @@ test("renderRehearsal 的 limit 非整数时退回 20", () => {
 
 test("renderRehearsal 对空报告只给一句 PASS，不抛", () => {
   const lines = renderRehearsal({ steps: [], verdict: { ok: true, reds: [], warns: [] } });
-  assert.deepEqual(lines, ["", "[rehearse] PASS  五条证据全绿"]);
+  assert.deepEqual(lines, ["", "[rehearse] PASS  0 步证据全绿"]);
 });
 
 test("renderRehearsal 缺 rows / warn 也不抛（步骤只做了半套证据）", () => {
@@ -599,6 +599,27 @@ test("七态词表与 lib/patch-outcome.mjs 的 STATE_LIST 完全对齐（多一
       ["unknown", "blocking"],
     ],
   );
+});
+
+
+test("PASS 文案按实际跑了几步说，--skip 之后不许自称五条证据全绿", () => {
+  // 这条是给 tool 自己立的规矩：跳过两步还印「五条证据全绿」，就是本工具存在的理由的反面。
+  const full = renderRehearsal({
+    steps: [
+      { id: "apply", label: "a", summary: "s", verdict: { ok: true, blocking: [], warn: [] } },
+      { id: "gates", label: "g", summary: "s", verdict: { ok: true, blocking: [], warn: [] } },
+    ],
+    skipped: [],
+    verdict: { ok: true, reds: [], warns: [] },
+  });
+  assert.match(full[full.length - 1], /PASS  2 步证据全绿/);
+  const partial = renderRehearsal({
+    steps: [{ id: "apply", label: "a", summary: "s", verdict: { ok: true, blocking: [], warn: [] } }],
+    skipped: ["choke", "gates", "behaviour", "outcome"],
+    verdict: { ok: true, reds: [], warns: [] },
+  });
+  assert.match(partial[partial.length - 1], /PASS  1 步（跳过 4 步）证据全绿/);
+  assert.ok(!partial[partial.length - 1].includes("五条"));
 });
 
 test("五态词表与 scripts/behavior-lib.mjs 的 BEHAVIOR_STATE_LIST 完全对齐", () => {
