@@ -40,8 +40,33 @@ function replacementsOf(patch) {
   return Array.isArray(patch?.replacements) ? patch.replacements : []
 }
 
-test('core 的公开导出名一字不差', () => {
-  assert.deepEqual(Object.keys(after).sort(), Object.keys(before).sort(), 'core public export names')
+// 只有测试需要的私有判定：加 export 不改变插件对宿主的面（宿主只认 apply/install），
+// 但一个名字被悄悄导出会让「这块逻辑是不是还有第二份实现」变得难查，所以只放开
+// 明确登记过的这些，别的一律红。
+const EXPORT_EXTRA = new Set([
+  'isAiBase',
+  'firstAiBase',
+  'aiBaseGuessesAround',
+  'aiBaseGuessesFor',
+  'nestedAiPath',
+  'isPnpmNodeModules',
+  'pnpmVirtualStoreDir',
+  'pnpmProjectRootNear',
+  'pnpmHoistAiBases',
+  'walkAncestorsForAiBase',
+  'findAiBaseFromDshHome',
+  'homeHasHarnessData',
+  'desktopDshHomeGuesses',
+  'findWslWindowsDshHome',
+])
+
+test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {
+  const now = Object.keys(after)
+  const was = Object.keys(before)
+  assert.deepEqual(was.filter((k) => !now.includes(k)), [], 'core public export removed')
+  assert.deepEqual(now.filter((k) => !was.includes(k) && !EXPORT_EXTRA.has(k)), [], 'unexpected new core export')
+  // 放开名单不能过期：名单里的每个名字都必须是真被导出的
+  assert.deepEqual([...EXPORT_EXTRA].filter((k) => !now.includes(k)), [], 'stale EXPORT_EXTRA entry')
 })
 
 test('补丁总数是 86', () => {

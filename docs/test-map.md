@@ -24,6 +24,8 @@
 | 我们调的宿主 API 还在（`ctx.webServer` 等 8 个服务、9 个成员、7 个事件、`dshHomePath`） | `scripts/host-contract.mjs` / `test-host-contract.mjs` | — |
 | 宿主版本兼容判定（major.minor.patch.pre 全等） | `lib/core.js` `hostCompat`，被 `host:status` 间接覆盖 | `lib/core.js` 49% |
 | 探测真宿主树、排除 Electron 外壳依赖树 | `test-host-baseline.mjs`（`looksLikeHostTree` / `resolveAiBase`） | —（同上） |
+| 宿主树与本机主目录的定位链（`isAiBase` 判据、10 项候选表、pnpm 布局、profiles、`DSH_HOME` 优先级） | `test-host-locate.mjs`（34 条：判据 6 / pnpm 9 / 候选表 4 / walk 2 / `findAiBaseFromDshHome` 5 / 主目录 4 / 平台 4） | `lib/core.js` 81.7% |
+| 判错时不报错：打到 Electron 外壳那份树（全场 `no-file`）、或把 `~/.dsh` 当成桌面版在用的 `dsh-home` | 同上（候选表逐项顺序 + `portableHomeFromLauncher` 顺序 + `desktopDshHomeGuesses` 三平台） | 同上 |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
 | 状态戳说「已应用」但宿主树上没有注入标记 → 必须 `broken`，不许报「补丁仍站得住」 | `test-host-baseline.mjs`（`auditStampVsTree` 9 条） | `scripts/` 不计覆盖率 |
@@ -543,6 +545,22 @@ RED 演练 **25 条突变 → 25/25 全红**（`{"restored":true,"total":25,"red
 
 RED 演练 **31 条突变 → 31/31 全红**（`{"restored":true,"total":31,"red":31,"green":[],"miss":[],"restored":true}`）。锚点按**行号取真实行再做行内替换**，不手抄缩进（批73 那条 ANCHOR 事故的对策）。首轮 30 红 / 1 绿，绿的是等价突变：把 `error.message : String(error)` 改成 `: error`，对 `throw "plain"` 结果完全相同 —— 字符串自己 `.message` 是 `undefined`，落到兜底分支还是那个字符串。改成 `: 'unknown'` 才有区分力。**判据：「丢兜底」类突变要检查兜底目标值与兜底值是否恰好相等。**
 
+**二十七补**：`lib/core.js` 的「宿主树 / 主目录定位」簇 —— 十四个纯路径判定（`isAiBase` / `firstAiBase` / `aiBaseGuessesAround` / `aiBaseGuessesFor` / `nestedAiPath` / `isPnpmNodeModules` / `pnpmVirtualStoreDir` / `pnpmProjectRootNear` / `pnpmHoistAiBases` / `walkAncestorsForAiBase` / `findAiBaseFromDshHome` / `homeHasHarnessData` / `desktopDshHomeGuesses` / `findWslWindowsDshHome`）。这一簇回答的是整个插件最要紧的一个问题：**补丁该打到哪棵树上、配置该读哪个主目录** —— 而它判错时一声不响。
+
+判错只有两种表现，都不会抛错：①打到 Electron 外壳那份 `resources/app/node_modules/@deepseek-ai`，`targetFiles()` 返回 0 文件，全场 `no-file`，看着像「这批补丁都不兼容」；②把用户 `~/.dsh` 认成桌面版真正在用的 `dsh-home`，写进去的 `prompt-inject.md` 永远不生效，而状态页仍是绿的。两条都不是「会不会崩」的问题，是「会不会白忙」的问题。
+
+新增 `scripts/test-host-locate.mjs`（**34 条**），全部在临时目录里造树，`lib/core.js` 行覆盖 4241/5191（81.7%、+113 行）。几条**读源码想不到、只能跑出来**的现状：
+
+- `pnpmVirtualStoreDir` 把 `.modules.yaml` 里的相对 `virtualStoreDir` **拼到项目根上，不是拼到 `node_modules` 上**（pnpm 的语义就是这样）；写错这一处，store 会指到一个永远不存在的目录，于是所有 pnpm 安装都被判成「没有宿主树」。
+- `walkAncestorsForAiBase(start, maxUp)` 的每一轮 `i` 覆盖的是**两层**（自己 + 父级 的 `node_modules`），所以 `maxUp=2` 只到祖父级；用例把 `start` 放在 `<root>/walk/A/B/C/lib`、宿主树放在 `<root>/walk/`，实测 `maxUp=2 → null`、`maxUp=3 → 命中`。参数名里的 "up" 不是「往上几层」而是「跑几轮」。
+- `findDshHome` 的兜底用的是 `os.homedir()`，而它读的是 **`process.env.USERPROFILE` / `HOME`**，不是 `options.env`。只把沙箱环境塞进 `options.env` 而没写回 `process.env`，兜底分支会返回真机的 `C:\Users\Administrator\.dsh` —— 第一版用例就这么踩了，红的是「四处都没有时仍回 `~/.dsh`」那一条。
+- `desktopDshHomeGuesses()` 的 linux 分支**返回空数组**（官方没有 linux 桌面壳），darwin 只给 `Library/Application Support/...` 一条 —— 三个平台的分支必须分别钉，用 `Object.defineProperty(process, "platform", ...)` 伪平台跑。
+- `findWslWindowsDshHome` 在非 linux 恒空串；linux 下 `/mnt/c/Users` 不存在也是空串（本机没有 WSL，所以「找到并返回」那一支测不到，写在盲区 74）。
+
+RED 演练 **30 条突变 → 30/30 全红**（`{"total":30,"red":30,"green":[],"miss":[],"restored":true}`）。三条被换掉的等价突变值得记下来，因为都是「改完用户看不出区别」：①`firstAiBase` 去掉 `path.normalize`（`path.join` 早就折平了）；②`isPnpmNodeModules` 去掉 `isDir(nmDir)`（对文件路径来说后面两个判据本来也都是 false）；③`firstAiBase` 遇空白候选就放弃 —— 这条最初是绿的，因为用例只喂了「全是空」的数组，补一条 `['', null, good]` 才有区分力。
+
+顺带**一处必须登记的地方**：`scripts/test-patch-registry.mjs` 的「core 的公开导出名一字不差」是拿拆分母树 `docs/origin/core-split-baseline-8066985` 对拍的，加 14 个 `export` 会让它红。改法是加 `EXPORT_EXTRA` 白名单（只放开这些名字、别的一律红、白名单里出现过期的名字也红）—— 不是为了让它变绿，是为了让「下一次悄悄多导出一个」仍然是红的。
+
 
 ## 五、前端产物链（client.js）
 
@@ -922,6 +940,14 @@ RED 演练 **31 条突变 → 31/31 全红**（`{"restored":true,"total":31,"red
     **检测办法**：改完 `dispatch` 之后，别只看 `node --test scripts/test-redteam-dispatch.mjs`，还要跑 `node scripts/test-redteam-report.mjs` 与 `node scripts/test-redteam-tool-branches.mjs`（它们才管 op 背后的算得对不对）；再在真机上开一次演练台面板，看九个读 op 是否都能出数。
 
 
+
+74. **宿主树 / 主目录定位里「真的要去看一眼外部世界」的那几段还是空的。**
+    `test-host-locate.mjs` 把判据与候选表钉死了（34 条，`lib/core.js` 81.7%），但那十四条判定之外仍有四处必须真的碰系统：
+    **①`findDshHome` 的桌面分支**（`lib/core.js:1738-1747`）：`desktopHomeCandidates()` 要调 `desktop.findDesktopAppExecutable()` / `desktop.listDesktopInstallRoots()` 去扫真安装树，还要读 `process.resourcesPath`（只有 Electron 里有）。本机可以跑通，但结果依赖「这台机器装了哪些桌面版本」，写进用例就是在测环境，所以只钉了 web 面与 `desktopDshHomeGuesses` 这两段纯的部分。
+    **②`findWslWindowsDshHome` 的命中分支**：本机没有 WSL，`/mnt/c/Users` 不存在，所以「扫到一个带 `.dsh` 的 Windows 用户目录并返回」那一段一次都没跑过 —— 只钉了「非 linux 恒空」与「linux 下没有 `/mnt/c/Users` 也空」。
+    **③`findAiBaseFromDshHome` 的第四条路**（`findAiBaseFromRequire` 走 `createRequire` 解析 `@deepseek-ai/dsh/package.json`）：要一份能被 Node 解析器认的 `node_modules` 布局（含 `package.json` 的 `exports`），本机 fixture 造得出来但成本远高于收益，目前只有前三条路有用例。
+    **④`requireFrom` / `findAiBaseFromRequire` 本身**：它们靠 `createRequire` 的解析顺序，改坏的表现是「装了但找不到」，而不是抛错。
+    **检测办法**：改完这一簇，除了 `node --test scripts/test-host-locate.mjs`，还要在真机上跑 `npm run host:status`（看 `ai_base` 指的是不是 `resources/app/dsh/node_modules/@deepseek-ai` 那一份、`patches_applied` 是不是 79 左右）与 `node scripts/verify-target.mjs`（看 `would-apply` 是不是 0 附近）。
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。

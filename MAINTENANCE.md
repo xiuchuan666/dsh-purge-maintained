@@ -546,6 +546,16 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 报告链路另有三条读源码看不出来、只能行为用例钉的现状：`scoreReport().items` 是 SQL 顺序而 `chain_no` 在排序副本上算（两者可以不一致）；`scoreChain().stages` 是五段定长表、`scoreReport().stages` 过滤空阶段，但两者的 `ordinal` 都保留链路真实位置；`representativeShots` 的候选池按关联强度分层 push，`sort` 却只比 `kind → captured_at → id`，**分层不影响先后**。
 
+### 判「补丁打到哪棵树、配置读哪个主目录」时踩到的三件事
+
+`lib/core.js` 的宿主树 / 主目录定位簇（`isAiBase` 那一串十四条）判错时不会抛错，只会让整批补丁落到错的那棵树、或让写进 `prompt-inject.md` 的东西永远不生效。写 `scripts/test-host-locate.mjs` 时踩到的三条，以后凡碰 `os.homedir()` / `process.env` / 目录 fixture 都要先想一遍：
+
+- **`os.homedir()` 读的是 `process.env`，不是你手里的 `options.env`。** `findDshHome` 的兜底分支用 `os.homedir()` 拼 `~/.dsh`，所以只把沙箱环境塞进 `options.env`（甚至只塞进被调函数的参数）完全不够 —— 实测那一支会返回真机的 `C:\Users\Administrator\.dsh`，用例在「四处都没有时仍回 `~/.dsh`」上直接红。修法：`withEnv(sandboxEnv(home), () => core.findDshHome({...}))`，与 `test-shim-patch.mjs` 钉 `TEMP`/`npm_config_prefix` 是同一类处置。
+- **fixture 不要落在别的用例已经造过的目录下。** 测 `pnpmProjectRootNear` 的「非 pnpm 往上找不到」时，把 fixture 放在 `<ROOT>/near/plain/node_modules`，而 `<ROOT>/near` 本身是上一个用例造的 pnpm 根 —— 往上第 3 层真命中，判据对、断言错。目录 fixture 一律用**独立顶层目录**（`near-plain`），不要复用父级。
+- **判据「要目录」还是「要存在」必须分开造样本。** `isAiBase` 查的是 `<base>/dsh-agent-instructions/lib` 是**目录**，而「同名文件冒充」有两种：冒充 `<base>` 本身（第一版只造了这一种，于是把 `isDir` 换成 `fs.existsSync` 的突变仍是绿的），以及冒充最末一级 `lib`（这一种才有区分力）。**写「文件冒充」类 fixture 时，要问一句「我冒充的是哪一级」**。
+
+另外：给 `lib/core.js` 加 `export` 会撞 `scripts/test-patch-registry.mjs` 的「公开导出名一字不差」——那是拿 `docs/origin/core-split-baseline-8066985` 对拍的。正确做法是把它加进该文件的 `EXPORT_EXTRA` 白名单（同时保留「删导出必红」「白名单过期也红」两条），**不要**把断言放宽成「子集」。
+
 ## 更新链路（已固定为离线）
 
 维护仓库是私有的，GitHub 的 `codeload` / `api` / `raw` / `jsdelivr` 对匿名请求全部 404。因此：
