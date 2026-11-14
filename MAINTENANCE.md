@@ -785,6 +785,32 @@ writeFileSync(fp, lines.join(eol), "utf8");
 
 判据：`git diff --stat` 显示「整个文件都是改动」（644 insertions / 644 deletions）就是踩了；恢复用 `git checkout -- <file>` 重来，别在坏文件上继续改。
 
+### 路径判据要要求「完整路径段」，子串判据会把邻居一起吃进去
+
+`n.includes("/dsh-purge")` 看起来够用，实际上把 `…/dsh-purge-maintained`、`…/dsh-purge-old`、`…/my-dsh-purge-fork` 全算成了插件树。这个判据出现在两个删除助手里（`lib/uninstall-restart.js`、`lib/restart-desktop.js`），而它们拿到的是**清理列表**，也就是一串要递归删掉的路径 —— 判宽了的代价是删掉用户的东西，判窄了的代价只是留下一堆垃圾。两边的赔率完全不对等，所以路径判据一律要求完整路径段：
+
+```js
+const OWN_TREE = /\/(?:node_modules\/)?dsh-purge(?:\/|$)/;
+const n = path.normalize(String(dir)).replace(/[\\/]+/g, "/").toLowerCase();
+if (!OWN_TREE.test(n)) return;
+```
+
+规矩有三条：
+
+1. **先归一再看**：`path.normalize` + 反斜杠折成正斜杠 + `toLowerCase()`，然后才匹配。少了归一，Windows 上 `D:\dsh-purge` 与 `d:/dsh-purge` 是两个结论。
+2. **末段要用 `(?:\/|$)` 收口**，不能只写 `\/dsh-purge`。少了它，`…/dsh-purge-maintained` 又回来了。
+3. **可信度分级**：`includes` 这种子串判据只能用在「误判代价为零」的地方（比如列出候选、打日志）。凡是它的返回值会喂给 `rmSync` / `unlinkSync` / `renameSync`，都必须改成完整段匹配，并且**必须有源码形状用例**钉住那句正则 —— 这类代码在独立进程脚本里，`import` 就会把进程跑起来，行为层根本测不到。
+
+同一个道理在 `collectCleanupDirs` 里还有一层：`remember()` 做 `fs.realpathSync` 会把链接解析成它的目标。如果那个目标是用户的源码目录，记进清理列表就等于让重启助手去递归删源码 —— 这是 1.1.94 起的真缺陷。所以「要记链接本身」与「要记链接指向的树」是**两个不同的决定**，不能都塞进 `remember`：入表用 `push`（不做 realpath），需要真实路径的地方才用 `remember`，两者共用一个去重集合。
+
+### 沙箱用例里，凡是被记忆化的路径解析，每造一套新现场都要 `resetPathMemo()`
+
+`lib/core.js` 的 `findAiBase` / `findDshHome` / `findShimDir` 都走同一个 memo（`resetPathMemo()` 把 `memo[slot] = { ready: false, value: null }`）。这本来是为了「一次进程内别重复扫盘」，代价是：**测试里换 env 不代表换路径**。第一套沙箱跑完，第二套沙箱即使把 `DSH_HOME` / `DSH_BASE` / `npm_config_prefix` 全指到新目录，`gatherState()` 还是会用第一套的读数。
+
+症状很有欺骗性：五条依赖 `applied:true` 的用例同时红，报的是业务断言（`expected true, actual false`），一个字都不提路径。第一次遇到会往「是不是补丁没打上」的方向查半小时。
+
+规矩：任何造沙箱的 helper（本项目里统一叫 `sandbox(tag)`）末尾必须调 `core.resetPathMemo()`，而且要在**挂完 env 之后**调 —— 它清的是缓存，不是配置。判据很简单：如果两条用例单独跑都绿、合起来跑就红，且它们用的是不同的临时目录，那九成是 memo 没清。
+
 ### 给 `agent.cancel` 这类宿主方法造「抛错」时，要分清同步抛与 rejected promise
 
 `try { ignoreSettled(agent.cancel(...)); } catch { /* ignore */ }` 这一句里两层保护各自兜一类错误：

@@ -243,6 +243,7 @@
 | `/purge apply` 的重启判据：`promptReady` 只认「失败项全是 `pattern_not_found`」（混进 `drifted` 就不算）、`hostWritten` 也认 `hostCleanMarkersPresent`、`hookDenyRestoreFailed` 非空时 `complete` 必须为 false、要重启时先 `markSettleRestart()`、`ctx` 原样透给 `scheduleApplyRestart` | `test-chat-purge.mjs`（5 条） | 同上 |
 | `/purge apply` 的两个附带效果：解包出 asar 时写 unpacked 戳、有被 scrub 的 bin bak 时多一段 `Desktop in-bin .bak scrub` | `test-chat-purge.mjs`（2 条） | 同上 |
 | `/purge revert` / `uninstall`：还原逐行 `✓ 已还原` + `⚠ 还原失败 p: e`、没有备份时补一句 `no patch backup`、没有 `ai_base` 时整段跳过；卸载的两种开场白（检测到/未检测到）+ override 删除行 + profile 移除行 + `ok:false` 时回 `error` | `test-chat-purge.mjs`（5 条） | 同上 |
+| 卸载链路：`uninstallPurge` 的三条早退与六处「失败只记一笔」、`collectCleanupDirs` 的去重与 `/resources` 闸门、两份 `rmTree` 的 `OWN_TREE` 判据（npm link 装的插件不许把源码目录放进清理列表） | `test-uninstall-purge.mjs`（33 条） | `lib/uninstall.js` 行 298/316、分支 123/135 |
 | `/purge edit` 与 `/purge help`：注入文件不存在时先 `installOverride` 再打开并说明「新建」、打不开回 `error`（旧实现在这里假报 success）、`editOverride` 的 `error` 原样带出；`help`/`h`/未知子命令同一份帮助且列全六条 + `/rules` `/skills`，子命令大小写不敏感，`config` 参数当前不影响输出 | `test-chat-purge.mjs`（6 条） | 同上 |
 | 插件能装配：假宿主提供 `webServer` 时 `apply()` 与全部 effect 工厂都不抛错（`ReferenceError` 会在这里露出来，`node --check` 抓不到） | `test-plugin-boot.mjs`（1 条） | `lib/index.js` 55% |
 | 路由总数：16 条（13 条 exact + 3 条 prefix），并点名 `/dsh-purge/status` / `apply` / `revert` / `restart` 与 `/dsh-purge/rules` / `skills` / `skill`；`enabled:false` 时一条都不注册 | `test-plugin-boot.mjs`（2 条） | 同上 |
@@ -792,6 +793,30 @@ RED 演练 **18 条突变 → 18/18 全红**（`restored: true`，无等价突�
 
 RED 演练按行号定位（19 条突变，19/19 全红）：把每个 `sendJson(response, 500, ...)` 改成 200、把两个 `writeHead(405, ...)` 改成 200、把三处「只告警」改回 `throw e`、把 `if (arch) core.writeUnpackedAsarStamp(arch)` 置空、把 `onHost` 里的 `applied: info.index || 0` 改成 `0`。全部按 `MUTS = [label, 行号, 该行必须包含的片段, 替换后的整行]` 形式做单行替换，比锚点子串稳：`sendJson(response, 500, { ok: false, error: String(e) });` 在文件里出现十几次，靠子串必撞。
 
+**四十补**：`lib/uninstall.js` 的卸载链路 —— 而这个文件本身就是**一个真缺陷的现场**。用户点「卸载」时走的就是 `uninstallPurge`（`lib/uninstall.js:205`），它一路做七件事：回退补丁、回退启动器、清 override/rules、摘掉 profile 清单里的引用、清演练授权、算清理列表、排清理重启。判错的表现全都不报错：少回退一个文件表现为「卸载完了宿主还是改过的样子」，清理列表算错表现为「卸载完留下一堆垃圾」或者更糟 —— **把用户的源码目录递归删掉**。
+
+那个缺陷在 1.1.94 里已经存在：`collectCleanupDirs` 把 profile 里的 `node_modules/dsh-purge` 交给 `remember()` 记进清理列表，而 `remember()` 内部做 `fs.realpathSync(dir)`。npm link / `file:` 安装时这个链接的 realpath 就是**用户的源码目录**，于是清理列表里出现了 `…/src/dsh-purge-maintained`，而两个重启助手的 `rmTree` 判据是 `n.includes("/dsh-purge")` —— 子串命中，**照删**。本机刚好因为源码目录叫 `D:\dsh-purge-maintained`（不走 `pluginRoot()` 那条）而没事，任何把源码放在 `…/dsh-purge*` 下面的人都会中招。
+
+修法是三处，都能单独解释：
+
+1. `collectCleanupDirs` 拆成 `push(dir)` 与 `remember(dir)` 两个 helper。`push` **不做 realpath**，只按 `path.resolve(dir).toLowerCase()` 去重后入表；`remember` 保留 realpath 与 `/resources` 那道闸，末尾调 `push(real)`。profile 那条改成 `push(nm)` —— 记**链接本身**，因为 `rmTree` 见到符号链接只 `unlinkSync`，「摘掉插件」的正确粒度就是这个。
+2. `lib/uninstall-restart.js` 与 `lib/restart-desktop.js` 两份 `rmTree` 各自新增 `const OWN_TREE = /\/(?:node_modules\/)?dsh-purge(?:\/|$)/;`，把 `n.includes("/dsh-purge")` 换成 `OWN_TREE.test(n)` —— 要求 `dsh-purge` 是**完整路径段**，`…-maintained`、`…-old` 都不再算插件树。探针实测九个路径：`.dsh/dsh-purge` ✓、`profiles/desktop/node_modules/dsh-purge` ✓、`D:/dsh-purge-maintained` ✗、`D:/src/dsh-purge-maintained` ✗、`resources/app` ✗、`resources/runtime` ✗、`node_modules/@deepseek-ai/dsh` ✗、`x/dsh-purge-old` ✗、`x/dsh-purge/` ✓。
+3. `scripts/test-uninstall-purge.mjs`（**33 条**）第一次直接调 `uninstallPurge`，沙箱造一棵假宿主树 + 空 `$DSH_HOME` + 空 npm 前缀，`test.after` 还原十二个 env，末尾 `sha256sum` 对拍真机三个启动器一字未变。
+
+七条只能跑出来的事实：
+
+1. **`core.resetPathMemo()` 是沙箱用例的生命线**。`findAiBase` / `findDshHome` / `findShimDir` 全都记忆化；第一套沙箱跑完再造第二套，`gatherState()` 会继续用第一套的路径 —— 症状是五条本该 `applied:true` 的用例同时读成 `false`，而错误信息里一个字都不提路径。`sandbox()` 末尾必须调它。
+2. **把 `package.json` 做成目录不是可靠的抛错手法**。`atomicWriteSync` 的 `existingMode(fp)` 有 catch，目录也能被 rename 覆盖，于是「profile 写盘失败 → 早退②」根本没触发（`ok:true`、`errors:[]`）。可靠写法是 monkeypatch `fs.renameSync` 抛错，`try/finally` 还原 → `errors === ["p1: rename boom"]`，且 `package.json` 逐字节未变。
+3. **三条早退的字段不是一套**。早退①（补丁回退失败）与早退②（profile 写失败）都设 `ok:false / needRestart:false / cleanup:[]`；只有早退② 额外设 `drillGrantCleared:false`；早退③（清演练授权失败）**不设** `drillGrantCleared`（读数 `undefined`）。早退① 的判据看 `report.patches.errors` 而不是 `report.errors`，所以它触发时 `errors` 数组是空的。
+4. **「失败只记一笔」和「早退」是两种处理**。删 override 失败（`prompt-inject.md` 做成目录 → `unlinkSync` EPERM）只往 `errors` 推一行 `remove override: …`，`ok` 仍 true，卸载继续往下走；`rules` 做成**文件**反而算清干净（`fsp.rm` 的 `force+recursive` 对文件成立），`rules_dir_removed:true` 且 `errors` 为空。
+5. **`shouldDeletePluginTree` 自己不拦 `resources`**，那道闸在 `collectCleanupDirs` 的 `remember()` 里。所以 `…/resources/app/node_modules/dsh-purge` 对它返回 **true** —— 分工必须写进注释，否则下一个人会以为这里漏了防护。
+6. **`updater.pluginRoot()` 走的是 `shouldDeletePluginTree`**，本机返回 `D:\dsh-purge-maintained` 所以不进表；换成 `…/node_modules/dsh-purge` 那种安装布局才进。这条判据决定了「卸载会不会删掉插件自己」，两边的用例都得有。
+7. **`scheduleCleanupRestart` 只是转发** `hostctl.scheduleCleanupRestart(opts)`（`lib/host.js:22-24` 再转给 `hostAdapter()`），自己一行实现都没有 —— 源码形状钉住，别让它长成第二个实现。
+
+RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` 每条四元组 `[label, 文件键, 1-based 行号, 该行必须含的片段, 替换后的整行]`，`finally` 写回，末尾校验字节还原）。首轮有 3 条 GREEN，处置分别是：①`bundles` 是标量时的新用例；②`readdirSync` 抛错写成 monkeypatch（把 catch 体改成 `throw`），原实现返回 `[]`；③`remember` 的 `/resources` 闸门 —— 造一条「插件目录是 junction，指向 `resources/app/node_modules/dsh-purge`」的现场，那条进不了清理列表。演练后补的这两条（去重、数据目录本身是链接）也各红一条：`push` 不去重会让同一条出现两次，`remember(realData)` 被跳过会把链接路径记成数据目录。
+
+`lib/uninstall.js` 行命中 258/310 → **298/316**（分母 +6 是新增的两个 helper）、函数 19/23 → 22/24、分支 71/103 → 123/135；全仓行 **93.23% → 93.51%**（函数 83.80% → 84.00%、分支 89.55% → 89.85%）。全量 **3408 tests / 3406 pass / 0 fail / 2 skipped**。两平台各 33/33。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -903,7 +928,7 @@ RED 演练按行号定位（19 条突变，19/19 全红）：把每个 `sendJson
 | profile 的 `dsh.profile.bundles` 被补上且幂等 | `test-self-update.mjs` | 同上 |
 | `pnpm-workspace.yaml` 的 `allowBuilds`：pnpm 11 删来源键、pnpm 12 保留、坏原文不写盘 | `test-self-update.mjs` | 同上 |
 | postinstall 只碰真的装了本插件的 profile | `test-self-update.mjs` | 同上 |
-| 卸载先还原再删：`revertAll` 出错就停手、不进入清理 | `test-self-update.mjs` | `lib/uninstall.js` 83% |
+| 卸载先还原再删：`revertAll` 出错就停手、不进入清理 | `test-self-update.mjs` | `lib/uninstall.js` 94.3% |
 | 卸载只删安装树（`node_modules/dsh-purge`），npm link 的源码目录不动 | `test-self-update.mjs` | 同上 |
 | 卸载摘干净四个依赖段 + 顶层与嵌套 `bundles`/`plugins` | `test-self-update.mjs` | 同上 |
 | 预设默认值改回 `standard`：7 种写法（裸值 / 单双引号 / 命名空间前缀 / 大小写 / 无空格 / 块内缩进）都落盘，`standard`/`other`/无键不动 | `test-preset-default.mjs` | `lib/preset-default.js` 94% |
@@ -1282,6 +1307,14 @@ RED 演练按行号定位（19 条突变，19/19 全红）：把每个 `sendJson
 
 - `lib/routes.js:618`（`/own-servers` POST 成功时的 `sendJson(response, 200, …)`）走不到：`lib/net-scope.js` 的 `writeAllowText()` 引用未声明的 `allowCache`，任何 POST 都在下一行前抛错。属上游 1.1.94 刻意留空，测试里已现状钉住「当前回 500」。
 - `lib/rewind.js` 的 `brh` 同一 commit 同一台机器连跑 5 次：4 次 312、1 次 311（`brf` 恒 373）。差的那一个是 `waitTurnClosed` / `rewindLocks` 里「先被拒还是先被兑现」的顺序分支，取决于两个 Promise 的 settle 先后，测试无法钉顺序。处置：**不**给 `lib/rewind.js` 加 `ENV_TOLERANCE`（该文件的容差按 `scripts/coverage-baseline-lib.mjs` 的规矩要先在干净 worktree 里复现同一下跌，本机复现不出来）；若 `npm run test:full` 报 `↓ lib/rewind.js 分支 312 → 311 (-1)`，重跑一次即可，**连续两次 311 才算真倒退**。
+
+88. **卸载的两份 `rmTree` 是独立进程脚本，闸门只能靠源码形状钉；另有四条分支这台机器上造不出来。**
+
+   - `lib/uninstall-restart.js` 与 `lib/restart-desktop.js` 都是顶层 await 的独立进程脚本，`import` 会把进程跑起来，所以 `OWN_TREE` 那句只能用「读源码 + 剥注释后断言」钉。**没有守卫的是**：这两个脚本真的被那个隐藏 PowerShell 宿主拉起来时的行为（`spawn` 参数、`detached`、日志落点）。
+   - `uninstallPurge` 的早退① 还有一条旁路：`report.errors.some((e) => /^revert patches:/.test(e))`。目前只有「`revertAll` 直接抛错」能命中，而 `revertAll` 的抛错路径要宿主文件被独占锁住 —— 本机造不出来，因此这条旁路只测了 `patches.errors` 那一半。
+   - `unregisterProfiles` 的 catch（`lib/uninstall.js:199-200`）在「读完能写、写到一半抛」的现场才触发；`fs.renameSync` 抛错那条已经覆盖同一条早退，但**这条 catch 本身**（`readJson` 抛而不是 `writeJson` 抛）没有独立用例。
+   - `collectCleanupDirs` 里 `fs.realpathSync` 的两个 catch（`:160`、`:175`）在 Windows 上要造「路径存在但 realpath 失败」的现场（通常是权限位导致的拒绝访问）。沙箱里造不出，所以「链接解析失败时退回 `path.resolve`」这条只有源码可读。
+   - **检测办法**：做一次真实卸载（`/uninstall`），看它报告的 `cleanup` 里有没有出现你自己的源码目录；出现在那就是 `OWN_TREE` 又被放宽了。另外看一眼 `%TEMP%\dsh-purge-cleanup.log`（重启助手的日志），里面每一条被跳过的路径都会写 `skip cleanup <path>` —— 这个文件里出现源码路径说明它被正确拦下了，什么都不写说明闸门在更早的地方就把它挡了。
 
 ## 维护约定
 
