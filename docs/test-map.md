@@ -337,6 +337,7 @@
 | `patchReplacements` / `matchesPattern` 只在 `lib/patch-outcome.mjs` 里定义一次：`scripts/verify-target-lib.mjs` 只做 `import` + 转出，源码形状断言钉住「这里不许再长出同名函数」（两份实现已经能从单数 `pattern` / `null` patch / 空串 pattern 三处分叉） | `test-verify-target-lib.mjs` | 仅 `scripts/` 与 `lib/patch-outcome.mjs`，后者 100% |
 | 演练台报告链路（`hitTrace` / `scoreReport` / `scoreChain` / `representativeShots`）用真 `RedteamStore` + 临时目录播种，钉 `tunnelIsLegit` 与 `buildCurlCommand` 的 headers 两个真 bug；同时锁定五条读源码看不出来的现状（items 与 chain_no 顺序可不同 / scoreChain.stages 五段定长 / representativeShots 分层不影响先后 / 不挂资产不挂凭据 / 纯英文用户名不认领） | `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1192 → **1457/1532**、`report-replay.js` 行 173 → **222/224** |
 | 报告正文边角（长备注按句子截断 / 档位校正段 / 截图归属指路 / 步骤去重）与一段重复兜底的删除 | `test-report-edges.mjs`（14 条）+ `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1457 → **1496/1510**（删掉 28 行死代码，分母 -22） |
+| 报告的「完整性判据」本身：账号类（`web-app` / `db-credential`）没挂凭据、突破类（`boundary-*` 四条）没登记隧道时，必须报缺口而不是让 `complete` 恒为 `true`；外加拿真 `score_point` 表对拍判据里写死的 code、以及报告正文里 WebShell / 凭据 / 通道三行 | `test-report-fidelity.mjs`（9 条）+ `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1516/1523 |
 | 目标宿主声明与宿主版本门禁：`HOST_TARGETS` / `HOST_TARGET` / `hostCompat` 的 known·ok·host 三态、预发布后缀原样相等、`dshTargets` 含 `dshTarget` 且无重复、每一项都能被 `parseHostVersion` 解析 | `test-host-target-decl.mjs`（9 条）/ `test-package-integrity.mjs`（13 条） | `lib/core.js` 宿主门禁段 100% |
 | 官方 CLI 三件套（`resources/runtime/cli/bin` 下的 `dsh` / `dsh.cmd` / `dsh.ps1`）：首装现场生成、已有就只打回退块、打完留 `.dsh-purge.bak`、`app/runtime` junction 指向 `../runtime` 且目标非空才回 `already` | `test-desktop-cli-repair.mjs` | `lib/desktop.js` 行 71% → **79.8%**（1624 → 1812 / 2273） |
 | 桌面面 shim 三件套的来源：先看桌面树的 `resources/runtime/cli/bin`（只看目录存在、不看里面有没有启动器），没有再回落 PATH 并标 `path`，两处都没有才是 `none`；桌面官方 CLI 的补丁是入口回退块不是 shim 注入，`dsh` / `dsh.cmd` / `dsh.ps1` 各判一次（`patched / missing / patched`）；`runtime_payload` 只在 desktop 面探。链式补丁（`#46←#45`、`#84/#92←#83`、`#88←#87`）前驱没 settled 记 `pending` 不记 `drifted`，`after` 里的字符串 id 先归一化成数字、非数字条目丢掉、不是数组就当没有前驱 | `test-desktop-shim-source.mjs`（21 条） | `lib/core.js` 行 4793/5205 |
@@ -1372,6 +1373,40 @@ linux 复跑时又会走错分支 —— 所以它自己要把平台钉回 `win3
 `lib/redteam/platform-config.js` 行 **612/612（100%）**，分支 253/287。
 RED 演练 11 条突变全红（11/11）。
 
+**六十二补**：`lib/redteam/score-report.js` 的**完整性判据失效** —— 两条「这条成果说不清怎么做到的」提示，从 v0.11.1 起一次都没出过。
+
+判据写的是旧得分点 code：`['web-account-user','web-account-admin','db-access']`（账号类要挂凭据）、
+`['boundary','internal-pivot']`（突破类要挂隧道）。而 v0.11.1 把得分项重构成《突破入侵类得分规则
+（合并版）》25 项之后，这些 code 全部作废 —— `score_point` 表里已经没有它们。后果不是报错，是
+`hit.code` 永远不等于这些值 → 两条 gap 永不 push → `complete` 恒为 `true`：**报告自称复现完整，
+而实际上既没有账号凭据也没有通道记录**。这正是「一个函数认的值比表约束多一个，那个值就从来没成功过」
+的第二种形态 —— 这次是"判据认的值比表里少一批"。
+
+修法：把两组值提成导出常量（`GAP_CREDENTIAL_POINT_CODES = ['web-app','db-credential']`、
+`GAP_TUNNEL_POINT_PREFIXES = ['boundary-']`），突破类改按前缀认（`boundary-logical` /
+`boundary-supply` / `boundary-strong` / `boundary-physical` 四条都算）。**不改文案、不改返回结构**，
+只让判据重新对得上真表。
+
+本批 9 条（`scripts/test-report-fidelity.mjs`）三件事各钉一遍：
+
+1. **业务面**：`db-credential` / `web-app` 没挂凭据要报缺口、挂了凭据缺口消失；`boundary-*` 没登记
+   隧道要报缺口、登记后消失；`terminal-access`（既不是账号类也不是突破类）两条都不许出现 —— 最后这条
+   防的是"把它们写成恒真"。
+2. **结构面**：拿 `store.listScorePoints()` 的**真表**对拍那两组常量（每个 code 必须在表里、
+   每个前缀至少命中一条真实 code）。以后规则表再改名，这里先红，而不是再静默失效一次。
+3. **回归面**：`score-report.js` 里不许再出现 `'web-account-user'` / `'web-account-admin'` /
+   `'db-access'` / `'internal-pivot'` 字面量，也不许再拿阶段名 `'boundary'` 当得分点 code 比
+   （`includes(['boundary'])` —— 阶段 code 里确实有 `boundary`，混用最难发现）。
+
+顺带补了报告正文里「WebShell / 凭据 / 通道」三行（`:1200-1206`）—— 之前只测到小节标题存在，
+没测条目下那三行，等于"小节能出来、明细不一定"。现在断言到 `` `http://10.0.0.5/s.jsp` behinder · 密钥 `k1` ``
+这一级。
+
+**一处已有用例跟着改**：`test-score-report.mjs` 的「没有任何步骤与资产时报两条缺口」改成三条 ——
+`web-app` 现在会额外报一条账号缺口。**这个改动是修复的目的本身**，不是测试迁就实现：报告少报一条
+就是在骗人。RED 演练 **10 条突变 → 10/10 全红**（两组常量各砍一项 / 前缀丢弃连字符 / 突破类改回精确相等 /
+凭据判据方向写反 / 隧道判据恒假 / 两条文案改掉 / WebShell 行不写密钥 / WebShell 行整段不写）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -2032,6 +2067,17 @@ RED 演练 11 条突变全红（11/11）。
     真跑得通的只有 `/etc/os-release` 那一条。改坏的表现是「Kali 上工具已经能用却提示需要配置」，
     检测办法：在有 `kali-menu` 的机器上跑 `node -e "import('./lib/redteam/platform-config.js')
     .then(m=>console.log(m.detectKali()))"`，`source` 应该是 `markers`。
+
+111. **`score-report.js` 还剩 7 行没覆盖：`:446-448`（真实 curl 作为本条动作的分支）与 `:698-700` `:708`（同阶段同时间的稳定排序）。**
+    `:446-448` 要求「得分点的动作模板是 curl 且这条命中不是靠隧道成立」，而当前的 25 条规则里
+    动作模板本身就带完整命令的得分点不多，用真数据凑到这个组合要连着改得分点模板 + 隧道的
+    `entry_kind`，改完还得解释"为什么这条命中不算隧道成立" —— 收益不如直接读判据。
+    `:698-700` 是 `stepSeqOf` 的兜底（同一阶段、同一 `order_at`、两条都有 `steps.seq` 时按最小 seq 排），
+    要构造它得把两条命中的 `order_at` 手工改成同一字符串，再给它们挂不同 seq 的步骤；
+    本机可做，本批没做（留作下一批候选）。
+    检测办法：`node --test --experimental-test-coverage --test-reporter=lcov
+    --test-reporter-destination=.tmp-x.info scripts/test-score-report.mjs` 后
+    `awk '/SF:.*score-report\.js/{f=1} f&&/^DA:/{split(substr($0,4),a,","); if(a[2]=="0") print a[1]}'`。
 
 ## 维护约定
 

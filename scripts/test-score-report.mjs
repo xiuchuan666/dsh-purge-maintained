@@ -54,7 +54,7 @@ function hitRow(db, id) {
    一、hitTrace：这条得分"是怎么拿到的"
    ══════════════════════════════════════════════════════════════════════════ */
 
-test('hitTrace：没有任何步骤与资产时，如实报两条缺口而不是编一份说明', () => {
+test('hitTrace：没有任何步骤与资产时，如实报出三条缺口而不是编一份说明', () => {
   withStore(({ store, db }) => {
     const r = store.addScoreHit('score', { code: 'web-app', evidence: '拿下后台管理页' })
     const trace = hitTrace(store, db, hitRow(db, r.id), 'score')
@@ -63,10 +63,12 @@ test('hitTrace：没有任何步骤与资产时，如实报两条缺口而不是
     assert.equal(trace.vuln, null)
     assert.equal(trace.how, '', 'how 是空串而不是 "undefined"')
     assert.equal(trace.complete, false)
-    // 顺序有意义：先"没有步骤"，再"没有 vuln_id"
-    assert.equal(trace.gaps.length, 2)
+    // 顺序有意义：先"没有步骤"，再"没有 vuln_id"，最后是这类得分自己的凭据缺口
+    // （web-app 属于账号类：拿下后台却没登记账号，报告照样说不清是怎么进去的）
+    assert.equal(trace.gaps.length, 3)
     assert.match(trace.gaps[0], /没有攻击步骤记录/)
     assert.match(trace.gaps[1], /没有关联 `vuln_id`/)
+    assert.match(trace.gaps[2], /账号类得分没有登记凭据/)
     assert.deepEqual(trace.evidence_refs, [])
   })
 })
