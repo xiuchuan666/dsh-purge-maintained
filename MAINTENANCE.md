@@ -240,7 +240,7 @@ npm run host:preview    # 升级前预演：目标版本装到隔离目录，只
 在那里跑 `patchStatus` 逐条判锚点，**真宿主一个字节都不碰**。
 
 ```bash
-npm run host:preview                      # 默认预演 0.2.2-rc.2
+npm run host:preview                      # 默认预演 0.2.2-rc.3
 npm run host:preview -- --version 0.2.3   # 指定版本
 npm run host:preview -- --keep --json     # 复用上次装好的树，只出 JSON
 ```

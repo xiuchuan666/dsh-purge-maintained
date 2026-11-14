@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* 宿主升级预演：把目标版本装进隔离目录，逐条试 86 个补丁的锚点，回答「升上去会坏几条」。
  *
- *   node scripts/host-preview.mjs                     # 预演最新 rc（默认 0.2.2-rc.2）
+ *   node scripts/host-preview.mjs                     # 预演最新 rc（默认 0.2.2-rc.3）
  *   node scripts/host-preview.mjs --version 0.2.3     # 指定版本
  *   node scripts/host-preview.mjs --json              # 只输出 JSON
  *   node scripts/host-preview.mjs --keep              # 复用上次装好的树
@@ -53,7 +53,7 @@ const opt = (n, d = "") => {
   return i >= 0 && args[i + 1] ? args[i + 1] : d;
 };
 
-const version = opt("--version", "0.2.2-rc.2");
+const version = opt("--version", "0.2.2-rc.3");
 
 function installTree() {
   fs.mkdirSync(TREE, { recursive: true });

@@ -1456,6 +1456,25 @@ RED 演练 **7 条突变 → 7/7 全红**：②分支不返回命令 / 改标 `t
 
 RED 演练 **13 条突变 → 13/13 全红**：配置不落盘 / 只回 `ok` 不回摘要 / 点级计数恒 0 / 点级计数去掉兜底 / 命中级计数恒 0 / `label`、`kind`、`mime` 三个兜底各去掉一个 / `assetId` 不设防 / 凭据分组不回落 `host` / 不写复现请求标题 / `label` 不回落 `method+url` / 响应不截断。
 
+**六十五补**：`dshTarget` 从 `0.2.2-rc.2` 推到 **`0.2.2-rc.3`**（2026-11-15）。这次只动「声明」，不动任何补丁：
+
+1. `package.json` 的 `dshTarget` 改 rc.3，`dshTargets` 首位插 rc.3 —— **历史四条（rc.2 / rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2）一条不删**。删了会让「用户降级回旧版」变成状态页报未适配。
+2. `scripts/test-package-integrity.mjs` 的三处跟着改：用例名（rc.3）、`assert.equal(manifest.dshTarget, '0.2.2-rc.3')`、「老版本仍列着」的清单补上 rc.2。这条用例的价值不在于钉版本号，而在于**它同时钉住「首项 = dshTarget」**（`check-lib.mjs` 的硬约束），所以推版本时它会红一次，提醒你两处一起改。
+3. `README.md` 两处字面量、`MAINTENANCE.md` 的 `host:preview` 示例、`scripts/host-preview.mjs` 的默认版本与注释 —— 都是「读的人会照着做」的地方，跟着改。
+
+**升级前的判据（按顺序，不要跳）**：
+
+```bash
+npm run host:preview -- --version 0.2.2-rc.3
+```
+
+实测（2026-11-15）：`目标 0.2.2-rc.3 实际装到 0.2.2-rc.3（预发布）`、`补丁 86 条：可打 71 / 升级打断 0 / 本来就坏 0 / 不适用 15`、`结论 compatible`。
+**这一版不需要追加任何 replacement** —— 与 rc.1→rc.2 那次（13/18/35/56/62/77 六条要追加）不同，rc.3 没有改动任何补丁锚点所在的代码形态。
+
+**注意「当前记录」与「目标」是两个东西**：`host:preview` 的输出里 `当前记录 0.2.2-rc.1` 来自 `docs/host-baseline.json`（那是**本机桌面实际装着的宿主**里逐条打补丁的实测记录），它不会因为 `dshTarget` 变了而自动更新。要让「当前记录」变成 rc.3，得先在桌面装 rc.3、再跑 `npm run host:capture`（会逐条打补丁并写回 79 settled / 7 no-file 的实测表）——**那是另一件事，别和改声明混在一起做**。
+
+**回归**：`test-package-integrity` / `test-host-target-decl` / `test-host-preview` 三个文件 45 条全绿；`npm run check` 六道闸全绿（`[syntax] 272` / `patches=86 tests=131` / `[eol] 343` / `[client]` / `[gates] 58 gated` / `3794 tests 3792 过`）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
