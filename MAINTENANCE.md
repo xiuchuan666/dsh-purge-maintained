@@ -839,3 +839,40 @@ if (!OWN_TREE.test(n)) return;
 - 外层 `try` 兜的是**参数求值阶段就 throw**（同步方法抛错）。
 
 只造 `async` 方法抛错的话，把外层 `try` 删掉测试全绿（等价突变），因为 `agent.cancel(...)` 在求值阶段不会抛。写法：另起一个 fixture，`cancel: () => { throw new Error(...) }`（**不带 `async`**），断言「调用发生了，异常没冒出去」。
+
+### 私有成员「看起来在用」：同一个名字在隔壁模块确实在用，删之前要按接收者数
+
+`lib/redteam/store-core.js` 里有个 `#hitTrace(db, hit, engagementId)`，函数体只有一行 `return hitTrace(this, db, hit, engagementId)`。`grep -rn hitTrace lib/` 会给你一堆命中（`lib/redteam/score-report.js` 里 `scoreReport` 和 `reportTargets` 都直接 import 它），看起来「当然在用」。但 `#hitTrace` 这个方法本身一次都没被调用过 —— 名字相同不等于同一个东西。
+
+判据按接收者数，不按名字数：
+
+```bash
+grep -rn "this\.#hitTrace" lib/            # 空 → 这个私有方法没人调
+grep -n "isCappedPoint" lib/redteam/store-core.js   # 只有定义行 → 死代码
+grep -rn "hitTrace" lib/redteam/score-report.js     # 有命中 → 函数本身活着，别删函数
+```
+
+三条纪律：
+
+1. **私有成员用 `this.#name` 数，公共函数用「定义处以外还有没有出现」数。** 前者能一次判死，后者在同名函数活在别的文件时会骗人。
+2. **删方法顺手删 import 名单里那个名字**（本例删 `#hitTrace` 之后 `import { scoreReport, scoreChain, representativeShots } from './score-report.js'` 里的 `hitTrace` 也要一起摘）。漏摘不会报错，因为 ESM 允许 import 未使用的绑定 —— 但下次有人搜「谁在用 hitTrace」时会被这个名字骗到。
+3. **删完要有一条源码形状守卫**，把「这个私有成员不许回来」钉住（判据：`assert.equal(SRC.includes('this.#hitTrace('), false)`），否则下一轮合并别人的分支时它可能被一起带回来。
+
+### 等价突变的第四种：事务型守卫在「还没成功写过任何东西」时，COMMIT 与 ROLLBACK 分不出来
+
+前三种等价突变是「两条判据互为补偿」「无可观测差异」「平台归一化吃掉差异」。第四种是事务：`deleteScorePoint` 的顺序是 `BEGIN` → `DELETE FROM score_hit` → `DELETE FROM score_point` → `COMMIT`，`catch` 里 `ROLLBACK` 再 `throw`。我把 `ROLLBACK` 改成 `COMMIT`，26 条用例**全绿** —— 因为这条测试路径上 `DELETE FROM score_hit` 就失败了，事务里没有任何脏数据，`COMMIT` 与 `ROLLBACK` 的可见效果完全一样。
+
+判据与写法：
+
+1. **要区分「有没有回滚」，就把回滚整句删掉**（`db.exec('ROLLBACK')` → `void 0`），这时连接会停在「事务未结束」状态 —— 可观测的现象是下一次 `BEGIN` 抛 `cannot start a transaction within a transaction`。
+2. **测试里补一条「事务确实收掉了」的断言**，而不是只看「数据还在不在」：
+
+   ```js
+   assert.throws(() => store.deleteScorePoint({ id: pid }), /no such table: score_hit/);
+   assert.doesNotThrow(() => {
+     store.db(eng).exec('BEGIN');
+     store.db(eng).exec('COMMIT');
+   });
+   ```
+
+3. **想真让 COMMIT / ROLLBACK 分出差异，就得让失败发生在「已经写成功一部分」之后**（例如让第二个 `DELETE` 失败），而这通常要改生产代码加注入点 —— 收益不足时，按「整句去掉」写突变、并把这层限制写进盲区（本例已写进盲区 90 第 4 条）。

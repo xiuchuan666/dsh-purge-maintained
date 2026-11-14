@@ -840,6 +840,28 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 **RED 演练**：`.tmp89-drill.mjs` **23 条突变 → 23/23 全红**（`restored: true`，分两片 `0 12` / `12 23`）：四道校验各拿掉 / `result` 放过 null / `canonicalize` 不排序键 / `record` 的错误文本改用 `String(err)`（带 `Error: ` 前缀）/ `get` 读失败回 `null` / `upgrade` 的拒绝文案改写 / `list` 失败回空数组 / `countUnverified` 只数 claimed 或恒回 0 或 catch 回 -1 / 闭环不看 observed 引用 / `countUnresolvedClaims` 的 catch 回 -1 / question 与 severity 的校验文案与判据 / 去重键不折叠空白 / `unknown.record` 与 `resolve` 与 `unknown.list` 三个出口 / `safeJsonParse` 回 undefined / `RESOLVE_DISPOSITIONS` 加回 withdrawn / `status CHECK` 也加 withdrawn。**没有等价突变，也没有 ANCHOR** —— 行号取自改完之后的文件（这次改动插了 8 行常量注释，行号整体下移，写死在脚本里之前先 `grep -n` 对了六处）。
 
 **为什么这十四条值得一测**：丢的是一条证据，不是一条日志。`record` 失败但调用方没看 `ok`，账面就少了「谁在什么时候用什么工具拿到了什么」；`get` 与 `countUnverified` 的失败被压成 `undefined` / `0`，指挥智能体看到的是「没有待核实项」，然后就派下一轮活去了。判错形态是**安静地少一条**，不会报错、不会崩、面板也照常显示。
+**四十二补**：演练台库的「筛选面 / 报告面 / 死代码」—— `listAssets` 的五个筛选（service / fingerprint / provenance / priority / scope）、`sort=todo` 与 `sort=ports` 两条排序串、`listShots` 的四个过滤、`deleteScorePoint` 的内置点拒绝与事务回滚、`saveScorePoint` 的名称必填、`addScoreHit` 的 `point_name` 解析与「顶掉旧命中 / 被旧命中顶掉」两种警告、报告里的「复现请求」段、`searchPocs` 的来源筛选、`listEngagements({stats:true})` 的坏库兜底、`refreshDefaultPrompts` 的 `.bak`、`readAttackFile` 的越界拒绝。测试文件 `scripts/test-store-core-facets.mjs` **26 条**，两平台各 26/26；生产改动是**删掉两处从来没有人调用过的私有成员**（`isCappedPoint` 与 `#hitTrace`，`lib/redteam/store-core.js` 3832 → 3822 行）。
+
+七条只能跑出来的事实（写断言前先跑探针，逐条实测）：
+
+1. **`priority` 只能靠 `assessAsset` 写进去**。`importBundle` 的资产对象里带 `priority` 会被丢掉 —— 所以「按 priority 筛」的用例如果只用 `importBundle` 造数据，筛出来永远是空表，看起来像「SQL 写错了」。实测三种写入路径：`importBundle`（不认）、`assessAsset`（认，且 `medium`/`low` 之外的非法值一律回落 `medium`）、直接 UPDATE（认）。**未评估的资产 `priority` 是 `NULL`，不是 `medium`** —— 筛 `priority: 'medium'` 出空表是正确行为。
+2. **`sort=todo` 的第一键是 `test_status`（`untested` 0 / `testing` 1 / `tested` 2 / `blocked` 3 / `abandoned` 4 / `no_surface` 5 / 其他 6），第二键才是 `priority`**，第三键是开放端口数、最后是 `ip_int`。实测 `[high 未测, low 未测, NULL 未测]` → `[high, low, NULL]`；把 high 那条标成 `tested` 之后它掉到队尾。`updateAssetTest` 的参数名是 **`status`**（不是 `test_status`），传错名字会静默不生效（`status` 回落成原值），用例会「什么都没改但看着绿」。
+3. **`sort=ports` 用的是「开放端口数」而不是「端口总数」**，`state='open'` 之外的不算。`sort=ip`（默认以外的第四条分支）走的是 `a.ip_int`，而 `ip_int` 是写入时算好的整数列。
+4. **`listShots` 返回的是 `{ok, items, total}`**（不是数组，也不是 `{items}` 加别的东西），`total === items.length`（没有分页）；三个 id 列（`hit_id` / `asset_id` / `vuln_id`）是「且」，而 `point_code` 走 `s.point_id = (SELECT id FROM score_point WHERE code = ?)` —— **`point_code` 拼错的时候整段 WHERE 恒假，出空表而不是全表**，这正好是想要的（`point_code=''` 才是「不筛」）。
+5. **`deleteScorePoint` 的回滚只在这条路上才有意义**：`BEGIN` → `DELETE FROM score_hit` → `DELETE FROM score_point` → `COMMIT`，`catch` 里 `ROLLBACK` 再抛。实测把 `score_hit` 表 `DROP` 掉再调 → 抛 `no such table: score_hit`，得分点**仍在**，并且**事务确实被收掉了**（紧接着 `BEGIN`/`COMMIT` 不报错）。少一句 `ROLLBACK` 时，`BEGIN` 会抛 `cannot start a transaction within a transaction` —— 这才是能区分「有没有回滚」的读数。
+6. **`addScoreHit` 的两种警告互斥且方向相反**：打**更高**的一档时 `counted:true` + `demoted_hits` 列出被顶掉的旧命中 + 警告「这条把同服务上分值更低的 N 条旧命中顶掉了……本次记分不会让总分增加」；打**更低**的一档时 `counted:false` + `capped_by_service:true` + `demoted_hits` 为空 + 警告「这条按规则不再计分，只作过程留痕……计分的是同服务的另一条：<证据前 120 字>」。两条都只对 `dedup_scope === 'service'` 的得分点生效，`none` 类的点是累加的、永远不进这两个分支。
+7. **报告里「复现请求」段有两条独立实现**（`reportTargets` 一处、`report` 一处，行号相差约 120 行）。`report()` 用的是自己那份 —— 所以 `test-store-core-facets.mjs` 的断言只对 `report()` 生效，改 `reportTargets` 那一份不会变红（`lib/redteam/store-core.js` 里 `3369-3375` 至今仍是未覆盖，已登记为盲区）。段内：请求**去掉全部 CR**（粘进 Burp 才是合法的 HTTP 文本）、响应 `slice(0, 2000)`（2500 个 `x` 进来，报告里只留 1983 个 —— 前 17 个字符是 `HTTP/1.1 200 OK\n\n`）、整份报告里一个 `\r` 都不剩。
+
+**删掉的两处死代码**（这是本批唯一的 `lib/` 改动）：
+
+- `isCappedPoint`（`scorePoints` 里的局部箭头函数，4 行）：全仓唯一出现位置就是定义本身。它在算「这个得分点参不参与同口径去重」，而真正的判断在下面 `meta.dedup_scope` 那几行里直接做了。
+- `#hitTrace`（私有方法，3 行）：只 `return hitTrace(this, db, hit, engagementId)`，转发的同名函数在 `lib/redteam/score-report.js` 里确实在用（`scoreReport` / `reportTargets` 直接 import 它），所以**它看起来像在用**。删掉方法后 `store-core.js` 的 import 名单里也去掉了 `hitTrace`。
+- 判据是 `grep -n "isCappedPoint\|#hitTrace" lib/redteam/store-core.js` 只命中定义行；`hitTrace` 名字本身在别的文件里出现不影响这个判断（要按**接收者**看：`this.#hitTrace` 一次都没有）。
+
+**一个等价突变的判据**：把 `catch` 里的 `db.exec('ROLLBACK')` 换成 `db.exec('COMMIT')` 时，测试**仍然全绿** —— 因为这条路上「还没成功写过任何东西」（`DELETE FROM score_hit` 就失败了，事务里没有脏数据），`COMMIT` 与 `ROLLBACK` 的可见效果相同。能区分的是把回滚整句**去掉**（`BEGIN` 会报「事务未结束」）。所以演练里那一条突变写成「不回滚」，并在测试里补了 `assert.doesNotThrow(BEGIN/COMMIT)` 这条断言。
+
+**覆盖率**：`lib/redteam/store-core.js` 行 3741/3831 → **3794/3822**（分母 −9 是删掉的两处死代码）、函数 250 → **251/259**、分支 1290 → **1368/1584**；全仓行 **93.81%** / 函数 84.66% / 分支 90.02%。RED 演练 **26 条突变 → 26/26 全红**（无 ANCHOR、无等价突变留在里面）。
+
 
 ## 五、前端产物链（client.js）
 
@@ -906,6 +928,7 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 | 知识库迁移：补出五个新列与两个索引、老条目按关键词推归类（具体压过泛化）、已有归类不被改写、`POC_CATEGORIES` 的 code 唯一且以 `other` 收尾 | `test-schema-migrate.mjs`（7 条） | 同上 |
 | `dispatch` 的 op 表：71 个 op 各自调哪个方法、第几个实参、别名怎么退（`req.poc` / `req.id ?? req.code` / `req.id ?? req.shot_id` / 十二个 `xxx || req`）、`limit` 夹取、写操作闸门、未知 op 与异常的错误信封；无靶标时九个读 op 共用一个信封、`openEngagement` 不受闸门管；`pngSize` 的五种容器宽高（经 `addShot` 间接测） | `test-redteam-dispatch.mjs`（25 条） | `lib/redteam/store-core.js` 96.2% |
 | IP / 网段 / slug 的十个纯函数：`cidrOf` 的 IPv4 取前三段与 IPv6 取前四组（带端口的 IP、IPv4-mapped 都原样返回）、`scopeOfIp` 的 172.16–31 与 100.64–127 边界 + fe80::/10 + IPv4-mapped 剥壳、`ipToInt` 的 32 位无符号与「只看位数不看范围」、`isIpv6` 的字符表与段数上限、`expandIpv6` 的 `::` 补齐、`slugTarget` / `slugPoc` / `defaultPocFilename` / `slugify` 的六处现状怪癖 | `test-ip-utils.mjs`（53 条） | `lib/redteam/ip-utils.js` 行 116 → **140/140**（分支 73/74） |
+| 演练台库的筛选面与报告面：`listAssets` 的五个筛选（service / fingerprint / provenance / priority / scope）、`sort=todo` 与 `sort=ports` 两条排序串、`listShots` 的四个过滤、`deleteScorePoint` 的内置点拒绝与事务回滚、`saveScorePoint` 名称必填、`addScoreHit` 的 `point_name` 解析与两种警告、报告的「复现请求」段、`searchPocs` 的来源筛选、`listEngagements({stats:true})` 的坏库兜底、`refreshDefaultPrompts` 的 `.bak`、`readAttackFile` 的越界拒绝 | `test-store-core-facets.mjs`（26 条） | `lib/redteam/store-core.js` 行 3741 → **3794/3822**（分支 1368/1584） |
 | 证据账本的十四条失败出口与两个计数：`record` 四道前置校验（`operation` 必填、`result` 不可为 null 但可为 `""`/`0`/`false`、`confidence` 四档、`authority` 六种）、`record` / `get` / `list` 三个 catch 的返回值各不相同（`{ok:false}` / `undefined` / **`{error}` 对象而不是数组**）、`countUnverified` 数裸条数而 `countUnresolvedClaims` 按 `supporting_ev_ids` 反查闭环（升级后前者不降、后者降）、坏 JSON 的四列各自回落到默认值、`upgrade` 四分支（未找到 / `derived` 拒绝 / 已 observed 原样 / claimed→observed 写新记录并用 `supporting_ev_ids` 链回原件、`subagent-report` 换成 `tool-output`、`recorded_by` 默认 `coordinator`）、`residual_unknown` 的 question/severity 校验、去重键折叠空白而存的是原文、`resolve` 只认 `resolved\|contradicted`（`withdrawn` 给干净校验错，不再走到 SQLite 的 CHECK） | `test-evidence-ledger-edges.mjs`（30 条） | `lib/redteam/evidence-ledger.mjs` 行 **516/516**、函数 20/20、分支 92.2% |
 
 ---
@@ -1350,6 +1373,15 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
     **检测办法**：`node --test scripts/test-evidence-ledger-edges.mjs`（30 条）应全绿；要看真库里的缝隙，对一个真实靶标库跑
     `SELECT status, COUNT(*) FROM residual_unknown GROUP BY status` —— 只有 `open` / `resolved` / `contradicted` 说明 ① 成立（没有 investigating/blocked 的行）；
     `SELECT COUNT(*) FROM evidence WHERE json_valid(parameters)=0 OR json_valid(result)=0` —— 非 0 说明库里有老数据或直连写过坏 JSON，`get()` 那边会静默回落成 `{}` / `null`。
+90. **演练台库的筛选面 `lib/redteam/store-core.js` 仍有六段未覆盖，而且「复现请求」段有两份平行实现。**
+
+    1. `reportTargets` 里的「复现请求」段（`lib/redteam/store-core.js:3369-3375`）一行都没跑过 —— `report()` 用的是它自己那一份（约 `:3491`），两份实现同时在用、也同时在改，改错一份没有任何信号。**检测办法**：`grep -n "复现请求" lib/redteam/store-core.js` 会命中两处；改任一处之后跑 `node --test scripts/test-score-report.mjs scripts/test-store-core-facets.mjs`，只有 `report()` 那份会让 `test-store-core-facets.mjs` 变红。
+    2. `listEngagements({stats:true})` 的 `catch`（`:899-902`）里「库损坏也照样列出靶标」只在 `stats === null` 时可观测 —— 而坏库的造法是往 `assets.db` 写一段非 SQLite 字节。**检测办法**：造一个靶标，把 `engagements/<id>/assets.db` 覆写成 `not a sqlite file at all`，面板里靶标必须仍然列出来（统计列显示空）。
+    3. `dispatch` 的 `platformConfigSave` op（`:673-675`）没有专门用例 —— 它只是 `savePlatformConfig(req.config || {}, store.root)` 再回一份摘要，`scripts/test-platform-config.mjs` 测的是函数本身而不是这条 op。
+    4. `scorePoints()` 的截图回填（`:1606-1616`）里「一条得分点下多张截图、分属不同命中」的聚合只在 `shotBrief` 的字段表上体现；现有用例只覆盖「一条命中一张图」。
+    5. `attackGraph()` 的 `access` 分组（`:3341-3356`）在没有任何已被利用的漏洞时走不到 —— `seedAssets` 一造漏洞就会同时造出 `exploited`，所以「空 access 组」只能靠删表造（而删表会让 `attackGraph` 直接抛，见下一条）。
+    6. **删掉两处死代码之后，`#hitTrace` 这个名字在 `lib/redteam/store-core.js` 里已经不存在**，但 `hitTrace` 函数本身在 `lib/redteam/score-report.js` 里仍在用。**检测办法**：`grep -rn "this.#hitTrace" lib/` 必须为空；`grep -rn "hitTrace" lib/redteam/score-report.js` 必须有命中。
+
 
 ## 维护约定
 
