@@ -718,6 +718,39 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 
 **覆盖率**：`lib/redteam/ip-utils.js` 行 116/182 → **140/140（100%）**、函数 11/12 → **13/13**、分支 25/42 → **73/74（98.6%，差的正是上面那个不可达分支）**；全仓行 **93.18%** / 函数 83.60% / 分支 89.55%。RED 演练 **36 条突变 → 36/36 全红**（另删掉三条互为补偿的等价突变，理由见上）。测试文件 `scripts/test-ip-utils.mjs` **53 条**，两平台各 53/53。
 
+**三十七补**：`lib/bom-guard.js` 的四条「不写盘」出口与那一行告警文案。这个模块只干一件事 —— 把 profile 清单开头的 BOM 剥掉（`\uFEFF` 在 `package.json` 开头会让宿主 0.2.2 **直接起不来**，用户看到的是桌面端闪一下就没了）。`test-bom-guard.mjs`（5 条）早就钉住了救砖主路：带 BOM 的清单能被点出来、修完 JSON 可解析、本来就坏的文件不会被写得更坏、修干净的文件 mtime 不变。这一批补的是同一套逻辑里**四条「决定不写」的出口**，以及 status 里那一行文案。
+
+这些出口的坏法全都是**安静地什么都不做**，用户不会看到任何报错：
+
+- 该修的没修（`dryRun` 分支写真漏了 `continue`）→ 面板说「已修复」，重启还是起不来；
+- 不该修的修了（`skipped` / `failed` 分支少了 `continue`）→ 把坏文件写成半截，把「等用户拿备份恢复」变成「备份也没用了」；
+- 写盘失败当成成功（`catch` 里忘了 `push failed`）→ 磁盘满 / 文件被占用时面板仍报成功；
+- 告警文案漏一半（只报 BOM 不报 JSON 坏）→ 用户照着提示修完 BOM，仍然起不来。
+
+`scripts/test-bom-guard-edges.mjs`（19 条）分成五组：常量与纯函数 3、`scanProfileBom` 4、`fixProfileBom` 6、写后复查 2、`bomWarningLine` 3，外加 1 条源码形状。
+
+跑出来的六条事实（都写进了断言，改代码前先看一眼）：
+
+1. **`result.report` 是「修完再扫一遍」的结果，不是修复过程的复述**。`dryRun` 时它照样报 `ok:false` 且 `bom.length === 1` —— 这样调用方只要看 `report.ok` 一个字段就能决定要不要提示用户，不必区分「这是试运行还是真修」。
+2. **`skipped` 与 `failed` 是两个不同的出口**：没有 BOM 但 JSON 本来就坏 → `skipped(reason:"json-invalid")`，一个字节都不写（这文件不是 BOM 的锅，不该由这里动它）；有 BOM 但剥掉之后仍然解析不过 → `failed`，**原文连带 BOM 原样留在盘上**（此刻用户最需要的是那唯一的副本，而不是一个「干净」的半截文件）。
+3. **`checked` 只数真实存在的清单**。`profiles/` 下每个目录都会展开六个候选名，但只有读得到文件的才 `+1`；`profiles/` 下不是目录的条目（比如一个 `pkg.json` 文件）直接跳过，一个候选都不产生。
+4. **yaml 只判 BOM，不判语法**。`cordis.patch.yml` / `pnpm-workspace.yaml` 带 BOM 会进 `bom`，但**不会**进 `broken` —— 这个模块没有 YAML 解析器，把「读不懂 YAML」当坏文件处理就等于把整类文件都判死。
+5. **`bomWarningLine` 的两段是拼起来的**：都有问题时是 `1 个清单带 BOM（宿主 0.2.2 会起不来），1 个清单 JSON 坏`（BOM 在前，用全角逗号）。只报一半，用户就会在修完那一半之后以为好了。
+6. **写盘只走 `atomicWriteSync`**（`lib/core.js:68-96`：写 `.<pid>.<ts>.tmp` → `fsyncSync` → `renameSync`）。直接 `fs.writeFileSync` 会丢掉这层保护，断电时清单可能变成半截 —— 那正是这个模块要救的砖。
+
+**这两条「写后复查」原本是测不到的，靠伪造读回来测**。`fixProfileBom` 写完之后会 `readFileSync` 再验一遍（还带 BOM → 抛 `BOM still present after write`；JSON 类还要再 `JSON.parse` 一次）。正常跑的时候这两行永远为假，任何实现都能过 —— 直到你让 `renameSync` 真的成功、却让**读回来说谎**：
+
+```js
+fs.renameSync = (...args) => { const out = origRename.apply(fs, args); written = true; return out; };
+fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? BOM + body : origRead.call(fs, target, ...rest));
+```
+
+真实场景是另一进程在同一毫秒把 BOM 写回去、或者磁盘缓存骗了我们 —— 复现不了，但「读回来是坏的就一定不能报成功」这条不变式必须钉住。同一手法（`export` 出去的是 `node:fs` 默认导出对象，`lib/bom-guard.js` 与 `lib/core.js` 里的 `atomicWriteSync` 共用同一个对象）也用来造写盘失败：`fs.renameSync = () => { throw new Error("rename boom") }` → `failed` 里 `error === "rename boom"`、原字节不变、目录里**不留 `.tmp`**（`atomicWriteSync` 的 catch 会 unlink）。这比 `chmod` 可靠：POSIX 上 `rename` 只要求目录可写，改目标文件的 mode 拦不住它（批59 踩过）。
+
+**顺手删掉 7 行死代码**：`readJsonNoBom(fp)`（原 `lib/bom-guard.js:51-57`）全仓只有定义处一个名字 —— `grep -rn "readJsonNoBom" lib scripts` 的唯一命中就是它自己。它是这个模块早期「顺便读一下 JSON」的遗留，BOM 判定早就不经过它了。判据很简单：**私有 helper 在全仓只有定义处一个标识符出现，就是死代码**；删除后 `node --check` + 该模块全部测试文件（5 + 19 条）通过即可。文件 169 → 161 行，`lib/bom-guard.js` 行覆盖 **148/161 → 161/161（100%）**、分支 34/44 → 58/61。
+
+**覆盖率**：`lib/bom-guard.js` 行 **100%**、函数 7/7、分支 **58/61（95.1%）**；全仓行 **93.23%**。RED 演练 **20 条突变 → 20/20 全红**（唯一一条 ANCHOR 是我把 `if (!home) return out;` 的缩进写成 4 格，真行是 2 格 —— 锚点必须从源码印刷行抄）。没有等价突变：那 20 条每一条都能说清「用户会看到什么不同」（该修没修 / 不该修却修了 / 失败报成功 / 告警少一半）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -824,7 +857,7 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 | `package.json` 的 `files` / `dsh.install` / `private` 不回退 | `test-package-integrity.mjs` | — |
 | `npm pack` 产物里不含 `.bak`、`default-prompt-inject.md` | `test-package-integrity.mjs` | — |
 | 发版前 `release-notes.md` 首行版本号与 `package.json` 一致 | `check-metadata.mjs` | — |
-| BOM 守卫（profile 清单带 BOM 会让桌面端起不来） | `test-bom-guard.mjs` | `lib/bom-guard.js` 86% |
+| BOM 守卫（profile 清单带 BOM 会让桌面端起不来）：扫描口径 / 试运行 / 四条「决定不写」的出口 / status 文案 / 写后复查 | `test-bom-guard.mjs`（5 条）+ `test-bom-guard-edges.mjs`（19 条） | `lib/bom-guard.js` 行 100% |
 | profile 的 `cordis.patch.yml` 按形态补齐（空文件 / `[]` / 块序列 / flow-seq 不动） | `test-self-update.mjs` | `lib/profile-insert.js` 93% |
 | profile 的 `dsh.profile.bundles` 被补上且幂等 | `test-self-update.mjs` | 同上 |
 | `pnpm-workspace.yaml` 的 `allowBuilds`：pnpm 11 删来源键、pnpm 12 保留、坏原文不写盘 | `test-self-update.mjs` | 同上 |
@@ -1181,6 +1214,18 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
     **④** `slugTarget` 的结果是**已经落盘的靶标目录名**，所以它的怪癖只能钉不能改：非 ASCII 目标整段被 `[^\w.\-]` 洗成 `unknown`（中文靶标全部挤进 `unknown/`）、`https://` 只剩协议名 `https`、IPv6 URL 变成 `_2001_db8__1`。改任何一条都会把用户已建的攻击文件留在旧目录里，因此这一批只锁现状。
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-ip-utils.mjs`（53 条应全绿）；再在演练台里手工确认三处：资产测绘左侧按段分组里 IPv6 目标只出现一个 `xxxx:xxxx:xxxx:xxxx::/64` 段（不是每个地址一段）、`172.16`/`100.64` 那两个边界地址落在「内网」侧、给同一个 IP 补一个 `:8080` 之后攻击文件仍落在同一个目录。
+
+85. **`lib/bom-guard.js` 里 `atomicWriteSync` 的 `fsyncSync` 与几条「实现等价」的判据，进程内测不到。**
+
+    **①** 「写 tmp → fsync → rename」里的 `fsyncSync` 没法在同一个进程里验证：它没有返回值、没有可观察副作用，把 `fsyncSync` 换成空函数测试全绿（批31 的同一个结论）。当前只能靠源码形状断言「写盘必须经过 `atomicWriteSync`」（`test-bom-guard-edges.mjs` 的最后一条），不能断言「真的把数据刷到了盘上」。
+
+    **②** 写后复查的两条（`hasBom(after)` 抛错、`kind === "json"` 时再 `JSON.parse(after)`）只能靠**让读回来说谎**来测（`fs.renameSync` 记标记 + `fs.readFileSync` 返回坏内容）。真实时序 —— 另一进程在同一毫秒把 BOM 写回去、或磁盘缓存返回旧内容 —— 复现不了，所以「读回来的确实是盘上的字节」这一层没有守卫。
+
+    **③** `hasBom(0)` / `stripBom(0)` 这两类非字符串入参只钉了结果（`false` / `""`），区分不了「先 `String(text ?? "")` 再判」与「`typeof text === "string"` 早退」两种实现 —— 对 `null` / `undefined` 之外的值两者同答案。`hasBom` 的 `String(text ?? "")` 目前只有一条源码形状之外的间接证据（`hasBom("x" + BOM) === false` 说明它只看开头）。
+
+    **④** `candidateFiles` 里 `statSync` 抛错与非目录两种 `continue` 无法区分：两者都只是「不产生候选」，`checked` 与三个数组全都不变。要区分只能把 `fs.statSync` 换成抛错版本，但那与「`profiles/` 不存在」的路径完全重合。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-bom-guard.mjs scripts/test-bom-guard-edges.mjs`（5 + 19 条应全绿）；再在真机上手工验一次救砖主路 —— 拿一个 `profiles/<name>/package.json` 用记事本存成「UTF-8 with BOM」，跑 `dsh-purge --status` 应出现 `清单告警 / manifest: 1 个清单带 BOM（宿主 0.2.2 会起不来） —— 运行 dsh-purge --fix-bom 修复`，跑 `--fix-bom` 后该行消失、桌面端能正常启动。
 
 ## 维护约定
 

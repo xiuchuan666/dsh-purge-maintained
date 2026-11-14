@@ -696,6 +696,32 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 反过来说：**如果一条兜底走得到，就必须有能区分两条实现的用例**。上一批（`test-store-evidence-rules.mjs`）的「存档失败不许删」就是这种：把 `runs` 做成文件让 `mkdir` 抛错，突变「存档失败也删」立刻红。判据永远是同一个 —— 改完之后说不出「用户会看到什么不同」，这条突变就是等价突变，删掉它、别为它硬凑用例。
 
+### 死代码的判据：私有 helper 在全仓只有定义处一个名字
+
+`lib/bom-guard.js` 里的 `readJsonNoBom(fp)` 活了很久：七行、看起来像「读 JSON 时顺手剥 BOM」的正规入口，实际上**没有任何调用点** —— `grep -rn "readJsonNoBom" lib scripts` 的唯一命中就是它自己的 `function` 行。它之所以没人发现，是因为它长得像基础设施：有注释、有 try/catch、名字合理，删不删都不影响任何测试。
+
+判据只有一条：**私有 helper（不带 `export`）在全仓只在自己定义处出现一次标识符，就是死代码**。带 `export` 的要另判 —— 它可能是给宿主或外部脚本用的 API，删之前先 `grep` 整个仓库（含 `docs/`、`scripts/`、`test-*`）与宿主安装树。
+
+删除前后各做一次：`node --check <file>`；跑**该模块的全部测试文件**（这里 5 + 19 条，不是只跑新增那一份）；在 `docs/test-map.md` 的「N补」与盲区里记一笔（下一个人会再问一遍「这个能不能用」）。删掉之后覆盖率分母会小 7 行 —— 这是**分母变小**，不是覆盖率下降，`check-coverage-baseline.mjs` 会同时打印 `↑ 行 148 → 161 (+13)` 与 `↓ 行总数 169 → 161 (-8)`，看到后者不要以为是退步。
+
+### 「写完之后再读回来验一遍」这类代码，要用「让写成功、让读说谎」来测
+
+`fixProfileBom` 写盘后会 `readFileSync` 复查一次（还带 BOM 就抛错、JSON 类再 `JSON.parse` 一次）。正常跑的时候这两个条件永远为假 —— 任何实现都能过，等于没测。这类「事后校验」的测法是**拆开它的两个前提**：让「写」成功，让「读」说谎。
+
+```js
+const origRename = fs.renameSync;
+const origRead = fs.readFileSync;
+let written = false;
+fs.renameSync = (...args) => { const out = origRename.apply(fs, args); written = true; return out; };
+fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? LIE : origRead.call(fs, target, ...rest));
+```
+
+`LIE` 换成 `BOM + body` 就走到「BOM 仍在」那条分支，换成 `"{"` 就走到「JSON 解析不过」那条分支。这套手法成立的前提是**双方共用同一个 `node:fs` 默认导出对象** —— `lib/bom-guard.js` 直接 `import fs from "node:fs"`，`lib/core.js` 的 `atomicWriteSync` 也是，所以 monkeypatch 一次就同时生效（跨平台，不依赖文件权限）。
+
+同一个注入点还能可靠地造「写盘失败」：`fs.renameSync = () => { throw new Error("rename boom") }`。比 `chmod 0o444` 可靠得多 —— POSIX 上 `rename` 只要求**目录**可写，改目标文件的 mode 拦不住它（批59 踩过这个坑，CI 上红了一条）。写盘失败的三件事要一起断言：`failed` 里有那条错误、**原文件字节不变**、目录里**不留 `.tmp`**（`atomicWriteSync` 的 catch 会 unlink）。
+
+与之相对，`fsyncSync` 是这条路上唯一测不到的一环：它没返回值、没可观察副作用，换成空函数测试全绿。这类只能退到源码形状断言（「写盘必须经过 `atomicWriteSync`」），并写进盲区。
+
 ### 纯函数模块：先跑探针把「现状」抄成一张表，再决定哪几条是该钉的现状
 
 `lib/redteam/ip-utils.js` 这批没有 fixture（不碰库、不碰文件、不读环境），所以写法跟前面的批次完全不同。有效的顺序是三段：
