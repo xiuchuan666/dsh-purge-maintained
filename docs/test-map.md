@@ -338,6 +338,7 @@
 | 演练台报告链路（`hitTrace` / `scoreReport` / `scoreChain` / `representativeShots`）用真 `RedteamStore` + 临时目录播种，钉 `tunnelIsLegit` 与 `buildCurlCommand` 的 headers 两个真 bug；同时锁定五条读源码看不出来的现状（items 与 chain_no 顺序可不同 / scoreChain.stages 五段定长 / representativeShots 分层不影响先后 / 不挂资产不挂凭据 / 纯英文用户名不认领） | `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1192 → **1457/1532**、`report-replay.js` 行 173 → **222/224** |
 | 报告正文边角（长备注按句子截断 / 档位校正段 / 截图归属指路 / 步骤去重）与一段重复兜底的删除 | `test-report-edges.mjs`（14 条）+ `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1457 → **1496/1510**（删掉 28 行死代码，分母 -22） |
 | 报告的「完整性判据」本身：账号类（`web-app` / `db-credential`）没挂凭据、突破类（`boundary-*` 四条）没登记隧道时，必须报缺口而不是让 `complete` 恒为 `true`；外加拿真 `score_point` 表对拍判据里写死的 code、以及报告正文里 WebShell / 凭据 / 通道三行 | `test-report-fidelity.mjs`（9 条）+ `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1516/1523 |
+| 报告链路的两处边角：复现命令的「真实 curl」分支（推断来的步骤也要原样给出、标 `real`；多步骤取第一条带 tool 的）与「同阶段同时间」的排序第三级键（最小步骤 seq，没步骤回 `MAX_SAFE_INTEGER` 排最后）；顺带锁定「返回的 items 数组顺序 ≠ chain_no 顺序」 | `test-report-chain-order.mjs`（6 条） | `lib/redteam/score-report.js` 行 **1523/1523（100%）** |
 | 目标宿主声明与宿主版本门禁：`HOST_TARGETS` / `HOST_TARGET` / `hostCompat` 的 known·ok·host 三态、预发布后缀原样相等、`dshTargets` 含 `dshTarget` 且无重复、每一项都能被 `parseHostVersion` 解析 | `test-host-target-decl.mjs`（9 条）/ `test-package-integrity.mjs`（13 条） | `lib/core.js` 宿主门禁段 100% |
 | 官方 CLI 三件套（`resources/runtime/cli/bin` 下的 `dsh` / `dsh.cmd` / `dsh.ps1`）：首装现场生成、已有就只打回退块、打完留 `.dsh-purge.bak`、`app/runtime` junction 指向 `../runtime` 且目标非空才回 `already` | `test-desktop-cli-repair.mjs` | `lib/desktop.js` 行 71% → **79.8%**（1624 → 1812 / 2273） |
 | 桌面面 shim 三件套的来源：先看桌面树的 `resources/runtime/cli/bin`（只看目录存在、不看里面有没有启动器），没有再回落 PATH 并标 `path`，两处都没有才是 `none`；桌面官方 CLI 的补丁是入口回退块不是 shim 注入，`dsh` / `dsh.cmd` / `dsh.ps1` 各判一次（`patched / missing / patched`）；`runtime_payload` 只在 desktop 面探。链式补丁（`#46←#45`、`#84/#92←#83`、`#88←#87`）前驱没 settled 记 `pending` 不记 `drifted`，`after` 里的字符串 id 先归一化成数字、非数字条目丢掉、不是数组就当没有前驱 | `test-desktop-shim-source.mjs`（21 条） | `lib/core.js` 行 4793/5205 |
@@ -1406,6 +1407,40 @@ RED 演练 11 条突变全红（11/11）。
 `web-app` 现在会额外报一条账号缺口。**这个改动是修复的目的本身**，不是测试迁就实现：报告少报一条
 就是在骗人。RED 演练 **10 条突变 → 10/10 全红**（两组常量各砍一项 / 前缀丢弃连字符 / 突破类改回精确相等 /
 凭据判据方向写反 / 隧道判据恒假 / 两条文案改掉 / WebShell 行不写密钥 / WebShell 行整段不写）。
+
+**六十三补**：`lib/redteam/score-report.js` 的**最后 7 行** —— 复现命令的「真实 curl」分支（`:445-448`）与「同阶段同时间」的稳定排序（`:697-700`、`:708`）。补完这个文件 **1523/1523 行（100%）**。
+
+两处都属于「判错了不报错，只是报告开始误导人」：
+
+1. **复现命令挑错**。报告里的 `replay_cmd` 有四个来源，先后顺序是硬编码的：
+   ① 有真实抓获报文 → 合成等价 curl；①′ 本条**显式关联**的攻击步骤里记过命令 → 原样给出；
+   ② 只有推断出来的步骤里是 curl → 原样给出；③ 得分点自带的动作模板 → 填值。
+   ②这一支过去没人测，意味着「步骤是推断来的」这条路上的命令可能被换成 ③ 的通用模板
+   （模板长这样：`id; whoami; hostname`），读者照着跑什么也复现不出来 —— 报告里最误导的一处。
+   本批两条用例分别钉「推断步骤里的 curl 原样给出、标 `real`」与「同一资产多条步骤时取第一条**带 tool 的**，
+   不是第一条」（后者靠 `test-report-chain-order.mjs` 里那条只有标题没命令的前置步骤区分）。
+
+2. **并列时的顺序**。`ordered` 的排序键是「阶段顺序 → `order_at`/`recorded_at` → 最小步骤 seq」。
+   `stepSeqOf` 的兜底是 `Number.MAX_SAFE_INTEGER`：没有步骤的条目**永远排在有步骤的后面**，
+   哪怕它记得更早。这个兜底原来是 0 就会反过来（"没证据的先讲"），而两种都不报错。
+   三条用例：一条有步骤 / 一条没有、两条都有步骤比最小 seq、两条都没有则保持查询顺序。
+
+**现状锁定（写进用例文档串）**：返回的 `items` **数组顺序保持查询顺序**（`recorded_at, id`），
+链路位置只写在 `chain_no` 上。所以想"按链路顺序读 items"的人必须自己按 `chain_no` 排 ——
+报告正文用的是 `chain_no`，两者不会互相矛盾，但这件事必须写下来，否则下一个人会以为数组是排好的。
+本批的排序断言因此一律写成 `noOf(hitId)`，不去断言数组下标。
+
+**造并列现场的手法**：`recorded_at` 是 `addScoreHit` 里 `new Date().toISOString()` 生成的，
+同一毫秒内两条才可能并列 —— 靠"连调两次"碰运气不行。用 `UPDATE score_hit SET recorded_at = ?`
+把两条钉到同一字符串，再给其中一条挂攻击步骤（`addChainStep`，`asset_id` + `point_id` 都要给，
+否则 `hitTrace` 的 `attack_step WHERE asset_id = ? AND point_id = ?` 查不到）。
+
+**另一个坑**：同资产同得分点的第二条命中会被「服务已拿满」判成重复而**排除出报告**
+（`summary.serviceCappedExcluded`）。第一版用例两条都用 `10.0.0.5`，报告里只剩一条，
+排序断言自然对不上。要两条都留在报告里，必须**换资产**（同一得分点、不同 IP）。
+
+RED 演练 **7 条突变 → 7/7 全红**：②分支不返回命令 / 改标 `template` / 闸门恒假 /
+不跳过没记命令的步骤（`trace.steps[0]`）/ `seqs` 恒空 / 兜底改成 0 / 并列时不再比 seq。
 
 ## 五、前端产物链（client.js）
 

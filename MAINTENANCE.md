@@ -1421,3 +1421,31 @@ core.rememberCommittedOverride(home, "");
 2. **判据修复会改已有用例的期望值**：修复的目的是"多报一条真实缺口"，所以
    `test-score-report.mjs` 里"报两条缺口"改成三条是对的 —— 判断标准是
    「用户看报告时会看到什么不同」，不是「测试改了多少」。
+
+## 数组顺序和编号顺序是两件事：断言盯编号，不盯下标
+
+`scoreReport()` 返回的 `items` **数组保持查询顺序**（`recorded_at, id`），链路位置只写在
+每条自己的 `chain_no` 上。这是有意的：`ordered = items2.slice().sort(...)` 排的是副本，
+`forEach` 把 `chain_no` 写回共享对象，原数组不动。
+
+后果是两个容易犯的错：
+
+1. **断言下标**：`assert.deepEqual(items.map((x) => x.id), [r2.id, r1.id])` —— 明明排序是对的，
+   这条也会红。正确写法是 `items.find((x) => x.id === hitId).chain_no`。
+2. **替调用方排序**：真要"按链路顺序读"，唯一安全的口径是 `chain_no`；文档里必须写明，
+   否则下一个人会把数组顺序当成链路顺序去改，改完报告正文的 ①②③ 反而错。
+
+同类信号：凡是一个数组「排序后写回某个字段」，就要问一句「调用方读的是数组还是字段」。
+
+## 想造「两条记录并列」，直接改时间戳；不要靠连调两次碰同一毫秒
+
+`addScoreHit` 里 `recorded_at` 是 `new Date().toISOString()`。想让两条并列（测排序的第三级键），
+唯一稳的写法是 `UPDATE score_hit SET recorded_at = ?` 把两条钉成同一字符串。
+
+两条附带约束：
+
+- **并列的两个条目必须挂在不同资产上**：同资产同得分点的第二条会被「服务已拿满」判成重复、
+  直接排除出报告（`summary.serviceCappedExcluded`），报告里只剩一条，排序用例必然对不上。
+- **攻击步骤要 `asset_id` + `point_id` 都给**：`hitTrace` 查的是
+  `attack_step WHERE asset_id = ? AND point_id = ?`，少一个就查不到，`steps` 恒空、
+  `stepSeqOf` 永远回兜底值，排序的第二三级键就测不到了。
