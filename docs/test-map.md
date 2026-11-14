@@ -183,7 +183,8 @@
 | 扫目录认工具：深度夹在 1–6（`maxDepth:0` 是 falsy → 走默认 4，现状锁定）、文件数夹在 100–20000、跳过点开头/`node_modules`/`.git`、同名多份按 `names` 排名先高后低、顺手认 `nuclei-templates` 目录 | `test-platform-config.mjs`（7 条） | 同上 |
 | 环境适配状态：`kali` → `skipped` → 已存路径（`toolkitDir` 或 `binDirs` 或任一 `tools[id]`）→ `found >= 2` → `need-config` 的优先级，以及 `assignToolkitFolder` 把新目录 `unshift` 到最前 | `test-platform-config.mjs`（10 条） | 同上 |
 | 宿主面分派：`hostAdapter` 按面挑适配器（桌面端拿到含 `ASAR_SWAP_PS1` 的那份，web/gui/tui 拿同一份），`adapterFor` 只吐 `web`/`desktop` 两个值 | `test-host-restart.mjs`（4 条） | `lib/host.js` 86% |
-| 重启参数怎么算：有 bin.js 时改写成 `[binJs, ...rest]` 并补 `web --port`、`.cmd`/`.bat` 换成 node_modules 里的 bin.js、永远补 `--no-open` 且不重复 | `test-host-restart.mjs`（9 条） | `lib/web.js` 53% |
+| 重启参数怎么算：有 bin.js 时改写成 `[binJs, ...rest]` 并补 `web --port`、`.cmd`/`.bat` 换成 node_modules 里的 bin.js、永远补 `--no-open` 且不重复 | `test-host-restart.mjs`（9 条） | `lib/web.js` 行 117/117 |
+| 后台重启的两条路：`spawn` 用当前 node 跑助手、`detached`+`stdio:ignore`+`windowsHide`+`shell:false` 四个选项、`unref` 一次、250ms/400ms 两个延时、payload 八键（`openBrowser` 用 `??` 不用 `||`）、提示语抛错不影响重启、子进程 env 不带 `DSH_PERMISSION_MODE`、清理重启把 `uninstall-restart.js` 逐字节复制到 `os.tmpdir()` 再跑副本 | `test-web-restart.mjs`（13 条） | `lib/web.js` 行 117/117（分支 34/35） |
 | 子代理审批接管：两个钩子都必须 `global`（`approval/request` 还要 `prepend`）、只在子会话把 `never` 改回 `ask` 且每会话最多 4 次、子会话审批一律 `allowed-once`、释放时摘钩子 | `test-host-restart.mjs`（13 条） | `lib/subagent-control.js` 100% |
 | 自动续跑与自动重试的判据：哪一类结束原因算异常（error / aborted / interrupted / max-tokens）、用户取消不续跑、永久码（鉴权/配额/上下文超限/缺凭据）与 `TRANSPORT`/`RATE_LIMIT` 不续跑、`signal.aborted` 不重试 | `test-continue-retry.mjs`（10 条） | `lib/continue-retry.js` 97% |
 | 续跑预算与失败连击：每会话 retry/continue 各自计数、同一失败点/同一轮结束点不重复消耗、连续失败 3 次永久停手（#85）、正常结束或 blocked 才清零、会话数超 200 淘汰最早 50 个 | `test-continue-retry.mjs`（10 条） | 同上 |
@@ -1028,6 +1029,18 @@ RED 演练 `.tmp97-drill.mjs` **12 条突变 → 12/12 全红**（首轮 11 红 
 补断言后复跑转红）。`lib/redteam/tool-specs-recon.js` 行覆盖 532 → **551/585**，唯一剩下的 `171-204`
 是「宿主没有 skills 服务且内置技能也为空」的早退支（`bundledSkillSummaries()` 恒非空 → 本仓库不可达）。
 
+**2026-11-15 五十补**：`lib/web.js` 剩下三块（`spawnRestartHelper` 整段、`scheduleRestart`、`scheduleCleanupRestart`）此前一直挂着，理由写在 `scripts/test-host-restart.mjs` 的注释里 —— 直接调用会把跑测试的进程杀掉（`setTimeout(() => process.exit(0), 250)`）。这一批把它补上（`scripts/test-web-restart.mjs`，**13 条**），该文件行覆盖 **62/117 → 117/117 = 100%**、分支 26 → 34/35。做法是把四件事逐个拦下来，而不是绕开：
+
+1. **拦 `spawn` 的难点不是 `spawn`，是具名导入。** `lib/web.js` 写的是 `import { spawn } from "node:child_process"`，改 `require("node:child_process").spawn` 对 ESM 侧**没有影响** —— 必须 `createRequire(import.meta.url)` 拿到 CJS 对象、赋新值、再 `syncBuiltinESMExports()`，ESM 绑定才会跟着变。还原时同样要再 sync 一次。
+2. **`setTimeout` 只记不跑。** 假 `globalThis.setTimeout` 收下 `ms` 就返回 `{ unref() {} }`，绝不调回调 —— 回调里就是 `process.exit(0)`。于是断言能精确钉到「250ms」与「400ms」两个值，而不是「反正会退出」。
+3. **四个 spawn 选项各管一件事，缺一个用户就中招。** `detached: true`（前台退出不带走子进程）/ `stdio: "ignore"`（子进程不占着父进程的管道，否则父进程退了终端还挂着）/ `windowsHide: true`（不弹黑框）/ `shell: false`（带空格的安装路径不会被拆开）。这四条各改一个，13 条测试全数变红。
+4. **`openBrowser` 用的是 `??` 不是 `||`。** `options.openBrowser ?? (request != null)` —— 调用方显式传 `false` 时必须压过「有 request 就弹窗」的默认推断（settle / 自愈重启走 `request=null`，面板点重启才带 request）。改成 `||` 或把 `openBrowser !== false` 改成 `!== true`，都有用例接住。
+5. **那句「关掉窗口不会停」只有一个作用：防止用户再开一个撞 EADDRINUSE。** 所以它必须打（三条正则钉原文），但它抛错（管道断了）时也不能把重启一起带崩 —— 有一条用例专门让 `console.log` 抛 `log boom`，断言 `spawn` 照样发生。
+6. **清理重启的助手是「复制出来再跑」。** `uninstall-restart.js` 先 `fs.copyFileSync` 到 `<os.tmpdir()>/dsh-purge-uninst-<pid>.mjs` 再 spawn 那份副本 —— 因为原文件马上要跟着安装目录一起被删。用例按 `sha256` 逐字节比对副本，并断言 `payload.helper` 指向副本（不是仓库源码）。改成 `writeFileSync(dest, "")` 立即红。
+7. **子进程 env 只带 `envForDetachedSpawn()` 加本次的 `DSH_PURGE_RESTART`。** 用例先把 `DSH_PERMISSION_MODE=danger-full-access` 塞进 `process.env`，断言它**没有**进子进程 —— 否则「这一轮用户点的 full-access」会被带进下一轮重启后的会话。
+
+RED 演练 **17 条突变 → 17/17 全红**（`detached`/`stdio`/`windowsHide`/`shell` 逐个改、删 `unref()`、`exitAfter` 默认值 250→300、`??`→`||`、`!== false`→`!== true`、去掉 `console.log` 的 try/catch、`kind` 改成别的字符串、`argv` 不给 `restartArgv()`、清理重启丢掉 `helper`、丢掉 `cleanup`、`}, 400)`→`250`、`copyFileSync` 换成写空文件、`openBrowser` 恒 `true`、不认调用方给的 `argv`）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1582,6 +1595,9 @@ RED 演练 `.tmp97-drill.mjs` **12 条突变 → 12/12 全红**（首轮 11 红 
 96. **`lib/prompt-source.js` 里仍然测不到的四处**：(a) `refreshHungOperator` 的风暴窗（10 秒内重算超 120 次才进入 `tripped` 状态）—— 要在进程内造出 121 次重算，得让 mtime 每次都变，也就是每轮都写盘，测试成本远高于收益，只由源码形状钉住阈值常量；(b) `hungDepth > 0` 的重入保护（`112`）—— `purgeLog` 与四档降级都不会回调 `fn()`，进程内没有第二次进入的路径，只能靠源码形状；(c) `readInjectFallback` 的 `subagent` 分支（`context.agent.session.header.origin === "subagent"`）已在 `test-prompt-source.mjs` 里覆盖，(d) `injectSnapshotFromBox` 的「框里有字但归一化后为空」分支需要构造只含空白字符、且四级兜底全空的现场，与 (a) 共用同一套成本。检测办法：`grep -n 'HUNG_STORM_LIMIT\|hungDepth > 0' lib/prompt-source.js` 确认阈值与重入保护仍在；`grep -rn 'origin.*subagent' scripts/test-prompt-source*.mjs` 确认 (c) 有守卫。
 
 97. **`redteam_preflight` 的「下一步」五条分支都有守卫了，但仍有两处空白。** (a) `171-204` 那 34 行只在 `skillsMissing && bundledSkills.length === 0` 时执行，而 `bundledSkillSummaries()` 恒扫随包 `skills/redteam`（23 个 `.md`）与 `<home>/redteam/skills` —— 任何安装形态下都不为空，所以只能源码形状钉（`test-recon-preflight-edges.mjs` 最后一条断言 `if (bundledSkills.length === 0) {`、`error: '读取技能目录失败：'`、`summaries = bundledSkills` 三处原文）。(b) 占位符提示对**可用**技能不可见：`checkSkill` 把 `<你的VPS_IP>` 这类占位符记成 issue（`status` 仍是 `available`），而返回体只给 `broken` 带 `needs_user`/`problems`，于是「技能正文里还有占位符」在 preflight 输出里查不到 —— 现状锁定，用例用 `assert.deepEqual(pf.needs_user_flat, [])` 钉着；要把这条暴露出来得给 `available` 也带 issues，属产品决策。检测办法：`grep -n "skillsMissing && bundledSkills.length === 0" lib/redteam/tool-specs-recon.js`；`grep -n "needsUser = Array.from" lib/redteam/tool-specs-recon.js` 确认 `needs_user` 仍只从 `broken` 收集。改坏的表现是「桌面端首次打开演练台时体检整条报废」，或者「模型看不见技能里还留着 `<你的VPS_IP>`，直接拿占位符去连 VPS」。
+
+98. **后台重启真的能跑起来这件事，本机一条都没验过。** `scripts/test-web-restart.mjs` 的 13 条全在**假 `spawn`** 上跑：它证明的是「调用了谁、带了什么参数、延时多少、env 里有什么」，不证明 `lib/restart-web.js` 与 `lib/uninstall-restart.js` 真的能把 server 从旧 pid 手里接过来。真跑一次需要：一个真的监听端口的 server、一次真的 detached spawn、一个真的会退出的父进程 —— 三件事凑一起就会把跑测试的进程杀掉，所以这台机器造不出可靠 fixture。同理 `process.exit` 被替换后，`setTimeout` 的回调**一次都没执行过**（只钉了延时值），「250ms 之后真的退出」不在守卫范围内。**检测办法**：手工 `dsh web` 起一个会话，在面板上点一次「重启」与一次「卸载后清理」，用 `netstat -ano | findstr :<port>` 看端口是否换到新 pid、旧 pid 是否消失、临时目录里的 `dsh-purge-uninst-<pid>.mjs` 是否在清理结束后被删掉。
+99. **`spawnRestartHelper` 里那句 `core.silenceCmdFlash()` 会去改宿主的 `bin.js`，而且没法重定向。** 它内部走 `findAiBase()`，而 `findAiBase()` 的候选里有一条锚在 `lib/core.js` **自己所在的位置**（不是 `cwd`、也不是 `DSH_BASE`）—— 于是本机会恒定落到 `D:\dsh-purge-maintained\node_modules\@deepseek-ai`。本机现状是 `entry: "already_injected"`（幂等，SHA-256 跑前跑后不变，测试结尾专门断言了这一点）；但如果哪天那份 `bin.js` 被 `npm ci` 换成未注入版，这条测试就会**真的去改 node_modules 里的文件**。CI 上没有这棵树时它是早退，所以不会红。**检测办法**：`git status --porcelain node_modules` 无用（被 gitignore），改用 `sha256sum node_modules/@deepseek-ai/dsh/lib/bin.js` 在跑 `node --test scripts/test-web-restart.mjs` 前后比对；不一致就说明那份 `bin.js` 已经不是注入版了。
 
 ## 维护约定
 

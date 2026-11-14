@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-14T16:51:43.624Z",
-  "commit": "7422fc7",
+  "capturedAt": "2026-11-14T17:20:35.590Z",
+  "commit": "be77d7a",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -93,12 +93,12 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 4628,
+      "lh": 4633,
       "lf": 5205,
-      "fnh": 317,
+      "fnh": 318,
       "fnf": 341,
-      "brh": 1600,
-      "brf": 1929
+      "brh": 1601,
+      "brf": 1931
     },
     "lib/desktop.js": {
       "lh": 1837,
@@ -201,8 +201,8 @@
       "lf": 363,
       "fnh": 20,
       "fnf": 23,
-      "brh": 117,
-      "brf": 147
+      "brh": 116,
+      "brf": 146
     },
     "lib/live-cache.js": {
       "lh": 84,
@@ -402,7 +402,7 @@
       "fnh": 159,
       "fnf": 166,
       "brh": 584,
-      "brf": 740
+      "brf": 758
     },
     "lib/redteam/score-rules.js": {
       "lh": 933,
@@ -410,7 +410,7 @@
       "fnh": 30,
       "fnf": 31,
       "brh": 239,
-      "brf": 282
+      "brf": 284
     },
     "lib/redteam/settings.js": {
       "lh": 78,
@@ -442,7 +442,7 @@
       "fnh": 251,
       "fnf": 259,
       "brh": 1368,
-      "brf": 1576
+      "brf": 1585
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -490,7 +490,7 @@
       "fnh": 39,
       "fnf": 46,
       "brh": 194,
-      "brf": 215
+      "brf": 214
     },
     "lib/redteam/validate.js": {
       "lh": 87,
@@ -613,12 +613,12 @@
       "brf": 542
     },
     "lib/web.js": {
-      "lh": 62,
+      "lh": 117,
       "lf": 117,
-      "fnh": 7,
-      "fnf": 10,
-      "brh": 26,
-      "brf": 27
+      "fnh": 10,
+      "fnf": 11,
+      "brh": 34,
+      "brf": 35
     },
     "lib/zip-extract.js": {
       "lh": 186,

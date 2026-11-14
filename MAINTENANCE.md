@@ -1076,3 +1076,36 @@ syncBuiltinESMExports();
 于是 `assert.ok(Array.isArray(out.pending))` 在本机永远绿、在 CI 永远红，而这条用例本身是对的（它测的是「有没有转发」）。正确写法是**先与直接调用底层函数的结果 `deepEqual`**（证明转发），再按 `ok` 分两支各断言各的字段。同类还有：`inspectRuntimePayload("")` 会去 discovery 本机安装树、`gatherState()` 的 `ai_base` 会落到 npm 全局树、`officeSkillAssetSources()` 读真安装树（CI 上走 `reason:"no-source"`）。
 
 判据很简单：**这个函数有没有「外部状态不存在时的早退形状」**。有，就必须写成「两种情况都成立」的断言，或者把外部状态也钉住（沙箱 `DSH_BASE` / `DSH_DESKTOP_INSTALL`）。
+
+
+## 拦下 `import { spawn }` 这种具名导入，必须 `syncBuiltinESMExports()`
+
+`lib/web.js` 里写的是 `import { spawn } from "node:child_process"`。这种具名导入在模块求值那一刻就把绑定指到了内置模块的属性上，之后：
+
+- 改 `require("node:child_process").spawn = fake` —— **没用的**，ESM 侧还是原函数；
+- 改 `globalThis.spawn` —— 更没用，模块从来没查过 `globalThis`；
+- 只有在赋值之后调一次 `syncBuiltinESMExports()`（`node:module` 导出），ESM 的具名绑定才会重新指向 CJS 对象上的当前值。
+
+所以「拦 spawn / 拦 `fs.renameSync` / 拦 `process.exit` 之外的任何内置模块函数」都是同一套三步：
+
+```js
+const require = createRequire(import.meta.url)
+const CJS = require('node:child_process')      // CJS 对象，属性可写
+const REAL = CJS.spawn                          // 必须先存引用，否则还原不回去
+CJS.spawn = (cmd, args, opts) => { /* 记录 */ return { unref() {}, pid: 1 } }
+syncBuiltinESMExports()                        // ← 少了这句全白干
+try {
+  await 被测函数()
+} finally {
+  CJS.spawn = REAL
+  syncBuiltinESMExports()                      // ← 还原也要 sync，否则后面几个测试文件还看到假的
+}
+```
+
+三个配套注意：
+
+1. **`process.exit` 不在这套机制里** —— 它是 `process` 对象的 own property，直接赋值就生效，但同样要在 `finally` 里还原（同进程里 `node --test` 还要跑别的文件）。
+2. **假 `setTimeout` 只记不跑**。`setTimeout(() => process.exit(0), 250)` 这种「延时退出」如果让假实现真去回调，测试进程当场死掉；只收下毫秒数、返回 `{ unref() {} }`，就能把「延时是 250 还是 400」钉住。代价是**「回调真的执行了」这件事没被验**，要写进盲区。
+3. **`delete` 之后不可恢复，永远存引用。** 置坏一个内置函数再 `delete CJS.xxx`，ESM 绑定还指着坏实现、CJS 对象又没了 own property，两边都对不上（`prompt-source` 那批踩过：`delete` 完 `defaultOverrideText()` 仍是 0）。存 `const REAL = CJS.xxx`、最后 `CJS.xxx = REAL` 才是唯一可靠写法。
+
+**判断依据**：只要打算 monkeypatch 的东西是**从内置模块具名导入**的（`import { spawn }`、`import { rename }`、`import { createDecipheriv }`），就一定要 `syncBuiltinESMExports()`；如果是模块自己导出的对象属性（`agent.cancel`、`ctx.effect`）或者 `process.env` 这类全局，就不需要。
