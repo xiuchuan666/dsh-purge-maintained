@@ -696,6 +696,28 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 6. **同会话串行锁的两条分支**。`rewindLocks.get(key)` 为前驱链，`prev.then(onOk, onRejected)` 两条分支各跑一次 `doRewindOneSession` 并在 `finally` 里 `if (rewindLocks.get(key) === next) rewindLocks.delete(key)`。实测：并发两次 → `fork:start1 / fork:end1 / fork:start2 / fork:end2`（严格串行，各自拿到 `child-1` / `child-2`）；第一次 fork 抛错 → 第二次**仍然要跑**（`settled` = `rejected` + `fulfilled`），把 onRejected 分支删掉之后第二次会被前一次的失败永远拖着；`sessionId=''` 时不进锁直接执行。**为什么值钱**：删掉 onRejected 的表现是「一次回退失败之后，这个会话的 `/rewind` 就再也不响应了」——不报错、不日志，只有重开窗口才好。
 7. **覆盖率**：`lib/rewind.js` 行 580 → **618/644（96.0%）**、函数 52 → 56、分支 258 → 312；全仓行 **93.11%**。RED 演练 **17 条突变 → 17/17 全红**（另删掉两条等价突变：`!id` 那半个判据从 `ids` 的两个来源就已经过滤掉、`if (!key)` 早退在串行语义上不可观测，理由见盲区 83）。
 
+**三十六补**：`lib/redteam/ip-utils.js` 的十个纯函数 —— `cidrOf`（资产按哪个网段分组）、`scopeOfIp`（内网 / 外网）、`ipToInt`（`ORDER BY ip_int` 的自然排序）、`expandIpv6` / `isIpv6`、以及四个 slug / 文件名函数。这是整份 `test-map.md` 里第一个**纯函数模块**（不碰数据库、不碰文件、不读环境），所以写起来没有 fixture，全部靠一张「输入 → 实测输出」的表；也正因为纯，它此前一条测试都没有 —— 全仓 `grep -rln 'ip-utils' scripts/*.mjs` 为空，25 行未覆盖全部落在 IPv6 与 CGNAT 上。
+
+坏法全都不报错，只让面板显示错东西：`cidrOf` 判错 → 资产测绘左侧多出一个假网段、资产归到错的段（IPv6 资产被拼成 `2001:db8::1.0/24` 这种四不像就是这么来的）；`scopeOfIp` 判错 → 内网目标被当外网（或反过来），扫描范围与报告口径一起偏；`ipToInt` 判错 → `ip_int` 变成负数或 NULL，资产列表的自然排序乱掉；`slugTarget` / `slugPoc` 判错 → 同一个目标的攻击文件散到两个目录、知识库条目引用不上。
+
+六处「明显不严谨但已被依赖」的现状，逐条钉住并写明为什么不改：
+
+1. `isIpv6(":")` / `isIpv6(":::")` / `isIpv6("1:2:3:4:5:6:7:8:9")` / `isIpv6("2001:db8::1::2")` 全是 **true**。它只校验「字符都在 `[0-9a-fA-F:]` 里」且 `split(':').length <= 9`，不校验真语法。**不改**：调用方只用它决定「要不要走 IPv6 分支」，改严会让脏输入从 `external` 掉回 `internal`，把扫描范围放大。
+2. `ipToInt("256.1.1.1") === 65793`：正则只要求 `\d{1,3}`，不校验 ≤255，256 溢出进下一段。**不改**：这是给 `ORDER BY ip_int` 用的排序键，脏 IP 有个大致有序的键比 NULL 更好。
+3. `cidrOf("10.1.2.3:8080")` 原样返回 `10.1.2.3:8080`，不认端口。**不改**：`asset.ip` 本来就不该带端口，原样返回便于肉眼发现脏数据（宁可显示难看，也不要静默归到一个错的段）。
+4. `cidrOf("::ffff:10.0.0.1")` → `0:0:0:0::/64`（不剥壳），而 `scopeOfIp` 同一个地址剥壳后算 `internal`。两边口径不同。**不改**：`cidrOf` 剥壳会把 IPv4-mapped 资产并进 `10.0.0.0/24`，和真正的 IPv4 资产混成一个段，比现在更糟。
+5. `scopeOfIp("::1") === "external"`：纯回环不是内网。**不改**：现实现只认 `127.` 开头的 IPv4 回环；把它改内网会让「用 ::1 做本地靶标」的演练目标整体挪到内网分组，影响报告口径。
+6. `slugTarget("中文 目标") === "unknown"`、`slugTarget("https://") === "https"`、`slugTarget("http://[2001:db8::1]:80/x") === "_2001_db8__1"`。**不改**：`slugTarget` 的结果是**已存在的靶标目录名**，改一次就把用户已建的攻击文件留在旧目录里；这一条只能钉、不能改。
+
+测试侧的四条纪律：
+
+1. **先跑探针再写断言**。这一批我凭「应该是什么」写错了三处 —— `isIpv6("2001:db8::1::2")` 以为是 false（实为 true）、`scopeOfIp("10.0.0")` 以为是 external（实为 internal，四条 IPv4 判据都是前缀匹配而非整串校验）、`slugTarget("A.Example.COM/x")` 以为是 `A.Example.COM`（实为 `A.Example.COM_x`，只有 `^https?://` 命中时才取 host）。三处全部靠 `scripts/test-ip-utils.mjs` 首跑变红后按实测值改正。
+2. **断言要钉到「用户看到的那一行」**。例如 `ipToInt` 那条不只断言数值，还断言 `> 0`（`>>> 0` 掉了会让 `255.255.255.255` 变 -1）；`defaultPocFilename` 那张 14 行的映射表逐项断言，而不是「返回以 poc. 开头」。
+3. **等价突变有三种形态，第三种最容易漏**：这次删掉的三条属于「两条判据互为补偿」—— `head === '' ? []` / `tail === '' ? []` 与 `g === '' ? '0'` 三者删任一条，另外两条都能把结果补回同一个值。所以 `expandIpv6` 的 37 行那个三元分支**永远走不到 true**（空组进不来），`brh` 上限就是 73/74。
+4. **`slugPoc` / `slugify` 的空结果要钉成时间戳形状**（`/^poc-\d+$/`、`/^engagement-\d+$/`），不能断言具体值。
+
+**覆盖率**：`lib/redteam/ip-utils.js` 行 116/182 → **140/140（100%）**、函数 11/12 → **13/13**、分支 25/42 → **73/74（98.6%，差的正是上面那个不可达分支）**；全仓行 **93.18%** / 函数 83.60% / 分支 89.55%。RED 演练 **36 条突变 → 36/36 全红**（另删掉三条互为补偿的等价突变，理由见上）。测试文件 `scripts/test-ip-utils.mjs` **53 条**，两平台各 53/53。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -760,6 +782,7 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 | 事实库迁移的两处回填真的生效：`asset.scope` 按 IP 归属判内外网（含 172.16–31 与 100.64–127 的边界）、`attack_step.stage_code` 按 `LEGACY_STAGE_MAP` 映射七个老阶段、已有值一律不覆盖、跑两遍结果全等 | `test-schema-migrate.mjs`（23 条） | `lib/redteam/schema.js` 98% |
 | 知识库迁移：补出五个新列与两个索引、老条目按关键词推归类（具体压过泛化）、已有归类不被改写、`POC_CATEGORIES` 的 code 唯一且以 `other` 收尾 | `test-schema-migrate.mjs`（7 条） | 同上 |
 | `dispatch` 的 op 表：71 个 op 各自调哪个方法、第几个实参、别名怎么退（`req.poc` / `req.id ?? req.code` / `req.id ?? req.shot_id` / 十二个 `xxx || req`）、`limit` 夹取、写操作闸门、未知 op 与异常的错误信封；无靶标时九个读 op 共用一个信封、`openEngagement` 不受闸门管；`pngSize` 的五种容器宽高（经 `addShot` 间接测） | `test-redteam-dispatch.mjs`（25 条） | `lib/redteam/store-core.js` 96.2% |
+| IP / 网段 / slug 的十个纯函数：`cidrOf` 的 IPv4 取前三段与 IPv6 取前四组（带端口的 IP、IPv4-mapped 都原样返回）、`scopeOfIp` 的 172.16–31 与 100.64–127 边界 + fe80::/10 + IPv4-mapped 剥壳、`ipToInt` 的 32 位无符号与「只看位数不看范围」、`isIpv6` 的字符表与段数上限、`expandIpv6` 的 `::` 补齐、`slugTarget` / `slugPoc` / `defaultPocFilename` / `slugify` 的六处现状怪癖 | `test-ip-utils.mjs`（53 条） | `lib/redteam/ip-utils.js` 行 116 → **140/140**（分支 73/74） |
 
 ---
 
@@ -1150,6 +1173,14 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
     **④** `waitTurnClosed` 的默认 8000ms 与 80ms 睡眠粒度：测试一律显式传 `timeoutMs`，所以「默认值被人改成 800 / 80000」不会红。真机上这条线决定「点了回退要干等多久」，改动时请连带看一眼 `lib/rewind.js:379` 的形参默认值。
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-rewind-edges.mjs scripts/test-rewind.mjs`；再在真宿主机上手工走一遍「轮次还在跑时点回退」（应提示先 Stop）、「连着点两次回退」（应一次成功一次跟进而不是卡死）、「回退后什么都不发」（应安静，不该自己冒出回答）。
+
+84. **`lib/redteam/ip-utils.js` 有一条分支永远走不到，另有三处「脏输入也算合法」的现状没有被改。**
+    **①** `expandIpv6` 的 `return groups.map((g) => (g === '' ? '0' : g.toLowerCase()))` 里 `g === ''` 的 true 分支是死分支：`head === '' ? []` 与 `tail === '' ? []` 两道守卫保证空段进不了 `groups`，`new Array(...).fill('0')` 也只产出 `'0'`。`node --test` 的 lcov 里它就是 `BRDA:37,72,0,0`，`brh` 上限 73/74。用三条互为补偿的等价突变验过（删任一条另两条都能把结果补回同一个值），所以不为它造用例。
+    **②** `isIpv6` 只校验字符表与段数上限，不校验真语法：`":"`、`":::"`、九组的 `"1:2:3:4:5:6:7:8:9"`、两个 `::` 的 `"2001:db8::1::2"` 全部返回 true。当前故意不收严 —— 它唯一的调用方是 `cidrOf` 与 `score-rules.js` 的 `targetHasIpv6Host`，两边都只用它决定「要不要走 IPv6 分支」。收严的后果是脏输入掉回 IPv4 分支、被前缀判据当内网，扫描范围反而放大。
+    **③** `cidrOf` 不剥 IPv4-mapped 的壳（`::ffff:10.0.0.1` → `0:0:0:0::/64`），`scopeOfIp` 剥（算 `internal`）。两处口径故意不同：剥壳会把 IPv4-mapped 资产并进真的 `10.0.0.0/24` 段，跟 IPv4 资产混成一组，比现在更难查。
+    **④** `slugTarget` 的结果是**已经落盘的靶标目录名**，所以它的怪癖只能钉不能改：非 ASCII 目标整段被 `[^\w.\-]` 洗成 `unknown`（中文靶标全部挤进 `unknown/`）、`https://` 只剩协议名 `https`、IPv6 URL 变成 `_2001_db8__1`。改任何一条都会把用户已建的攻击文件留在旧目录里，因此这一批只锁现状。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-ip-utils.mjs`（53 条应全绿）；再在演练台里手工确认三处：资产测绘左侧按段分组里 IPv6 目标只出现一个 `xxxx:xxxx:xxxx:xxxx::/64` 段（不是每个地址一段）、`172.16`/`100.64` 那两个边界地址落在「内网」侧、给同一个 IP 补一个 `:8080` 之后攻击文件仍落在同一个目录。
 
 ## 维护约定
 
