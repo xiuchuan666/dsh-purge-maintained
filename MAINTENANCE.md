@@ -532,6 +532,17 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 一个提醒：这一层在本副本里是**死路**（`ONLINE_UPDATES_ENABLED = false`），所以它坏掉时用户看不到任何报错 —— 点了更新什么都没下载、或者回退版本时把工作区覆盖了。正因为它平时不跑，才更需要有测试盯着那几条护栏（https 强制、跳转白名单、跳数与自环、50MB 上限、`git` 覆盖前的脏检查）。
 
+### 报告链路的两个「传了但没实现」
+
+`lib/redteam/score-report.js` 是拆分出来的（`d48f3d8`），`lib/redteam/report-replay.js` 是上游原样带过来的。两个文件各有一处「调用方把参数递过去了，被调用方根本没看」的缺陷，而且**都活在 `try { } catch { }` 后面**，2976 条测试全绿也照不出来。
+
+1. **漏 import**：`tunnelIsLegit` 在两个函数里被调用，import 列表里却没有这个名字 → `ReferenceError` 被 `catch` 吞成空数组。修复一行，但发现它的方法值得留：**拿被依赖模块的导出名并集，去比对「本文件正文出现过、import 声明里没有」**，一次就能扫出来（在全仓 `lib/` 上跑出 25 行，只有 1 行是真的；其余全是方法名 `ctx.apply(...)`、对象字面量键 `setActive(rules)`、可选链 `db.exec?.(...)` —— 判据必须排除前导 `.` 与 `?.`，否则误报淹没真问题）。
+2. **参数被忽略**：`buildCurlCommand(options)` 不收 `options.headers`，而调用方把筛过的 `authorization|content-type|...` 传进去了 → 合成出来的 curl 缺认证头，复现得 401/415。
+
+判据：**一个函数「接受某参数」不算契约，只有「测试断言了该参数的效果」才是契约。** 这两处的共同点不是写错，而是**没有任何用例问过「登记了隧道之后读出来是什么」「带请求头合成出来的 curl 长什么样」**。所以写完一批之后要问的是：我这批用例里，有几个是断言**效果**的，几个只是断言**形状**？
+
+报告链路另有三条读源码看不出来、只能行为用例钉的现状：`scoreReport().items` 是 SQL 顺序而 `chain_no` 在排序副本上算（两者可以不一致）；`scoreChain().stages` 是五段定长表、`scoreReport().stages` 过滤空阶段，但两者的 `ordinal` 都保留链路真实位置；`representativeShots` 的候选池按关联强度分层 push，`sort` 却只比 `kind → captured_at → id`，**分层不影响先后**。
+
 ## 更新链路（已固定为离线）
 
 维护仓库是私有的，GitHub 的 `codeload` / `api` / `raw` / `jsdelivr` 对匿名请求全部 404。因此：

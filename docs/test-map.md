@@ -312,6 +312,7 @@
 | `cleanupLegacyRestartScripts` 只删 24h 前的 `dsh-purge-official-restart(?:-[0-9a-f-]+)?\.(js|cmd|log)`，新文件与无关名字一律不动 | `test-desktop-relaunch.mjs` | 同上 |
 | 九个原本私有的帮手（`officialRestartScript` / `systemPromptFiles` / `dshHomeForRelaunch` / `officialExeFromProcess` / `helperEnv` / `helperNodePath` / `unpackedHostIsClean` / `officialRestartLogState` / `probeWshJsEngine`）加 `export` 才能被单独验；公开行为零变化 | `test-plugin-surface.mjs` 之外的导出面 | 同上 |
 | `patchReplacements` / `matchesPattern` 只在 `lib/patch-outcome.mjs` 里定义一次：`scripts/verify-target-lib.mjs` 只做 `import` + 转出，源码形状断言钉住「这里不许再长出同名函数」（两份实现已经能从单数 `pattern` / `null` patch / 空串 pattern 三处分叉） | `test-verify-target-lib.mjs` | 仅 `scripts/` 与 `lib/patch-outcome.mjs`，后者 100% |
+| 演练台报告链路（`hitTrace` / `scoreReport` / `scoreChain` / `representativeShots`）用真 `RedteamStore` + 临时目录播种，钉 `tunnelIsLegit` 与 `buildCurlCommand` 的 headers 两个真 bug；同时锁定五条读源码看不出来的现状（items 与 chain_no 顺序可不同 / scoreChain.stages 五段定长 / representativeShots 分层不影响先后 / 不挂资产不挂凭据 / 纯英文用户名不认领） | `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1192 → **1457/1532**、`report-replay.js` 行 173 → **222/224** |
 | 目标宿主声明与宿主版本门禁：`HOST_TARGETS` / `HOST_TARGET` / `hostCompat` 的 known·ok·host 三态、预发布后缀原样相等、`dshTargets` 含 `dshTarget` 且无重复、每一项都能被 `parseHostVersion` 解析 | `test-host-target-decl.mjs`（9 条）/ `test-package-integrity.mjs`（13 条） | `lib/core.js` 宿主门禁段 100% |
 | 官方 CLI 三件套（`resources/runtime/cli/bin` 下的 `dsh` / `dsh.cmd` / `dsh.ps1`）：首装现场生成、已有就只打回退块、打完留 `.dsh-purge.bak`、`app/runtime` junction 指向 `../runtime` 且目标非空才回 `already` | `test-desktop-cli-repair.mjs` | `lib/desktop.js` 行 71% → **79.8%**（1624 → 1812 / 2273） |
 
@@ -515,6 +516,22 @@ RED 演练 **39 条突变 → 39/39 全红**（`restored: true`）。首轮 38 �
 `npm run check` 六道闸：`[syntax] 236 files` / `[metadata] patches=86 tests=95` / `[eol] 306 文件` / `[client] PASS` / `[gates] 86 rows, 58 gated` / `[test] 2976 / 2974 过 / 0 失败 / 2 跳过`（两平台各 102/102）。覆盖率 `[coverage] PASS`，全仓行 **89.44%** / 函数 80.45% / 分支 84.74%。
 
 顺带修掉一条**老测试的隐藏缺陷**：`scripts/test-update.mjs` 的 `bodyOf(signature, nextSignature)` 用 `SRC.indexOf(nextSignature, from)` 切函数体，而下一个签名现在带 `export ` 前缀 —— `indexOf` 命中的位置在 `export ` 之后，于是上一段的尾巴留着 `export `，`body.trimEnd().endsWith('}')` 变成 false。修法是在切之前 `to = SRC.lastIndexOf('\n', to) + 1` 退到行首。**加 `export` 之前没人踩到，因为当时所有函数都没有前缀。**
+
+**二十五补**：`lib/redteam/score-report.js` 的四个导出一行没测过 —— 而它们决定**交付物长什么样**：报告里"这一步是怎么做到的"、"凭据/通道挂在哪条成果上"、"复现命令是什么"、"哪些命中不算数"。这一批 43 条（`scripts/test-score-report.mjs`）用真 `RedteamStore` + 临时目录播种，`lib/redteam/score-report.js` 行覆盖 **1192 → 1457/1532（95.1%）**、函数 101 → 156、分支 221 → 559。
+
+顺手抓到**两个真 bug，形状完全一样：参数传了，被调用方没实现**。
+
+第一个是**漏 import**：`:157` 与 `:1413` 都调 `tunnelIsLegit(t.entry_kind)`，而 import 块里没有这个名字。`lib/redteam/score-rules.js:38` 有实现，基线 `store-core.js:40` 也一起 import + 再导出 —— 是拆分提交 `d48f3d8`（"修掉两处迁移漏定义"）漏掉的**第三处**。危害被两处 `try { } catch { }` 全吞掉：`hitTrace().tunnels` 恒 `[]` → 报告「1.1 通道」每条都空、`needs_channel` 恒 false、`summary.tunnels` 恒 0；`scoreChain().summary.tunnelsLegit` / `tunnelsSelfOnly` 恒 0 → 攻击链页「真实隧道 = 边界突破实锤」整块失效。**2976 条测试全绿，因为这个功能从来没被断言过「登记了隧道之后读出来是什么」。**
+
+第二个是**传了但没用**：`lib/redteam/report-replay.js:144` 的 `buildCurlCommand(options)` 完全不看 `options.headers`，而 `score-report.js:419-424` 明确把从真抓包报文里筛出的 `capturedCurl.headers`（只留 `authorization|content-type|accept|x-requested-with|referer`）传了进去。后果是：有真抓包时合成的 curl 缺 `Authorization` → 455/401，缺 `Content-Type` → 415，照着手册复现不出来。基线 `fa8d09d` 也没有这段 —— **上游原样缺陷，不是拆分丢的**。
+
+**这一批最值钱的一条教训**：漏 import 这类问题可以扫出来。做法是拿被依赖模块（这里 `score-rules.js` / `engagement-meta.js` / `report-replay.js`）的**导出名并集**，逐个看本文件正文是否出现、以及是否在 import 声明里 —— 一次就抓到 `MISSING [["tunnelIsLegit", 2]]`。在全仓 `lib/` 上跑同样的扫描出 25 行，只有这 1 行是真的，其余全是正则误报，三类：方法名（`ctx.apply(...)` / `ctx.inject(...)`）、对象字面量键（`setActive(rules)`）、可选链（`db.exec?.(...)`）—— **判据要排除前导 `.` 与 `?.`**。
+
+几条**只能靠行为用例钉住、读源码看不出来**的现状：①`scoreReport().items` 是 SQL 顺序（按 `recorded_at`），`chain_no` 是在**排序副本**上算的 —— 两者可以不一致，"阶段顺序压过时间顺序"必须用「时间与阶段相反」的 fixture 才测得出；②`scoreChain().stages` 是**五段定长表**（不过滤空阶段），`scoreReport().stages` 是过滤过的（`.filter(st => st.items.length > 0)`），两者 `ordinal` 都保留链路真实位置；③`representativeShots` 的候选池虽然按「命中级 → 目标/资产级 → 点级」push，但 `sort` 只比 `kind === 'card' ? 1 : 0` → `captured_at` → `id`，**分层不影响最终先后**（真要"先自家图"得给 rank 加层级维度）；④`targetMatchesAsset()` 在 `asset === undefined` 时直接 `false`，而 `host LIKE '%<ip>%'` 那条凭据匹配包在 `if (sameAsset)` 里 —— 所以**没挂资产时一条凭据都挂不上**，想按主机模糊匹配先登记资产；⑤`ownsCred` 只用「本条自己写出来的文字」认领凭据，用户名还要求"像账号"（`/[\d\\@]/` 或长度 ≥10），纯英文单词（`default`）会撞车。
+
+RED 演练 **25 条突变 → 25/25 全红**（`{"restored":true,"total":25,"red":25,"green":[],"anchor":[]}`）。首轮是 19 RED / 5 GREEN / 1 ANCHOR：5 条 GREEN 全部靠**补能区分两条实现的用例**转红（internet 阶段的通道反例 / 纯英文用户名不认领 / 阶段与时间逆序 / 未验证凭据不展示 / 阶段小节标题必须带分），1 条 ANCHOR 是锚点凭记忆写了 8 空格缩进，真源码是 `.map((t) => Object.assign({}, t, { legit: ...`）的**内联一行**。
+
+顺便确认两处**不会去修**的上游现状：`ACCOUNT_POINT_CODES`（`score-rules.js:48`，6 项）与 `hitTrace` 里硬编码的三个 code（`web-account-user` / `web-account-admin` / `db-access`）不一致，而 `hitTrace` 那两条 `gaps`（账号类无凭据、突破类无隧道）里的 code 集合**全是已作废的旧 code，永不命中** —— 后者已在批73 里被 `tunnelIsLegit` 修复顺带暴露，但改判定要动 25 项得分表，收益零实证，按现状锁定。
 
 ## 五、前端产物链（client.js）
 
@@ -885,6 +902,7 @@ RED 演练 **39 条突变 → 39/39 全红**（`restored: true`）。首轮 38 �
     ③ `app/runtime` 那条 junction 是否真的让 Electron 从 `resources/runtime` 读到负载 —— 沙箱里建完链接只 `realpathSync` 比对了一下，没有 Electron 去消费它；
     ④ `healRuntimePayload` 从 `~/.dsh/dsh-runtimes/dsh-primary-runtime` 拷 1MB 级的 `node.exe` 时，真机上 `atomicCopyFileSync` 的耗时与中断恢复（测试里只有 2048 字节的 pnpm.mjs 与 1 字节符号占位的 node）。
     **检测办法**：`dsh --version` / `cmd /c dsh.cmd --version` / `pwsh -NoProfile -File <resources>\runtime\cli\bin\dsh.ps1 --version` 三条各敲一次；再 `node -e "console.log(require('fs').realpathSync(process.argv[1]))"` 确认 `app/runtime` 解析到 `resources/runtime`。任一条报「不是内部或外部命令」就是三件套没生成或入口退错级。
+72. **报告链路的「交付物质量」还只测到「推得对不对」，没测到「读起来对不对」。** 这一批把四个导出的判定全钉住了（归因四档、gaps 五条、复现五级降级、分组众数、排序三键、依赖推导、代表截图分层、markdown 章节顺序），但三类东西仍在射程外：①**排版细节**（表格列宽、长文本 `clipText` 在哪个分隔符处断、`block()` 生成的代码围栏是否闭合）—— 只能靠人眼看一遍导出的 md；②**模板的「能不能真跑」**（`SCORE_CONFIRM` 里 25 条 script，本批只断言了 `boundary-logical` 与 `terminal-access` 两条的填值与 `unfilled` 判定，其余 23 条的占位符写法没有任何用例；真要验得在靶标上跑）；③**五级降级的「优先级」只用组合覆盖**（有抓包 / 有显式步骤命令 / 有隧道模板 / 只有普通命令 / 什么都没有，五种各一条；两两组合的先后只在 `capturedRequest + linkedTool` 和 `tunnel0 + confirm.script` 这两处被钉，其余组合没有）。**检测办法**：对一个真实靶标生成一次 `scoreReport().markdown`，把 §3 的每一条复现命令粘到 Burp/终端里跑一遍；跑不通的记下来，就是在射程外的那一类。
 
 ## 维护约定
 
