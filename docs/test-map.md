@@ -533,6 +533,17 @@ RED 演练 **25 条突变 → 25/25 全红**（`{"restored":true,"total":25,"red
 
 顺便确认两处**不会去修**的上游现状：`ACCOUNT_POINT_CODES`（`score-rules.js:48`，6 项）与 `hitTrace` 里硬编码的三个 code（`web-account-user` / `web-account-admin` / `db-access`）不一致，而 `hitTrace` 那两条 `gaps`（账号类无凭据、突破类无隧道）里的 code 集合**全是已作废的旧 code，永不命中** —— 后者已在批73 里被 `tunnelIsLegit` 修复顺带暴露，但改判定要动 25 项得分表，收益零实证，按现状锁定。
 
+**二十六补**：`lib/redteam/store-core.js` 的 `dispatch(store, req)` —— 127 行，**71 个 op 的唯一分发路径**，命令面板、HTTP 桥（`/redteam/api`）、64 个智能体工具全部从这里过。补之前它只有 `pocSearch` / `pocList` / `pocSave` 三个 op 被 `test-knowledge-dispatch.mjs` 碰过，其余 68 个连一次调用都没有。这一层的坏法特别静默：op 名拼错就落到「未知操作」、别名漏一个就写进另一条记录、`id`/`code` 判成真值就把 id=0 当成没传 —— 三条都不会抛错，只会让面板上少一条数据。
+
+新增 `scripts/test-redteam-dispatch.mjs`（**25 条**）分三段：**记录型假 store 钉接线**（谁被调、第几个实参）、**真 store 钉行为**（落库后读回来对不对）、`dispatchAsync` 与 `pngSize` 单独钉。`lib/redteam/store-core.js` 行覆盖 **3377 → 3687/3831（96.2%）**、函数 233 → 246/261、分支 960 → 1254/1520；全仓行 **90.30% → 91.18%**。
+
+接线测试用的是文字方法名数组，不是 `Proxy`：`recorder({methods: RECORDED_METHODS})` 给 70 个方法各装一个记录函数，dispatch 一旦调到没登记的方法就 `TypeError`，而不是被万能 `Proxy` 悄悄接住、把「这个 op 根本不该调这个方法」变成一条绿。`expectCalls` 逐个比**实参的对象同一性**（`got[i] === want[i]`），这样「传了 req 还是传了 req.vuln」这种差别才看得见。
+
+几条**只能跑出来、读源码想不到**的现状：①**无靶标时九个读 op 共用同一个信封** `{ok:true, items:[], total:0, stats:null, segments:[], stages:[], roles:[]}` —— `stats` 与 `sessions` 连自己的形状都不给，模板上少一个键就是契约变了；②`openEngagement` 在靶标解析**之前**就返回，所以无靶标也能建靶标（写闸门管不到它）；③`vulns` 在同一个信封里拼两次调用 `Object.assign({ok:true}, store.vulnStats(id), store.listVulns(id, req))`；④`addChainStep` 的回落看的是老字段 `s.stage`，不是那个非法的 `stage_code`；⑤`pngSize` 的 PNG 门槛是 `buf.length > 24`，24 字节的合法 PNG 头读出来宽高全是 `null`（fixture 必须 `Buffer.alloc(32)`）；⑥`db.prepare(...).get()` 返回的是 **null 原型对象**，`assert.deepEqual(row, {...})` 会因为原型不同而红，只能逐字段比。
+
+RED 演练 **31 条突变 → 31/31 全红**（`{"restored":true,"total":31,"red":31,"green":[],"miss":[],"restored":true}`）。锚点按**行号取真实行再做行内替换**，不手抄缩进（批73 那条 ANCHOR 事故的对策）。首轮 30 红 / 1 绿，绿的是等价突变：把 `error.message : String(error)` 改成 `: error`，对 `throw "plain"` 结果完全相同 —— 字符串自己 `.message` 是 `undefined`，落到兜底分支还是那个字符串。改成 `: 'unknown'` 才有区分力。**判据：「丢兜底」类突变要检查兜底目标值与兜底值是否恰好相等。**
+
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -595,6 +606,7 @@ RED 演练 **25 条突变 → 25/25 全红**（`{"restored":true,"total":25,"red
 | 靶标元数据的落盘与阶段口径：`readMeta` / `writeMeta` 的容错、`SCOPE_SQL` 的内外网判定、`POINT_SHORT_NAME` / `scoreStageOf` / `LEGACY_STAGE_MAP` 的取值 | `test-schema-migrate.mjs`（末条）+ `test-score-consistency.mjs` | `lib/redteam/engagement-meta.js` 99% |
 | 事实库迁移的两处回填真的生效：`asset.scope` 按 IP 归属判内外网（含 172.16–31 与 100.64–127 的边界）、`attack_step.stage_code` 按 `LEGACY_STAGE_MAP` 映射七个老阶段、已有值一律不覆盖、跑两遍结果全等 | `test-schema-migrate.mjs`（23 条） | `lib/redteam/schema.js` 98% |
 | 知识库迁移：补出五个新列与两个索引、老条目按关键词推归类（具体压过泛化）、已有归类不被改写、`POC_CATEGORIES` 的 code 唯一且以 `other` 收尾 | `test-schema-migrate.mjs`（7 条） | 同上 |
+| `dispatch` 的 op 表：71 个 op 各自调哪个方法、第几个实参、别名怎么退（`req.poc` / `req.id ?? req.code` / `req.id ?? req.shot_id` / 十二个 `xxx || req`）、`limit` 夹取、写操作闸门、未知 op 与异常的错误信封；无靶标时九个读 op 共用一个信封、`openEngagement` 不受闸门管；`pngSize` 的五种容器宽高（经 `addShot` 间接测） | `test-redteam-dispatch.mjs`（25 条） | `lib/redteam/store-core.js` 96.2% |
 
 ---
 
@@ -903,6 +915,12 @@ RED 演练 **25 条突变 → 25/25 全红**（`{"restored":true,"total":25,"red
     ④ `healRuntimePayload` 从 `~/.dsh/dsh-runtimes/dsh-primary-runtime` 拷 1MB 级的 `node.exe` 时，真机上 `atomicCopyFileSync` 的耗时与中断恢复（测试里只有 2048 字节的 pnpm.mjs 与 1 字节符号占位的 node）。
     **检测办法**：`dsh --version` / `cmd /c dsh.cmd --version` / `pwsh -NoProfile -File <resources>\runtime\cli\bin\dsh.ps1 --version` 三条各敲一次；再 `node -e "console.log(require('fs').realpathSync(process.argv[1]))"` 确认 `app/runtime` 解析到 `resources/runtime`。任一条报「不是内部或外部命令」就是三件套没生成或入口退错级。
 72. **报告链路的「交付物质量」还只测到「推得对不对」，没测到「读起来对不对」。** 这一批把四个导出的判定全钉住了（归因四档、gaps 五条、复现五级降级、分组众数、排序三键、依赖推导、代表截图分层、markdown 章节顺序），但三类东西仍在射程外：①**排版细节**（表格列宽、长文本 `clipText` 在哪个分隔符处断、`block()` 生成的代码围栏是否闭合）—— 只能靠人眼看一遍导出的 md；②**模板的「能不能真跑」**（`SCORE_CONFIRM` 里 25 条 script，本批只断言了 `boundary-logical` 与 `terminal-access` 两条的填值与 `unfilled` 判定，其余 23 条的占位符写法没有任何用例；真要验得在靶标上跑）；③**五级降级的「优先级」只用组合覆盖**（有抓包 / 有显式步骤命令 / 有隧道模板 / 只有普通命令 / 什么都没有，五种各一条；两两组合的先后只在 `capturedRequest + linkedTool` 和 `tunnel0 + confirm.script` 这两处被钉，其余组合没有）。**检测办法**：对一个真实靶标生成一次 `scoreReport().markdown`，把 §3 的每一条复现命令粘到 Burp/终端里跑一遍；跑不通的记下来，就是在射程外的那一类。
+
+73. **`dispatch` 的 op 表钉住了「哪个 op 调哪个方法、第几个实参」，钉不住「那个方法本身算得对不对」。**
+    `scripts/test-redteam-dispatch.mjs` 的接线段用记录型假 store，能抓住丢 `req`、别名失效、形参错位、`limit` 不夹、写闸门漏项；行为段用真 store 跑 20 个写 op 与 20 个读 op。但**真 store 只走了我播种过的那几条路径**：一台资产、一份凭据、一张截图、一个漏洞。`dispatch` 之后的库内实现（`listVulns` 的六种筛选组合、`attackGraph` 的跨靶标归并、`importBundle` 的部分失败回滚）仍然只有它们各自的测试文件在管，`dispatch` 这层对它们是透明的。
+    **仍然测不到的**：①`dispatchAsync` 的 `probeSessions` 分支会在调用时真的**发 HTTP 请求**（连 `10.1.1.1:80` 要等 6 秒超时），所以整条异步探测路径只能用假 store 钉「转发对不对」，真连网的行为一次都没跑过；②`platformConfigSave` 写的是本机 `~/.dsh` 下的平台配置，测试只断言「回显的 config 里有什么键」，没有真落盘再读回；③`templateSearch` / `templateStats` 读 `~/.local/nuclei-templates`，本机没装模板库，所以 `total` 恒 0 —— 命中排序与去重那段没被执行。
+    **检测办法**：改完 `dispatch` 之后，别只看 `node --test scripts/test-redteam-dispatch.mjs`，还要跑 `node scripts/test-redteam-report.mjs` 与 `node scripts/test-redteam-tool-branches.mjs`（它们才管 op 背后的算得对不对）；再在真机上开一次演练台面板，看九个读 op 是否都能出数。
+
 
 ## 维护约定
 
