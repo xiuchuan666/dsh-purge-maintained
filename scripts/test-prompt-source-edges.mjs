@@ -199,10 +199,16 @@ test("rejectIfNeedPrompt：框里有字就直接放行，不需要读盘", () =>
 
 test("ensureRestartReady：只是把 core.ensureHostClean 转发出去", async () => {
   newHome("restart");
-  const out = await ps.ensureRestartReady();
-  assert.equal(typeof out, "object");
-  assert.equal(typeof out.ok, "boolean");
-  assert.equal(Array.isArray(out.pending), true);
+  // 这个函数的全部内容就是 `return core.ensureHostClean()`，所以判据是「与直接调它一致」，
+  // 而不是钉某个具体形状：干净机器上找不到宿主树时回的是 { ok:false, error, aiBase:null }，
+  // 连 ok:true 都没有，更不会有 pending —— 本机造得出宿主树，CI 造不出。
+  const direct = await core.ensureHostClean();
+  const forwarded = await ps.ensureRestartReady();
+  assert.equal(typeof direct, "object");
+  assert.equal(typeof direct.ok, "boolean");
+  assert.deepEqual(forwarded, direct);
+  if (direct.ok === true) assert.equal(Array.isArray(direct.pending), true);
+  else assert.equal(typeof direct.error, "string");
 });
 
 test("addPromptSection：返回 disposer 的实现会被 ctx.effect 收走，一个抛错不影响其余", () => {
