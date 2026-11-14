@@ -885,6 +885,20 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 
 
+**四十四补**（`lib/profile-insert.js` 的边角：insert 段状态机 / `classifyPatchBody` 五形态 / allowBuilds 的两处段结束）：
+
+1. **`profileHasPurgeBodyInsert` 里「关闭后遇到另一个 `- insert:` 就重开」那三行永远走不到。** 上面第一条 `if (/^-\s*insert:\s*$/.test(line) || /^\s+-\s*insert:\s*$/.test(line))` 已经把**任意缩进**的 `- insert:` 全收走了（两个分支合起来覆盖「0 个空白」与「至少 1 个空白」），所以走到下面那句 `if (/^-\s*insert:\s*$/.test(trimmed))` 的行必然不是 `- insert:`。用单文件 lcov 验证：新用例跑完后 `46` `47` 两行命中数仍为 0，`45` 那句 `if` 只执行了判断侧。**处置：删掉这三行，原地留两行注释**（和 `isCappedPoint` / `#hitTrace` / `readJsonNoBom` 同类：判据是「一条测试都打不到 + 说得清为什么打不到」）。
+2. **内层 insert 段的结束判据必须比本行缩进，不是比顶层 0。** 用户手写的 `- plugins:` 里嵌一层 `  - insert:` 时，只有「兄弟键缩进 2 <= 本行缩进 2」才算段结束；写死成 0 会让 `  - other:` 关不掉段，于是后面 `    - id: dsh-purge` 被误判成命中（结果就是同一条 insert 被写两遍）。
+3. **`classifyPatchBody` 的五形态边界**：空文件与「只有注释和空行」都是 `empty`；`[]`（可带 `---` 前缀、可带行尾注释）单独一档 `empty-flow`；非空 flow 序列 `[a, b]` 是用户内容 `flow-seq`；块序列里**混进一条顶层 `[`** 判 `unknown`（认不准就不写）；多文档用 `---` 切开后**只看最后一个**（追加内容会落在最后一个文档里）。
+4. **`validateAllowBuildRewrite` 的段结束不是「跳过那一行」，而是清掉段标记。** 回退那一行本身由后面的 `continue` 跳过，所以「`inAllow = false` 留着」与「改成 `void 0`」在**这一行**上完全等价 —— 差别只在**再下一行又深缩进回来**时显形：段标记没清，那行会被当成段内键去校验（垃圾键就判不过）。造 fixture 必须把「回退行 + 再深缩进行」两行一起放进去。
+5. **`rewritePnpmAllowBuilds` 的两处段结束 + 两类原样保留**：空行结束段、顶格行（`/^\S/`）结束段；段内注释行与解析不出的行**连缩进一起原样保留**（`kept.push(line)` 不是 `line.trim()`）。后者是「不认识的用户内容一个字都不动」这条纪律的具体形态。
+6. **`ensurePnpmAllowBuild` 只有一个拒绝出口**：重写结果过不了校验就 `{ ok: false, wrote: false, reason: "allowBuilds-invalid" }`，**原文一字不动**。用「`packages:` 顶层键重复」就能造出来（重写只换 `allowBuilds:` 段，重复的顶层键会原样留在 next 里）。
+7. **`profileOwnsPurge` 探测 `node_modules/dsh-purge/package.json` 时 `fs.existsSync` 抛错就当「没有」**（`return false`）→ 整个 profile 被跳过，`ensureAllProfileBodyInserts` 返回 `[]`、一个字都不写。这是「探测失败时宁可不动用户的 profile」的兜底。
+
+**RED 演练**：23 条突变 → **23/23 全红**（分两片 `0 12` / `12 23`，两片都 `restored:true`、无 ANCHOR）。其中「上一道 if 已收走」那条在整段删除前是 GREEN —— 删掉那三行之后该突变一并从清单里删掉（否则会变成「改注释」的假突变）。
+
+**覆盖率**：`lib/profile-insert.js` 行 392 → **412/412（100%）**、分支 149 → 168/188（89.4%）；全仓行 **93.88% → 93.93%** / 函数 84.95% / 分支 90.06%。行总数 413 → 412 是删掉那三行的结果。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -994,9 +1008,10 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 | `npm pack` 产物里不含 `.bak`、`default-prompt-inject.md` | `test-package-integrity.mjs` | — |
 | 发版前 `release-notes.md` 首行版本号与 `package.json` 一致 | `check-metadata.mjs` | — |
 | BOM 守卫（profile 清单带 BOM 会让桌面端起不来）：扫描口径 / 试运行 / 四条「决定不写」的出口 / status 文案 / 写后复查 | `test-bom-guard.mjs`（5 条）+ `test-bom-guard-edges.mjs`（19 条） | `lib/bom-guard.js` 行 100% |
-| profile 的 `cordis.patch.yml` 按形态补齐（空文件 / `[]` / 块序列 / flow-seq 不动） | `test-self-update.mjs` | `lib/profile-insert.js` 93% |
+| profile 的 `cordis.patch.yml` 按形态补齐（空文件 / `[]` / 块序列 / flow-seq 不动） | `test-self-update.mjs` | `lib/profile-insert.js` 行 100% |
 | profile 的 `dsh.profile.bundles` 被补上且幂等 | `test-self-update.mjs` | 同上 |
 | `pnpm-workspace.yaml` 的 `allowBuilds`：pnpm 11 删来源键、pnpm 12 保留、坏原文不写盘 | `test-self-update.mjs` | 同上 |
+| profile-insert 的边角：insert 段的结束判据（内层缩进要按本行比）/ `classifyPatchBody` 五形态 / allowBuilds 的两处段结束 + 两类原样保留 / 写前校验不过一个字都不写 / 探测抛错就跳过整个 profile | `test-profile-insert-edges.mjs`（30 条） | `lib/profile-insert.js` 行 412/412（100%） |
 | postinstall 只碰真的装了本插件的 profile | `test-self-update.mjs` | 同上 |
 | 卸载先还原再删：`revertAll` 出错就停手、不进入清理 | `test-self-update.mjs` | `lib/uninstall.js` 94.3% |
 | 卸载只删安装树（`node_modules/dsh-purge`），npm link 的源码目录不动 | `test-self-update.mjs` | 同上 |
@@ -1411,6 +1426,7 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 
 
+**92. `lib/profile-insert.js` 的 insert 段状态机只剩「关闭」这一半，另外三处判断靠别的测试文件。** 本批删掉了 `profileHasPurgeBodyInsert` 里永远走不到的 reopen 三行（判据见「四十四补」第 1 条），剩下的段状态机只有一个 `insertIndent` 变量、两种转移：进段、关段；**没有「同段内出现第二条 `- insert:`」这种情况的用例**（因为那时已经在段里，先命中的是本体行匹配）。另外 `164-174`（`ensureProfileBundles`）与 `385-409`（`ensureAllProfileInstall` 尾部）不在本批测试的覆盖范围内 —— 单跑 `scripts/test-profile-insert-edges.mjs` 时 lcov 会报这些行未命中，它们是 `test-self-update.mjs` 的地盘。`pnpmMajor` 三个来源里「`.modules.yaml` 读得到但没有 `packageManager` 字段」这一支没有专门用例；`keepSources === false`（pnpm 11）那一侧也仍由 `test-self-update.mjs` 覆盖，本批只用 `dir = "NOPE"`（major 判不出 → null → 保留来源键）跑过保留侧。**检测办法**：`grep -n "keepSources = major === null || major >= 12" lib/profile-insert.js` 必须命中一行，且 `grep -c "inAllow = false;" lib/profile-insert.js` 为 1（多了说明段标记在别处也被清）。
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。

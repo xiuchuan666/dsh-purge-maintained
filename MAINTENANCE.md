@@ -928,3 +928,27 @@ function service(ctx, name) {
 ```
 
 把第一道删掉，`{}` 会抛 `ctx.get is not a function`，被第二道吃掉，返回同样 `undefined`。判据：**把守卫删掉之后，是否存在一个输入能让两个版本的返回值（或副作用）不同** —— 找不到就是等价，直接删掉那条突变，不要为它硬凑用例；但要留一行注释说明「这道守卫目前是冗余的，一旦下面的 catch 改成别的值它就重新必要」。
+
+### 上一道 `if` 已经把这类行全收走了，下面那个「重开 / 再判一次」分支就永远走不到
+
+`lib/profile-insert.js` 的 `profileHasPurgeBodyInsert` 原本长这样：先一句 `if (/^-\s*insert:\s*$/.test(line) || /^\s+-\s*insert:\s*$/.test(line))` 把 insert 行收走，再在结束段的分支里写「如果这一行本身又是 `- insert:`，就重新开段」。**后一个分支恒假** —— 两个正则合起来覆盖「0 个空白」与「至少 1 个空白」，没有第三种行能走到那里。它从 1.1.94 起就没执行过一次，单文件 lcov 里那两行命中数一直是 0。
+
+判据（三步，都不需要读模板以外的知识）：
+
+1. **把「能被前面判据吃掉的行的形状」和「后面那个分支假设的形状」列出来看交集。** 在这里：`^\s*-\s*insert:` 覆盖所有缩进，交集就是全集，所以分母为空。
+2. **跑单文件覆盖率确认命中数为 0**，而不是靠阅读判断：`node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=.tmp-lcov.info scripts/<该模块的测试>.mjs`，再从 `DA:` 行里挑出那几行。
+3. **删掉之后，drill 里对应的那条突变必须一起删。** 留着它就会变成「改一行注释」的假突变 —— 它当然还红（测试文件里那条源码形状断言会撞上），但它测的已经不是行为。
+
+同类处置参考：`isCappedPoint` / `#hitTrace`（批90）、`readJsonNoBom`（批85）。三条的共同点是**判据不在代码里、在调用点集合里**，所以复核手段统一是「数调用点」而不是「读实现」。
+
+### 段标记清不清，往往不在当前这一行显形，而在再下一行
+
+`validateAllowBuildRewrite` 里「缩进回退 → 段结束」的那句 `inAllow = false;` 后面紧跟 `continue;`。这意味着**回退那一行本身**无论如何都会被跳过：把 `inAllow = false;` 换成 `void 0;`，那一行的处理结果一模一样，用例照样绿（我第一次就是这么被坑的，突变得了 GREEN）。
+
+差别在**再下一行又缩回段内层级**时才出现：段标记没清，那行会被当成段内键去校验，一个解析不出的垃圾键就足以把整个文件判成 `false`（于是 `ensurePnpmAllowBuild` 拒绝写盘）。所以 fixture 必须写成「回退行 + 再深缩进的垃圾行」两行：
+
+```js
+assert.equal(P.validateAllowBuildRewrite("allowBuilds:\n    a: true\n  b: true\n    notakey\n"), true);
+```
+
+推广：**`try {…} finally`、`continue`、`return` 这些「跳过后半段」的语句，会让它前面的状态清理变成不可观测**；造 fixture 时要往后多看一步，找那条「清理没做 → 状态泄漏到下一次循环」的输入。
