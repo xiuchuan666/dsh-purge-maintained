@@ -180,7 +180,8 @@
 | `/rewind` 的收件箱与子会话：只收最后一次 `turn/end` 之后的 `next-turn` 插入、去重保序；本轮子会话按 catalog/descriptor 去重保序 | `test-rewind.mjs`（5 条） | 同上 |
 | 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`）的名字、空 parameters、output schema | `test-command-surface.mjs` | `lib/tools.js` 100% |
 | 三个工具的执行分支（无宿主直接报错、需确认时停手、applied/already/scrub 统计、回滚同时收 shim） | `test-command-surface.mjs` | 同上 |
-| 工具目录与配置落盘：`TOOL_CATALOG` 15 条（`names` 与 `adapt` 两份清单互校）、`save` 的增量合并（`platform` 非法保留旧值、`binDirs` 非数组保留旧值、布尔开关只在 `!== undefined` 时改）、落盘 JSON 补齐全键并 trim | `test-platform-config.mjs`（12 条） | `lib/redteam/platform-config.js` 98% |
+| 工具目录与配置落盘：`TOOL_CATALOG` 15 条（`names` 与 `adapt` 两份清单互校）、`save` 的增量合并（`platform` 非法保留旧值、`binDirs` 非数组保留旧值、布尔开关只在 `!== undefined` 时改）、落盘 JSON 补齐全键并 trim | `test-platform-config.mjs`（12 条） | `lib/redteam/platform-config.js` 行 612/612 |
+| 四条「读不到就看下一条」的出口：Python 判据打不开就回 false、别名对撞时单条 stat 失败只跳过那一条、扫盘时文件夹读不动要说「无法读取」而不是「不存在」、Kali 上 os-release 读不到要退回看标记目录；外加「条目没有 `isDirectory` 时退回 `statSync` 判类型」（子目录要另起一条才分得出来） | `test-platform-config-edges.mjs`（18 条） | `lib/redteam/platform-config.js` 行 612/612 |
 | 找工具的六条路：配置的绝对/相对路径（不存在时 `source:'missing'` + `note`）、`toolkitDir`、`binDirs`、`PATH`（`PATH` 与 `Path` 都认）、Linux 回退目录、`bin`/`Bins`/`tools`/`Tools` 四个子目录 | `test-platform-config.mjs`（13 条） | 同上 |
 | 扫目录认工具：深度夹在 1–6（`maxDepth:0` 是 falsy → 走默认 4，现状锁定）、文件数夹在 100–20000、跳过点开头/`node_modules`/`.git`、同名多份按 `names` 排名先高后低、顺手认 `nuclei-templates` 目录 | `test-platform-config.mjs`（7 条） | 同上 |
 | 环境适配状态：`kali` → `skipped` → 已存路径（`toolkitDir` 或 `binDirs` 或任一 `tools[id]`）→ `found >= 2` → `need-config` 的优先级，以及 `assignToolkitFolder` 把新目录 `unshift` 到最前 | `test-platform-config.mjs`（10 条） | 同上 |
@@ -1346,6 +1347,31 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 `lib/inject-write.js` 行 **351 → 363/363（100%）**，分支 79.75%。RED 演练 3 条突变全红
 （回收不摘 disposer / 回收不清定时器 / cwd 兜底闸门恒假）。
 
+### 六十一补：环境适配层的四条「读不到就看下一条」
+
+`lib/redteam/platform-config.js` 这个文件的性质是「猜本机有什么工具」——每条判据都有两层：
+先看能不能读，读不到就退一步。退的那一步平时一次都不走，而且退错的表现全都不是报错：
+
+| 出口 | 退错的后果 |
+| --- | --- |
+| `looksLikePythonCli` 的 catch（`:178-180`） | 读不动就当成工具 → `rejectPython` 白设，把 python 脚本指给用户当 `httpx` |
+| `adaptInDir` 的 `catch { continue }`（`:226`） | 一个条目 stat 失败就整层放弃 → 明明有可用的分发名也报「没找到」 |
+| `scanFolderForTools` 的 stat 失败（`:413-415`） | 回「文件夹不存在」，用户照着删了又建还是不行 |
+| `detectKali` 的 `readFileSync` catch（`:376`） | 有 Kali 但没读成 os-release 时直接判否 → 让用户手填 15 个工具路径 |
+
+本批 18 条把它们各钉一条，外加「条目没有 `isDirectory` 时退回 `statSync` 判类型」
+（`:439-442`，TypeScript/自定义 dirent 形态）。**一条不够**：子目录要另起一条 —— 只写
+「顶层有个文件」时把 `isDir = s.isDirectory()` 改成 `isDir = false` 仍然绿（文件本来就按
+file 处理），必须是「顶层有个子目录、工具在子目录里」才分得出来。
+
+Kali 三条必须 `asPlatform("linux")` 才走得到（`detectKali` 第一行就是
+`osPlatform() !== 'linux'` 直接返回「非 Linux 宿主」）。反过来，「非 Linux 宿主」那条在伪
+linux 复跑时又会走错分支 —— 所以它自己要把平台钉回 `win32`：**两条相反的平台判据放在同一个
+文件里时，各自都要显式钉平台，不能靠运行环境的默认值。**
+
+`lib/redteam/platform-config.js` 行 **612/612（100%）**，分支 253/287。
+RED 演练 11 条突变全红（11/11）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1999,6 +2025,13 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     改坏的表现是「热重载之后 pre-step 瀑布上叠了两层过滤」。
     检测办法：`grep -n "let mounted = false" lib/inject-write.js` 确认闸门仍在；真机上连续
     热重载 3 次后用 `grep -c "\[mnemon\]"` 看日志有没有重复。
+
+110. **`detectKali` 的「标记目录」兜底（`/usr/share/kali-menu` 等五条）只能靠源码形状钉。**
+    本机是 Windows，`asPlatform("linux")` 之后这些绝对路径仍然不存在，只能把 `existsSync`
+    换掉 —— 但那会让同一次调用里其他 `existsSync` 一起变，测出来的东西说不清。
+    真跑得通的只有 `/etc/os-release` 那一条。改坏的表现是「Kali 上工具已经能用却提示需要配置」，
+    检测办法：在有 `kali-menu` 的机器上跑 `node -e "import('./lib/redteam/platform-config.js')
+    .then(m=>console.log(m.detectKali()))"`，`source` 应该是 `markers`。
 
 ## 维护约定
 
