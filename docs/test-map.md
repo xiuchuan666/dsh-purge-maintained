@@ -660,6 +660,21 @@ RED 演练 **22 条突变 → 22/22 全红**（`{"total":22,"red":22,"green":[],
 
 RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新增的「`candidates` 为 `null` 时不抛错」「只认第一个候选」两条也红）。
 
+**三十三补**：`lib/redteam/store-core.js` 里三件「写错了也不报错」的事 —— **旧得分项清理**（`:1401-1438`）、**多值 `test_status` 筛选**（`:1187-1197`）、**步骤连带记分**（`:2681-2699`）。这一批第一次把「不可逆的破坏性操作」和「筛出来的队列不对」这两类问题搬进守卫：前者的错法是用户自建的得分点连同命中被静默删掉（`saveScorePoint` 照样返回 ok、界面照样弹「已保存」），后者的错法是「被封的资产又进了队列」—— 两者都不抛错、都不留日志。
+
+**三条只能跑出来、读代码看不出来的现状**：
+
+1. **清理前必须存档，存档失败就一条都不删。** 有命中时先写 `<靶标>/runs/legacy-score-<ISO 时间戳>.json`（`archived_at` / `reason` / `points[]` / `hits[]` 全带 evidence 原文），写成功才 `DELETE`。把 `runs` 做成**文件**挡住 `mkdirSync` 后：`purged:false`、得分点与命中**都还在**、函数不抛（外层 `catch` 吞掉，播种继续）—— 这就是「宁可旧点再多留一轮，也不能静默丢证据」的可执行版本。没有命中时直删，**不建空存档文件**。
+2. **`builtin` 列才是「是不是内置点」的判据，不是「code 在不在默认名单里」。** 用例造了一个 `code='web-account-mine'`、`builtin=0`、`legacy=0` 的自建点（长相与旧点一模一样）：清理必须一条不动、也不产生存档；反过来 `legacy=1 && builtin=0` 的老库点（迁移时打过标记）要清。用名单判会把用户自建点当旧体系残留删掉，而 `saveScorePoint` 的返回值与界面提示都正常。
+3. **多值 `test_status` 走的是 `IN`，而且两个分支都要 `COALESCE`。** `'abandoned,blocked'` 两条都出来；`' blocked ,, abandoned '` 里空格与空段被 `trim`/`filter(Boolean)` 掉；`''` 等于不筛（不是筛「状态为空」）；`'untested'` 靠 `COALESCE(a.test_status,'untested')` 也能命中 `NULL` 的老资产 —— 这条在 `=` 分支与 `IN` 分支**各有一份 COALESCE**，只守单值分支的话，把 `IN` 那份删掉不会有任何测试红。还有一处现状锁定：`'tested,'`（只多一个尾逗号）会被当成字面量去查，一条都出不来 —— 因为单值分支压的是**原始字符串**而不是 `list[0]`；哪天有人改这里，用例会立刻红。
+
+**步骤连带记分**（`addChainStep`）钉了五条：带 `point_code` + `evidence` 时同一次调用完成「动作 + 得分」，`step.point_id` 与 `score_hit.step_id` 双向挂上；给了 `point_code` 但 `evidence` 为空（含纯空白）→ 步骤照常入库、不记分、提示里明说「**没有记分**」要补 `evidence`（**不能**闯进 `addScoreHit` 再被它的 evidence 校验打回来 —— 那样模型看到的提示是「记分失败」，会以为计分逻辑坏了）；两者都不给 → 只写步骤、连提示都不出；`seq` 连续递增；最后一条现状锁定：`point_id` 指向不存在的得分点（`999999`）**不报错**，照写一条 `point:null` / `points:0` 的命中（`addScoreHit` 只在 `pointId === null` 时才报 not found）。
+
+**RED 演练**：`.tmp81-drill.mjs` 16 条突变 → **16/16 全红**（`restored: true`）：多值不走 `IN` / 多值不 `trim` / 不滤空段 / `IN` 分支去 `COALESCE` / 存档守卫失效 / 不写存档也当已存档 / 没命中也建空存档 / 判据丢掉 `builtin`+`legacy` 列 / 存档不写 `reason` / 存档文件名换前缀 / 命中不挂 `step_id` / `evidence` 不 `trim` 就当给了 / 缺 `evidence` 时不提示 / 显式 `point_id` 被忽略 / 步骤行不写 `point_id` / `purged` 恒 `true`。首轮两条 GREEN 靠**补用例**转红，不是靠改断言：`IN` 分支的 `COALESCE` 需要「逗号串里带 `untested` + 一个 `NULL` 老资产」，`evidence` 是否 `trim` 需要区分提示文案（「没有记分」vs「记分失败」）。
+
+**用例分布**（21 条）：多值筛选 6 / 旧得分项清理 8 / 连带记分 7。`lib/redteam/store-core.js` 行覆盖 3687 → **3740/3831（97.6%）**、函数 246 → 250、分支 1254 → 1290。
+
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -686,6 +701,7 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 | 计分口径三处一致：面板 / 报告 / 攻击链算出同一个总分（普通命中、同服务去重、自建账号、停用得分点、规则上限吃满、命中自带分值、G6 IPv6 ×3、G5 数据规模 ×2、混合 9 种场景） | `test-score-consistency.mjs` | `lib/redteam/store-core.js` 88% |
 | `applyScoreCaps` 纯函数：四种 `dedup_scope` + 规则上限的边界（降序累计、`cap<=0` 不封、`self_created` 不占位、无元数据退化） | `test-score-consistency.mjs` | `lib/redteam/score-rules.js` 98% |
 | 封顶文案（dedup / cap 两种措辞，含 `+50 分` 与 `+null` 边界） | `test-score-consistency.mjs` | 同上 |
+| 旧得分项清理（先存档到 `<靶标>/runs/legacy-score-*.json` 再删、存档失败一条不删、用户自建点不动）、多值 `test_status` 筛选、步骤连带记分 | `test-store-evidence-rules.mjs`（21 条：多值 6 / 清理 8 / 连带记分 7） | `lib/redteam/store-core.js` 行 3687 → **3740/3831** |
 | 目标归并 `targetKey`：URL 截到 scheme+host+port、非 URL 取首段、空值回落资产 IP | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 88% |
 | 写库前的枚举规范化：马类型/马状态认中文别名与大小写、认不出就抛错（不是静默存原文） | `test-redteam-crud.mjs` | `lib/redteam/validate.js` 95% |
 | 漏洞登记：非法 severity/status 静默回落、带 cve 与不带 cve 两种幂等键、`gained` 规范成一行、只在挂资产时写 observation | `test-redteam-crud.mjs` | `lib/redteam/store-core.js` 88% |
@@ -1081,6 +1097,15 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
     **④** 槽位释放只挂在 `subagent/end` 上：宿主不发这个事件、或 handler 抛错被 `try` 吞掉时，名额只增不减。沙箱用假 `ctx.on` 验了注册与解绑，真机上要确认「派三次子智能体后 `redteam_agent_slot status` 的 `used` 回到 0」——这一步没有自动化，属于每次升级后手点一次的项目。
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-tools-resolve.mjs`；再在真机上打开演练台派一个子智能体、等它结束后调 `redteam_agent_slot`（`action: "status"`），确认 `used` 掉回 0 且 `reservations` 为空数组；若工具整组不在下拉里，先看插件日志有没有 `cannot resolve @deepseek-ai/dsh-tools`。
+
+
+80. **旧得分项清理的「存档成功」只有一条路，步骤记分的失败分支只有一条路进不去。**
+    `test-store-evidence-rules.mjs`（21 条）把「先存档再删 / 存档失败一条不删 / 自建点不动 / 多值筛选 / 步骤连带记分」都钉住了，但三件事只能在真机上才算数：
+    **①** 存档成功的前提是 `<靶标>/runs` 可写。沙箱里用「把 `runs` 做成文件」造失败路径，真机上更常见的是**磁盘满 / 目录被安全软件锁住 / 靶标目录被设成只读**，这三种在沙箱里造不出来（`chmod` 在 Windows 上是空操作，`mkfifo` 之类更不行）。它们的共同后果是「清理一直不生效」——`purged` 永远 false、旧点一直挂在面板上，但**不报错**，只能靠面板上肉眼发现旧 code 还在。
+    **②** `addChainStep` 的 `catch`（`:2693-2696`，「步骤已保存，但记分失败：…」）在正常实现下**走不到**：`evidence` 已非空、`points` 不传、`#servicePortOf` 自己带 `try`、`score_hit` 表没有 FK 约束（`PRAGMA foreign_keys=1` 但没定义外键），连 `point_id=999999` 都能安静地插成一条 0 分命中。它只有「`evidence` 不 `trim` 就去判空」这类**突变**才会被触发（演练里就是这么红的）。所以这条提示文案在真机上是否合理，没有守卫。
+    **③** `seedScorePoints` 的 `{ seeded: 0 }` 早退分支（`missing===0 && purgedPoints===0 && synced===0`）在常规库上走不到：内置点还在时，同步循环每条都算一次 `changes`，`synced` 恒 > 0，于是返回的是完整对象（全零字段）。真要走到，得让表里一条默认 code 都不存在且又没有要补的 —— 与「缺哪条补哪条」互斥。这里锁的是**实际返回值**（逐字段断言），不是那条早退分支。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-store-evidence-rules.mjs`；再在真机上打开演练台读一次得分面板，确认面板里没有 `web-account-*` / `webshell` / `rce` 这类旧 code（有就说明清理一直没生效，去看 `<靶标>/runs` 是否可写、有没有 `legacy-score-*.json` 落下）。
 
 
 ## 维护约定
