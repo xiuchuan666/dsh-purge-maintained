@@ -11,13 +11,15 @@
 // 每一种在宿主升级时都可能挪位，所以这里钉的是**顺序与条数**，不是「能不能找到」。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   addCandidate,
   considerBin,
   defineToolCandidates,
   loadDefineTool,
+  resolveDefineTool,
   apply,
 } from '../lib/redteam/tools.js'
 
@@ -197,8 +199,45 @@ test('defineToolCandidates：不传参数时读真实 process，且至少给出 
 
 /* ==================================================== loadDefineTool */
 
-test('loadDefineTool：本仓库里能直接解析到宿主包，返回一个函数（不是模块对象）', () => {
-  const fn = loadDefineTool()
+/* 造一个能被人造 require 解析成功的假宿主包。
+   为什么不用本机真实宿主：开发机上 createRequire 直接能解析到盘上的 dsh-tools，
+   而 CI（ubuntu 无宿主）一条都解析不到 —— 同一个断言在两边必然有一边假红。 */
+function fakeHostTree(tag) {
+  const root = mkdtempSync(join(tmpdir(), `dshp-tools-${tag}-`))
+  const pkgDir = join(root, 'node_modules', '@deepseek-ai', 'dsh-tools')
+  mkdirSync(pkgDir, { recursive: true })
+  writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-tools', version: '0.0.0', main: 'index.js' }), 'utf8')
+  writeFileSync(join(pkgDir, 'index.js'), "module.exports = { defineTool: (spec) => ({ fake: true, spec }) };\n", 'utf8')
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fake-host-root' }), 'utf8')
+  return { root, pkg: join(root, 'package.json') }
+}
+
+test('resolveDefineTool：候选表里第一条能解析的就赢，不存在的路径跳过', () => {
+  const host = fakeHostTree('first')
+  const fn = resolveDefineTool(['/nope/package.json', '', host.pkg])
+  assert.equal(typeof fn, 'function')
+  const tool = fn({ name: 'x' })
+  assert.deepEqual(tool, { fake: true, spec: { name: 'x' } }, '用的必须是候选表里那棵树里的 defineTool')
+})
+
+test('resolveDefineTool：一条都解析不到就抛错（文案要能被 grep 到），不返回 undefined', () => {
+  assert.throws(() => resolveDefineTool([]), /cannot resolve @deepseek-ai\/dsh-tools from host/)
+  assert.throws(() => resolveDefineTool(['/nope/package.json']), /cannot resolve @deepseek-ai\/dsh-tools from host/)
+  assert.throws(() => resolveDefineTool(null), /cannot resolve/)
+  // 目录存在但没有 dsh-tools 子包 → 也要继续试、最后抛同一条
+  const empty = mkdtempSync(join(tmpdir(), 'dshp-tools-empty-'))
+  writeFileSync(join(empty, 'package.json'), '{"name":"x"}', 'utf8')
+  assert.throws(() => resolveDefineTool([join(empty, 'package.json')]), /cannot resolve/)
+})
+
+test('loadDefineTool：有宿主就返回函数，没宿主就抛同一条文案（这条随环境两态，两种都算过）', () => {
+  let fn
+  try {
+    fn = loadDefineTool()
+  } catch (e) {
+    assert.match(String(e && e.message), /cannot resolve @deepseek-ai\/dsh-tools from host/, 'CI 无宿主时抛的必须是这一条')
+    return
+  }
   assert.equal(typeof fn, 'function')
 })
 
@@ -206,8 +245,10 @@ test('源码形状：loadDefineTool 先试插件自己的解析，再退候选�
   const body = SRC.slice(SRC.indexOf('export function loadDefineTool()'), SRC.indexOf('/** 0.2.1：'))
   assert.ok(body.includes("createRequire(import.meta.url)"), '第一优先必须是插件自己的 require')
   assert.ok(body.indexOf('createRequire(import.meta.url)') < body.indexOf('defineToolCandidates()'), '先本地解析，再扫宿主')
-  assert.ok(body.includes("throw new Error('dsh-purge/redteam/tools: cannot resolve @deepseek-ai/dsh-tools from host')"))
-  assert.ok(body.includes('existsSync(pkg)'), '候选表里不存在的路径要跳过，不能直接 require 一个不存在的目录')
+  assert.ok(body.includes('resolveDefineTool(defineToolCandidates())'), '解析不到时交给候选表那条路')
+  const resolver = SRC.slice(SRC.indexOf('export function resolveDefineTool('), SRC.indexOf('export function loadDefineTool()'))
+  assert.ok(resolver.includes("throw new Error('dsh-purge/redteam/tools: cannot resolve @deepseek-ai/dsh-tools from host')"))
+  assert.ok(resolver.includes('existsSync(pkg)'), '候选表里不存在的路径要跳过，不能直接 require 一个不存在的目录')
 })
 
 /* ============================================ 子智能体结束自动释放 */

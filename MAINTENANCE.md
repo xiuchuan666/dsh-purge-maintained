@@ -645,3 +645,14 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 ### 等价突变的一种常见形态：早退读的是不可能存在的键
 
 `if (rootId === undefined) return` 这种守卫，删掉后行为不变 —— 因为紧接着的 `reservations.get(undefined)` 本来就返回 `undefined`，而 `addReservation` 只会收到解析出来的根会话 id，表里不可能存在 `undefined` 这个键。判据是「能不能举出一条让它与不删它表现不同的路径」：举不出来就删掉这条突变，并在用例里写一行说明「这是防御性早退、不是可测行为」。早退守卫多半属于这一类，别为它们硬造 fixture。
+
+### 依赖「本机装了什么」的用例要拆出可注入的那一层，而不是加 skip
+
+第一版这么写：`test('loadDefineTool：本仓库里能直接解析到宿主包，返回一个函数')`。开发机上绿（桌面安装把 `@deepseek-ai/dsh-tools` 摆在了可解析的位置），`ubuntu-latest` 上红（`Error: cannot resolve @deepseek-ai/dsh-tools from host`）。**这种用例在错误的一端永远是假红或假绿，而且它挡住的是整条 CI。**
+
+修法是把它拆成两层：
+
+- `resolveDefineTool(candidates)`：只做「逐条试、第一条能解析的就赢、一条都没有就抛文档里那句错误」。候选表由调用方给，所以模块只依赖文件系统 —— 用例造一棵假宿主树（`node_modules/@deepseek-ai/dsh-tools/package.json` + `index.js` 导出返回 `{fake:true}` 的 `defineTool`）就能确定地覆盖命中、跳过、抛错三件事。
+- `loadDefineTool()`：自解析一半 + 交给候选表一半。用例改成**两态容忍**（拿到函数就断言 `typeof === 'function'`，抛错就断言抛的正是那句文案），并在用例里写明「这条随环境两态」。
+
+判据：一条用例如果在两台上机器给出不同结果，它就不是在测行为，是在测环境。把它拆到「纯函数 + 注入参数」那一层，剩下的壳用两态容忍 + 源码形状钉住。**别用 `skip` 搪塞**：跳过之后那一层永远没人测，而 CI 绿的假象会一直留着。
