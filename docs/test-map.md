@@ -989,6 +989,45 @@ RED 演练 `.tmp96-drill.mjs` **18 条突变 → 18/18 全红**（首轮 17 红 
 
 ---
 
+## 四十九补：preflight 的「下一步该做什么」五条分支各自单独走到
+
+`redteam_preflight` 返回的 `next` 是模型决定「先去问用户什么」的唯一依据，而它原来**一条都没跑到过**：
+`test-redteam-tool-branches.mjs` 那 5 条用例全跑在本机真实平台（win32）上，第一个分支
+`plat.runtime.windows && (!hasMarker || missing.length > 0 || allBroken.length > 0)` 在这里恒真，
+后面四条（首次无脚本 / 有脚本没跑 / 有缺口 / 有坏技能 / 全干净）一次也走不到。所以「缺什么、能不能开工、
+要不要让用户自己跑 setup.sh」这些话从来没被验证过。
+
+`test-recon-preflight-edges.mjs`（9 条）用 `$DSH_HOME/redteam/config.json` 的 `platform: "linux"` 把平台钉死
+（`isWinLike` 先看显式配置再回落 `osPlatform()`），于是同一份期望值在 Windows 与 ubuntu 上都成立。
+
+1. **五条分支的触发条件与文案要点**（全部实测）：①linux、无 `.setup-complete`、无 `setup.sh` →
+   「首次使用，且本机没有安装脚本 ……（这是正常情况，不是故障）」+ `crt.sh` 降级方案；②有 `setup.sh` 没跑过 →
+   「让用户自己执行 `bash … --check`」+「不要由智能体执行 `--yes`」；③marker 在但缺 `FOFA_KEY` →
+   「有缺口」+ 指向 `onboarding.missing` +「不要替用户下载工具」，且此时 `ok` 必须是 `false`；④配齐但技能坏 →
+   `ok:false`、`onboarding.complete:false`、`next` 指向 `broken` 的 `needs_user`；⑤全干净 →
+   `next === '全部可用，可以开工。'`。
+2. **`runtime_hint` 的 linux 文案是两行拼起来的**：第一行说「建议在专供演练的 Kali 虚拟机里运行」，
+   第二行说「本机落私钥与马、流量从常用出口 IP 出去、演练完虚拟机可直接丢弃」。第二行被删掉时，
+   第一轮 drill 是 **GREEN**（断言只钉了第一行），补 `演练完虚拟机可直接丢弃` 后才红 —— 这句才是
+   「敢不敢在这台机器上落私钥」的依据，不能只留前半句。
+3. **坏技能的 `fixes` 就是 `issues[].fix` 的数组**（`(s.issues || []).map(i => i && i.fix).filter(Boolean)`），
+   文件不存在这条 issue 能给出修复步骤；`issues` 为空时 `fixes` 是 `[]` 而 `fix_note` 照常打印 ——
+   所以「有没有 fixes」与「有没有 fix_note」是两件事，不能互相替代断言。
+4. **`fromBundle` 翻假的两条路**：`skills.list` 给的条目缺 `content` → `every(...)` 为假 →
+   逐条 `skills.get` 取正文；`skills.get` 抛错 → `def = undefined` → 按 summary 自带的 `path`/`content`
+   继续体检，不整条报废。注意 `include` 必须点名要查的技能：不点名时 `summaries` 会并进随包的 23 个技能，
+   `checked` 直接变 24，「有没有问 `skills.get` 要正文」这件事就被稀释掉了。
+5. **占位符只算 issue，不算 broken**：正文里写着 `<你的VPS_IP>` 的技能 `status` 仍是 `available`，
+   而返回体只有 `broken` 会带 `needs_user` / `problems` —— 于是「技能里还有占位符」在 preflight 输出里
+   **看不见**。这是现状，用例 `assert.deepEqual(pf.needs_user_flat, [])` 把它钉住（见盲区 97）。
+6. **`skills.get` 抛错时也得出一条结论**：`checked` 为 1、`available.length + broken.length` 为 1。
+   注意 `all_checked` 只有 `registry_total` / `checked` / `broken` / `available` 四个键，**没有 `unknown`**，
+   想按三类求和会得到 `NaN`。
+
+RED 演练 `.tmp97-drill.mjs` **12 条突变 → 12/12 全红**（首轮 11 红 1 绿，绿的正是上面第 2 条的续行，
+补断言后复跑转红）。`lib/redteam/tool-specs-recon.js` 行覆盖 532 → **551/585**，唯一剩下的 `171-204`
+是「宿主没有 skills 服务且内置技能也为空」的早退支（`bundledSkillSummaries()` 恒非空 → 本仓库不可达）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1057,6 +1096,7 @@ RED 演练 `.tmp96-drill.mjs` **18 条突变 → 18/18 全红**（首轮 17 红 
 | 演练台库的筛选面与报告面：`listAssets` 的五个筛选（service / fingerprint / provenance / priority / scope）、`sort=todo` 与 `sort=ports` 两条排序串、`listShots` 的四个过滤、`deleteScorePoint` 的内置点拒绝与事务回滚、`saveScorePoint` 名称必填、`addScoreHit` 的 `point_name` 解析与两种警告、报告的「复现请求」段、`searchPocs` 的来源筛选、`listEngagements({stats:true})` 的坏库兜底、`refreshDefaultPrompts` 的 `.bak`、`readAttackFile` 的越界拒绝 | `test-store-core-facets.mjs`（26 条） | `lib/redteam/store-core.js` 行 3741 → **3794/3822**（分支 1368/1584） |
 | 证据账本的十四条失败出口与两个计数：`record` 四道前置校验（`operation` 必填、`result` 不可为 null 但可为 `""`/`0`/`false`、`confidence` 四档、`authority` 六种）、`record` / `get` / `list` 三个 catch 的返回值各不相同（`{ok:false}` / `undefined` / **`{error}` 对象而不是数组**）、`countUnverified` 数裸条数而 `countUnresolvedClaims` 按 `supporting_ev_ids` 反查闭环（升级后前者不降、后者降）、坏 JSON 的四列各自回落到默认值、`upgrade` 四分支（未找到 / `derived` 拒绝 / 已 observed 原样 / claimed→observed 写新记录并用 `supporting_ev_ids` 链回原件、`subagent-report` 换成 `tool-output`、`recorded_by` 默认 `coordinator`）、`residual_unknown` 的 question/severity 校验、去重键折叠空白而存的是原文、`resolve` 只认 `resolved\|contradicted`（`withdrawn` 给干净校验错，不再走到 SQLite 的 CHECK） | `test-evidence-ledger-edges.mjs`（30 条） | `lib/redteam/evidence-ledger.mjs` 行 **516/516**、函数 20/20、分支 92.2% |
 | 红队工具注册面的边角：参数封口（`{type:'object'}` 无 properties 封 `true`、有 properties 封 `false`、已封的不覆盖、`properties`/`items`/`additionalProperties` 三层递归）、`makeDefineTool` 四处都封、`capMap` 满员淘汰最早而同键重设不淘汰、`sessionInfoOf` 读 `header` 抛错时只丢父 id、`resolveRootSession` 父不在内存时用父 id 当根键 + 父子互指在 64 层停下、`bindingKeyOf` 的 rootId/sessionId/chain、`liveRunningChildren` 三态（注册表不可用 / 列失败 / 非数组当空表）、`reservationList` 无预留回空数组、`apply` 的 `ctx.redteam` getter 抛错时 warn 一条并注册满 64 个工具（桩库 `openEngagement` 报「红队资产库不可用」） | `test-tools-edges.mjs`（27 条：`sealObjectSchemas` 6 / `makeDefineTool` 2 / `capMap` 2 / `sessionInfoOf` 2 / `resolveRootSession` 5 / `bindingKeyOf` 2 / `reservationList` 1 / `liveRunningChildren` 4 / `apply` 2 / 源码形状 1） | `lib/redteam/tools.js` 行 479 → **500/501**（唯一剩下的 `:131` 是 `loadDefineTool()` 兜底，本机解析得到宿主所以走不到） |
+| 演练台体检的「下一步该做什么」五条分支各自单独走到：linux 首次无 `setup.sh`（「这是正常情况，不是故障」+ `crt.sh` 降级）、有脚本没跑过（只让用户自己 `--check`，不许智能体 `--yes`）、有 marker 缺 `FOFA_KEY`（「有缺口」，`ok:false`）、配齐但技能坏（`ok:false`、`onboarding.complete:false`、`broken[].fixes` 来自 `issues[].fix`、`fix_note` 是另一件事）、全干净（`next === '全部可用，可以开工。'`）；外加 `runtime_hint` 的 linux 两行文案、`fromBundle` 翻假后逐条 `skills.get` 取正文、`skills.get` 抛错仍出结论、`include` 点名时才不并进随包技能 | `test-recon-preflight-edges.mjs`（9 条） | `lib/redteam/tool-specs-recon.js` 行 532 → **551/585**（唯一剩下的 `171-204` 不可达） |
 
 ---
 
@@ -1540,6 +1580,8 @@ RED 演练 `.tmp96-drill.mjs` **18 条突变 → 18/18 全红**（首轮 17 红 
 `loadDefineTool` 的兜底句。它们的行为分支已分别有直接用例，形状断言只是防有人顺手删掉。
 
 96. **`lib/prompt-source.js` 里仍然测不到的四处**：(a) `refreshHungOperator` 的风暴窗（10 秒内重算超 120 次才进入 `tripped` 状态）—— 要在进程内造出 121 次重算，得让 mtime 每次都变，也就是每轮都写盘，测试成本远高于收益，只由源码形状钉住阈值常量；(b) `hungDepth > 0` 的重入保护（`112`）—— `purgeLog` 与四档降级都不会回调 `fn()`，进程内没有第二次进入的路径，只能靠源码形状；(c) `readInjectFallback` 的 `subagent` 分支（`context.agent.session.header.origin === "subagent"`）已在 `test-prompt-source.mjs` 里覆盖，(d) `injectSnapshotFromBox` 的「框里有字但归一化后为空」分支需要构造只含空白字符、且四级兜底全空的现场，与 (a) 共用同一套成本。检测办法：`grep -n 'HUNG_STORM_LIMIT\|hungDepth > 0' lib/prompt-source.js` 确认阈值与重入保护仍在；`grep -rn 'origin.*subagent' scripts/test-prompt-source*.mjs` 确认 (c) 有守卫。
+
+97. **`redteam_preflight` 的「下一步」五条分支都有守卫了，但仍有两处空白。** (a) `171-204` 那 34 行只在 `skillsMissing && bundledSkills.length === 0` 时执行，而 `bundledSkillSummaries()` 恒扫随包 `skills/redteam`（23 个 `.md`）与 `<home>/redteam/skills` —— 任何安装形态下都不为空，所以只能源码形状钉（`test-recon-preflight-edges.mjs` 最后一条断言 `if (bundledSkills.length === 0) {`、`error: '读取技能目录失败：'`、`summaries = bundledSkills` 三处原文）。(b) 占位符提示对**可用**技能不可见：`checkSkill` 把 `<你的VPS_IP>` 这类占位符记成 issue（`status` 仍是 `available`），而返回体只给 `broken` 带 `needs_user`/`problems`，于是「技能正文里还有占位符」在 preflight 输出里查不到 —— 现状锁定，用例用 `assert.deepEqual(pf.needs_user_flat, [])` 钉着；要把这条暴露出来得给 `available` 也带 issues，属产品决策。检测办法：`grep -n "skillsMissing && bundledSkills.length === 0" lib/redteam/tool-specs-recon.js`；`grep -n "needsUser = Array.from" lib/redteam/tool-specs-recon.js` 确认 `needs_user` 仍只从 `broken` 收集。改坏的表现是「桌面端首次打开演练台时体检整条报废」，或者「模型看不见技能里还留着 `<你的VPS_IP>`，直接拿占位符去连 VPS」。
 
 ## 维护约定
 

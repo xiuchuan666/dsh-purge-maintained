@@ -1055,3 +1055,24 @@ syncBuiltinESMExports();
 两个坑：**不能 `delete`**——`delete` 之后 CJS 对象上没有 own property，ESM 绑定仍指向坏实现，
 `defaultOverrideText()` 会一直是 0（探针 8 就栽在这）；**必须 `finally` 恢复**，
 否则同进程后续用例全都读不到内置正文。
+
+
+### 平台相关的分支，用配置把平台钉住，不要拿 `process.platform` 去凑
+
+同一个函数里既有「按真实平台分叉」也有「按可配置的平台分叉」两种情况，判据是**它读的是什么**：
+
+- 读 `process.platform` / `os.platform()`（常见写法是模块级常量 `const isWindows = process.platform === "win32"`）→ 只能用 `asWin32(fn)` 或在伪装 linux 的 preload 下跑，而且**模块级常量连 `asPlatform` 都改不动**（`lib/core.js:40`）。
+- 读一份可配置的平台（`lib/redteam/platform-config.js` 的 `isWinLike(cfg)`：先看 `cfg.platform === "windows" | "linux"`，都没有才回落 `osPlatform() === "win32"`）→ **写一份 `platform: "linux"` 的 config.json 就能在 Windows 上跑 linux 分支**，两平台跑出来的期望值完全一致，不用在用例里写 `if (process.platform === ...)` 分叉。
+
+`test-recon-preflight-edges.mjs` 就是第二种：`withPreflight` 每次都写 `<home>/redteam/config.json` 里 `platform: "linux"`，于是「首次无 setup.sh / 有脚本没跑 / 有缺口 / 有坏技能 / 全干净」五条 `next` 分支在 CI 的 ubuntu 与本机 win32 上是同一份断言。反过来说，凡是**行为层区分不了**的（`chmod 0o755` 在 Windows 是空操作、`fs.symlinkSync` 会把 `/` 归一成 `\`），不要去伪造平台，直接退到源码形状断言。
+
+### 断言「某函数返回的形状」之前，先问一句：CI 上没有这套外部状态时它还回这个形状吗
+
+`ensureRestartReady()` 只是转发 `core.ensureHostClean()`：
+
+- 本机（有宿主安装树、补丁齐全）回 `{ ok: true, aiBase: "…", pending: [], hosts: [仓库树, 桌面安装树] }`；
+- CI 上（没有宿主树）回 `{ ok: false, error: "…", aiBase: null }` —— **连 `pending` 这个键都没有**。
+
+于是 `assert.ok(Array.isArray(out.pending))` 在本机永远绿、在 CI 永远红，而这条用例本身是对的（它测的是「有没有转发」）。正确写法是**先与直接调用底层函数的结果 `deepEqual`**（证明转发），再按 `ok` 分两支各断言各的字段。同类还有：`inspectRuntimePayload("")` 会去 discovery 本机安装树、`gatherState()` 的 `ai_base` 会落到 npm 全局树、`officeSkillAssetSources()` 读真安装树（CI 上走 `reason:"no-source"`）。
+
+判据很简单：**这个函数有没有「外部状态不存在时的早退形状」**。有，就必须写成「两种情况都成立」的断言，或者把外部状态也钉住（沙箱 `DSH_BASE` / `DSH_DESKTOP_INSTALL`）。
