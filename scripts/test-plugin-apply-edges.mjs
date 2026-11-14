@@ -309,9 +309,13 @@ test('settle 正常返回结论字符串并写进日志', async () => {
   console.log = (...args) => { logs.push(args.join(' ')) }
   try {
     plugin.apply(ctx, { verbose: true })
-    // 不跑 effect：life 仍活着，定时器 0ms 后自己醒来
-    await new Promise((r) => setTimeout(r, 60))
-    await tick()
+    // 不跑 effect：life 仍活着，定时器 0ms 后自己醒来。
+    // 但醒来之后那一步会真的去核对宿主树（patchesMatchInstallStrict 要 stat 一遍），
+    // 本机实测 130–180ms 才出结论 —— 固定等 60ms 在这台机器上会假红，所以改成轮询。
+    for (let i = 0; i < 200; i += 1) {
+      if (logs.some((line) => /\[dsh-purge\] settle: /.test(line))) break
+      await new Promise((r) => setTimeout(r, 20))
+    }
     for (const factory of ctx.effects.slice()) {
       try { const d = factory(); if (typeof d === 'function') d() } catch {}
     }

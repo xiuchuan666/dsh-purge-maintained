@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-14T14:44:03.756Z",
-  "commit": "eb9e214",
+  "capturedAt": "2026-11-14T15:46:58.307Z",
+  "commit": "c1a753a",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -34,7 +34,7 @@
       "fnh": 2,
       "fnf": 2,
       "brh": 31,
-      "brf": 38
+      "brf": 37
     },
     "lib/bom-guard.js": {
       "lh": 161,
@@ -93,20 +93,20 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 4631,
+      "lh": 4628,
       "lf": 5205,
-      "fnh": 319,
+      "fnh": 317,
       "fnf": 341,
       "brh": 1601,
-      "brf": 1929
+      "brf": 1930
     },
     "lib/desktop.js": {
-      "lh": 1837,
+      "lh": 1840,
       "lf": 2272,
       "fnh": 105,
       "fnf": 116,
-      "brh": 491,
-      "brf": 617
+      "brh": 499,
+      "brf": 624
     },
     "lib/drill-grant.js": {
       "lh": 45,
@@ -201,8 +201,8 @@
       "lf": 363,
       "fnh": 20,
       "fnf": 23,
-      "brh": 116,
-      "brf": 146
+      "brh": 117,
+      "brf": 147
     },
     "lib/live-cache.js": {
       "lh": 84,
@@ -309,12 +309,12 @@
       "brf": 189
     },
     "lib/prompt-source.js": {
-      "lh": 324,
+      "lh": 363,
       "lf": 363,
-      "fnh": 22,
+      "fnh": 24,
       "fnf": 24,
-      "brh": 81,
-      "brf": 114
+      "brh": 114,
+      "brf": 133
     },
     "lib/reapply.js": {
       "lh": 270,
@@ -442,7 +442,7 @@
       "fnh": 251,
       "fnf": 259,
       "brh": 1368,
-      "brf": 1585
+      "brf": 1575
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -517,12 +517,12 @@
       "brf": 250
     },
     "lib/rules.js": {
-      "lh": 559,
+      "lh": 560,
       "lf": 560,
       "fnh": 46,
       "fnf": 48,
-      "brh": 201,
-      "brf": 228
+      "brh": 206,
+      "brf": 230
     },
     "lib/session-access.js": {
       "lh": 159,
@@ -581,11 +581,11 @@
       "brf": 6
     },
     "lib/table-read.js": {
-      "lh": 16,
+      "lh": 18,
       "lf": 18,
       "fnh": 1,
       "fnf": 1,
-      "brh": 2,
+      "brh": 3,
       "brf": 3
     },
     "lib/tools.js": {

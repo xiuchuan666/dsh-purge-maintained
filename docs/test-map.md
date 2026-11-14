@@ -141,6 +141,7 @@
 | 注入指纹抠除（`injectNeedles` 的 OWN SERVERS 前缀、`injectMatchers` 超 4096 字符按空行切段、`leadWithInject` 精确+宽松两路抠掉旧副本） | `test-identity-assembly.mjs`（第五节 + 第十三节的单行 5000 字符注入） | 同上 |
 | 注入正文的读盘缓存 `refreshHungOperator`（home / mtime / 提交版本四元组命中时返回同一对象、`prompt-inject.md` 先写好则记 `source:"prompt"`、`rememberCommittedOverride` 改版本立刻失效、连续重算超阈值就打日志而不是继续算） | `test-prompt-source.mjs`（6 条） | `lib/prompt-source.js` 89% |
 | 进程内注入兜底 `installHungPromptGlobal`（四档 `refresh → hung → disk → sealed` 依次降级、重入深度保护、单次慢调用超 1500ms 进 30 秒冷却，`globalThis.__dshPurgeHungPrompt` 挂的是同一个函数） | `test-prompt-source.mjs`（3 条，含四档顺序与两个阈值的源码断言） | 同上 |
+| 四档降级的每一档都能单独走到（破密封槽→缓存空→再放行 `hung`/`disk`/`sealed`；四档全空回空串；熔断靠真慢 1700ms 触发、冷却期内只交内存钉子）、空提示词闸门与重启前体检的转发、`capabilityProtocolText` 只认 `enabled` | `test-prompt-source-edges.mjs`（15 条） | `lib/prompt-source.js` 行 363/363 |
 | 提示词分段注册 `registerPromptSections`（默认 `dsh-purge@-100000` + `dshpg-capabilities@-99999`、`interpolate:false`、`capabilityProtocol:false` 只挂一段、`postPrompt` 挂第三段 `dsh-purge:post@7`、非法的 `postPromptOrder` 只警告并跳过、`already registered` 不算失败、多段全抛时抛最后一个） | `test-prompt-source.mjs`（9 条） | 同上 |
 | 注入快照与闸门 `injectSnapshot` / `rejectIfNeedPrompt` / `ensureRestartReady`（快照三字段形状、空提示词时回 `needPrompt:true` 与固定文案、重启前先问 `core.ensureHostClean()`） | `test-prompt-source.mjs`（8 条，含文案与形状的源码断言） | 同上 |
 | 装配决策输入 `shouldInjectAssembly` / `readSessionEvents`（默认 full/general、只有 `origin:"subagent"` 算子会话、续跑标记只消费一次变 `lastRole:"retry"`、事件优先 `snapshotEvents` 抛错退 `events` 再兜 `[]`） | `test-prompt-source.mjs`（8 条） | 同上 |
@@ -972,6 +973,22 @@ RED 演练 25 条突变 → **25/25 全红**（分两片 `0 13` / `13 25`，`res
 `@deepseek-ai/dsh-tools`，所以走不到，CI 上才走）、函数 36 → **39/42**、分支 142 → 194。
 全仓行 94.07% → **94.12%** / 函数 85.36% / 分支 90.37%。
 
+## 四十八补：注入兜底的四档每一档都单独走到（含熔断的真慢触发）
+
+**2026-11-14 四十八补**：`lib/prompt-source.js` 剩下的 39 行（`114-119` 熔断档、`129-142` 后三档降级与全空、`237`/`245` 空提示词闸门、`249-250` 重启前体检的转发、`280-282` disposer 回收循环、`309-314` 能力纪律段的取文、`342-348` 读盘兜底的 `ensure` 与 `empty` 两支）此前被当作「要真等 30 秒冷却 / 要四层同时为空」而挂着。这一批全部补上（`scripts/test-prompt-source-edges.mjs`，**15 条**），该文件行覆盖 **363/363 = 100%**，分支 81 → 114/133。下面七条只有真跑过才知道：
+
+1. **「让密封槽为空」= 让 `createDecipheriv` 抛错**。`lib/table-read.js:6` 的 `openSlot()` 整段包在 try/catch，失败就回 `""`，于是 `core.defaultOverrideText()` 从 21219 变 0。但必须用 `createRequire(import.meta.url)("node:crypto")` 拿到 CJS 对象再赋值——`await import("node:crypto")` 的命名空间只读，会直接报 `Cannot assign to read only property 'createDecipheriv'`；改完还要 `syncBuiltinESMExports()` 让 ESM 侧同引用生效。**恢复时不能 `delete`**——`delete` 之后 CJS 对象上再没有 own property，ESM 绑定仍指向坏实现，`defaultOverrideText()` 会一直是 0（这是探针 8 的失败原因）；必须把模块加载时捕获的 `REAL_DECIPHER` 赋回去再 sync 一次。
+2. **「让 refresh 返回空」比想象中难**。只写一个空白 `prompt-inject.md` 不行：`rules.resolveInjectText` 的四级兜底会落到 `default` 档（内置正文 20994），而且 `syncPromptInjectOnDiskSync` 会把空白文件补成完整正文。正确顺序是 **先破密封槽 → 调一次 `fn()`（这一轮缓存里存的是空、`mtime=0`）→ 恢复密封槽或写盘（不动 `mtime`/版本号）→ 再调 `fn()`**，这样 refresh 仍命中缓存里那份空，才会往下掉。
+3. **`disk` 档要求「缓存空 且 mtime 没变」**。写盘之后 `fs.utimesSync(fp, 0, 0)` 把 mtime 拨回 0 才走 `disk`；只拨回原来的值不算——`statSync` 精度是秒级，会算成不同值，refresh 直接读到磁盘正文，日志记的是 `tier=refresh`（探针 5 的失败原因）。
+4. **熔断只能靠「真慢一次」**。`hungSlowAt` / `hungDepth` 是 `installHungPromptGlobal` 的闭包 `let`，外部无法置位；把 `fs.statSync` 包一层忙等 1700ms 再调一次 `fn()`，`finally` 里 `cost >= HUNG_SLOW_MS` 才会置上冷却时间，紧接着的第二次调用才走 `tier=breaker`。这条用例单跑要 6.8 秒（`refreshHungOperator` 内部多次 `statSync` 全被拖慢），必须放文件最后，否则把别的用例的超时也拖起来。
+5. **`capabilityProtocolText` 只认 `enabled`**（`lib/capability-protocol.js:29-31`），`redteam` / `redteamChild` 两个入参目前不影响输出——普通会话、`{header:{agentPreset:"redteam"}}`、`{agentPreset:"redteam"}` 三种上下文取到的正文都是同一份 1050 字节。这一条只能断言「三者相等且等于 `capabilityProtocolText({enabled:true})`」，不能凭空断言红队版多了什么。
+6. **`addPromptSection` 的第二个 host 是 `ctx` 自己**，所以假 ctx 的 `systemPrompt` 自身必须有 `.section`；只给 `ctx.systemPrompt = { ctx: sp }` 会抛 `TypeError: host.systemPrompt.section is not a function`。而回收 disposer 的循环（`280-282`）只有让 `section()` 真的返回函数才执行——原来那条用例只断言 `doesNotThrow`，drill 里「把循环改成空数组」是 GREEN，改成收集 `disposerCalls` 并断言 `["dsh-purge","dshpg-capabilities"]` 后才红。
+7. **`ensureRestartReady` 真的会摸本机安装树**（实测 1.5 秒、返回 `hosts: [仓库树, 桌面安装树]`），所以用例必须给沙箱 `DSH_BASE`；否则在 CI 上会去 stat 不存在的路径，耗时也不稳。
+
+RED 演练 `.tmp96-drill.mjs` **18 条突变 → 18/18 全红**（首轮 17 红 1 绿，绿的正是上面第 6 条，补断言后复跑转红）。顺带修掉一个**已有测试的假红**：`scripts/test-plugin-apply-edges.mjs` 的 `settle 正常返回结论字符串并写进日志` 原来固定等 60ms，而本机 settle 结论要 174ms 才出现（`rules init` 131ms），三连跑必红；改成轮询最多 200×20ms 后稳定 15/15。
+
+---
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1521,6 +1538,8 @@ RED 演练 25 条突变 → **25/25 全红**（分两片 `0 13` / `13 25`，`res
 此外这一批有两个「只能源码形状钉」的点，都写在 `test-tools-edges.mjs` 的最后一条里：
 桩库三件套（`openEngagement` 抛 / `listEngagements` 回 `[]` / `stats` 回 `{}`）与
 `loadDefineTool` 的兜底句。它们的行为分支已分别有直接用例，形状断言只是防有人顺手删掉。
+
+96. **`lib/prompt-source.js` 里仍然测不到的四处**：(a) `refreshHungOperator` 的风暴窗（10 秒内重算超 120 次才进入 `tripped` 状态）—— 要在进程内造出 121 次重算，得让 mtime 每次都变，也就是每轮都写盘，测试成本远高于收益，只由源码形状钉住阈值常量；(b) `hungDepth > 0` 的重入保护（`112`）—— `purgeLog` 与四档降级都不会回调 `fn()`，进程内没有第二次进入的路径，只能靠源码形状；(c) `readInjectFallback` 的 `subagent` 分支（`context.agent.session.header.origin === "subagent"`）已在 `test-prompt-source.mjs` 里覆盖，(d) `injectSnapshotFromBox` 的「框里有字但归一化后为空」分支需要构造只含空白字符、且四级兜底全空的现场，与 (a) 共用同一套成本。检测办法：`grep -n 'HUNG_STORM_LIMIT\|hungDepth > 0' lib/prompt-source.js` 确认阈值与重入保护仍在；`grep -rn 'origin.*subagent' scripts/test-prompt-source*.mjs` 确认 (c) 有守卫。
 
 ## 维护约定
 

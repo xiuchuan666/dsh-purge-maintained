@@ -1016,3 +1016,42 @@ try { … } finally { process.argv[1] = orig; }
 
 同类先例：`lib/bom-guard.js` 的 `readJsonNoBom`（全仓只有定义处一个名字 → 删）、
 `lib/profile-insert.js` 的重开段三行（上一道 `if` 已把行全收走 → 删）。
+
+### 想测「闭包里的一次性状态」，要么让它真的发生一次，要么就别测
+
+`installHungPromptGlobal` 把 `hungSlowAt` / `hungDepth` 放在闭包里，外部既读不到也写不进。
+这类「只能由函数自己触发一次」的状态，有三种走法，按优先级：
+
+1. **让它真的发生一次**（首选）。熔断的触发条件是「单次调用耗时 ≥ 1500ms」，
+   于是把 `fs.statSync` 包一层忙等 1700ms 再调 `fn()`，`finally` 里就会置上冷却时间；
+   紧接着第二次调用自然走 `tier=breaker`。代价是这一条用例要 6.8 秒，
+   **所以它必须单独放在文件最后**，否则会连带拖超时别的用例。
+2. **用「第 n 次」定位**（当状态由调用次数决定）。见前面 `spThrowAt` 那条：
+   同一个属性被十几次读取，只有其中几次不在 `try` 里，靠计数把异常打到那一次。
+3. **只钉源码形状**（当上面两条都要付出不成比例的代价）。风暴窗（10 秒 120 次）
+   与重入保护（`hungDepth > 0`）属于这类：要造 121 次重算得每轮写盘，
+   而重入在进程内根本没有第二次进入的路径。写进 test-map 盲区，附一条 `grep` 检测办法。
+
+判据：**能不能说清「用户会看到什么不同」**。熔断说得出（正文变成内存里那份旧的），
+所以值得花 6.8 秒；风暴窗说不出（只是重算次数），就只留常量断言。
+
+### 想 monkeypatch 内置模块，必须走 `createRequire` + `syncBuiltinESMExports`
+
+`await import("node:crypto")` 拿到的是**只读命名空间**，赋值会抛
+`Cannot assign to read only property 'createDecipheriv'`。可行的写法：
+
+```js
+import { createRequire } from "node:module";
+import { syncBuiltinESMExports } from "node:module";
+const cjs = createRequire(import.meta.url)("node:crypto");
+const REAL = cjs.createDecipheriv;      // 一定要先存原引用
+cjs.createDecipheriv = () => { throw new Error("sealed slot unavailable"); };
+syncBuiltinESMExports();                 // ESM 侧同引用立刻生效
+// ...用例...
+cjs.createDecipheriv = REAL;            // 恢复，不能 delete
+syncBuiltinESMExports();
+```
+
+两个坑：**不能 `delete`**——`delete` 之后 CJS 对象上没有 own property，ESM 绑定仍指向坏实现，
+`defaultOverrideText()` 会一直是 0（探针 8 就栽在这）；**必须 `finally` 恢复**，
+否则同进程后续用例全都读不到内置正文。
