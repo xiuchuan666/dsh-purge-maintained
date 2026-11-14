@@ -621,3 +621,137 @@ test("installContinueRetry：agent 还在跑、收件箱有货、刚有真人说
   assert.equal(sent.length, 0, "真人刚说过话，不要抢");
   h.dispose();
 });
+
+test("sessionEventsOf：两条读事件的路都抛错时给空数组，不让异常漏出去", () => {
+  const agent = {
+    session: {
+      snapshotEvents: () => {
+        throw new Error("snapshot boom");
+      },
+      get events() {
+        throw new Error("events boom");
+      },
+    },
+  };
+  // 上一条用例只覆盖了「snapshotEvents 抛错 → 退到 events 数组」。
+  // 这条覆盖再往下掉一层：events 这个属性本身读出来就炸，
+  // 只能返回空数组。少了这个出口，一个坏 session 就能让
+  // agent/status 钩子整条抛出去，宿主那一侧的 idle 处理跟着断。
+  assert.deepEqual(sessionEventsOf(agent), []);
+});
+
+test("installContinueRetry：ctx.on 不认第三个参数时退回两参注册", () => {
+  const regs = [];
+  const ctx = {
+    on(name, handler, opts) {
+      if (arguments.length > 2) throw new TypeError("expects 2 arguments");
+      const rec = { name, handler, opts, off: false };
+      regs.push(rec);
+      return () => {
+        rec.off = true;
+      };
+    },
+  };
+  const h = installContinueRetry(ctx, { config: {} });
+  assert.deepEqual(
+    regs.map((r) => r.name),
+    ["agent/request-error", "agent/status"],
+    "两参注册也要把两个钩子都挂上",
+  );
+  assert.ok(regs.every((r) => r.opts === undefined), "退回两参时不再传 global");
+  h.dispose();
+  assert.ok(regs.every((r) => r.off), "退回注册的钩子也要能摘掉");
+});
+
+test("installContinueRetry：ctx.on 两参也不认时宁可一个钩子都不挂，也不抛", () => {
+  let calls = 0;
+  const ctx = {
+    on() {
+      calls += 1;
+      throw new Error("on boom");
+    },
+  };
+  const h = installContinueRetry(ctx, { config: {} });
+  assert.equal(calls, 4, "每个事件各试两种签名（3 参 + 2 参）");
+  h.dispose(); // 两个 off 都是 null，dispose 不能炸
+});
+
+test("installContinueRetry：续跑那句发不出去时把名额退回去，并留一行 warn", async () => {
+  const { regs, ctx } = fakeCtx();
+  const h = installContinueRetry(ctx, { config: { autoContinue: true, continueMax: 1 } });
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...args) => warned.push(args.map(String).join(" "));
+  try {
+    const boomAgent = () => ({
+      id: "s1",
+      status: "idle",
+      followup: () => {
+        throw new Error("followup boom");
+      },
+      session: { snapshotEvents: () => [end(3, { kind: "error" })] },
+    });
+    const handler = regs.find((r) => r.name === "agent/status").handler;
+    handler({ status: "idle", agent: boomAgent() });
+    await new Promise((r) => setTimeout(r, 350));
+
+    assert.equal(warned.length, 1, "发不出去要有且只有一行 warn");
+    assert.match(warned[0], /auto-continue send failed/);
+    assert.match(warned[0], /session=s1/);
+    assert.match(warned[0], /seq=3/);
+    assert.match(warned[0], /followup boom/);
+
+    // 名额必须退回来：continueMax=1 时，如果不 refund，下一个失败点也只能干看着。
+    // 注意必须换一个新的 seq —— refundContinue 故意保留 lastContinueSeq，
+    // 同一个失败点不会再消耗第二次（见下一条用例）。
+    const okSent = [];
+    handler({
+      status: "idle",
+      agent: {
+        id: "s1",
+        status: "idle",
+        followup: (m) => okSent.push(m),
+        session: { snapshotEvents: () => [end(5, { kind: "error" })] },
+      },
+    });
+    await new Promise((r) => setTimeout(r, 350));
+    assert.equal(okSent.length, 1, "上一次发送失败不能把本会话的续跑名额吃掉");
+    assert.equal(okSent[0].content[0].text, "继续", "补的是默认那句");
+  } finally {
+    console.warn = realWarn;
+    h.dispose();
+  }
+});
+
+test("installContinueRetry：同一条失败点退款之后不再重复续跑，seq 变了才行", async () => {
+  const { regs, ctx } = fakeCtx();
+  const h = installContinueRetry(ctx, { config: { autoContinue: true, continueMax: 1 } });
+  const realWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const mk = (seq) => ({
+      id: "s1",
+      status: "idle",
+      followup: () => {
+        throw new Error("followup boom");
+      },
+      session: { snapshotEvents: () => [end(seq, { kind: "error" })] },
+    });
+    const handler = regs.find((r) => r.name === "agent/status").handler;
+    handler({ status: "idle", agent: mk(3) });
+    await new Promise((r) => setTimeout(r, 350));
+    // 同一个 seq 再来一次：refundContinue 保留失败记录，不该再试
+    let tries = 0;
+    const agent2 = mk(3);
+    agent2.followup = () => {
+      tries += 1;
+      throw new Error("followup boom");
+    };
+    handler({ status: "idle", agent: agent2 });
+    await new Promise((r) => setTimeout(r, 350));
+    assert.equal(tries, 0, "同一失败点退过一次就不再消耗第二次");
+  } finally {
+    console.warn = realWarn;
+    h.dispose();
+  }
+});

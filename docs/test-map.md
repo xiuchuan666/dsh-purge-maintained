@@ -188,7 +188,8 @@
 | 重启参数怎么算：有 bin.js 时改写成 `[binJs, ...rest]` 并补 `web --port`、`.cmd`/`.bat` 换成 node_modules 里的 bin.js、永远补 `--no-open` 且不重复 | `test-host-restart.mjs`（9 条） | `lib/web.js` 行 117/117 |
 | 后台重启的两条路：`spawn` 用当前 node 跑助手、`detached`+`stdio:ignore`+`windowsHide`+`shell:false` 四个选项、`unref` 一次、250ms/400ms 两个延时、payload 八键（`openBrowser` 用 `??` 不用 `||`）、提示语抛错不影响重启、子进程 env 不带 `DSH_PERMISSION_MODE`、清理重启把 `uninstall-restart.js` 逐字节复制到 `os.tmpdir()` 再跑副本 | `test-web-restart.mjs`（13 条） | `lib/web.js` 行 117/117（分支 34/35） |
 | 子代理审批接管：两个钩子都必须 `global`（`approval/request` 还要 `prepend`）、只在子会话把 `never` 改回 `ask` 且每会话最多 4 次、子会话审批一律 `allowed-once`、释放时摘钩子 | `test-host-restart.mjs`（13 条） | `lib/subagent-control.js` 100% |
-| 自动续跑与自动重试的判据：哪一类结束原因算异常（error / aborted / interrupted / max-tokens）、用户取消不续跑、永久码（鉴权/配额/上下文超限/缺凭据）与 `TRANSPORT`/`RATE_LIMIT` 不续跑、`signal.aborted` 不重试 | `test-continue-retry.mjs`（10 条） | `lib/continue-retry.js` 97% |
+| 三条静默出口：读会话事件两条路都炸时给空数组、`ctx.on` 三参不被认时退回两参（不再传 `global`；两参也不认就一个钩子都不挂，尝试次数 4）、续跑那句 `followup` 抛错时退名额 + 留且只留一行 warn、退款之后同一失败点不再重试（换新 seq 才看得到名额回来） | `test-continue-retry.mjs`（+5 条） | `lib/continue-retry.js` 行 364/364 |
+| 自动续跑与自动重试的判据：哪一类结束原因算异常（error / aborted / interrupted / max-tokens）、用户取消不续跑、永久码（鉴权/配额/上下文超限/缺凭据）与 `TRANSPORT`/`RATE_LIMIT` 不续跑、`signal.aborted` 不重试 | `test-continue-retry.mjs`（10 条） | `lib/continue-retry.js` 行 364/364 |
 | 续跑预算与失败连击：每会话 retry/continue 各自计数、同一失败点/同一轮结束点不重复消耗、连续失败 3 次永久停手（#85）、正常结束或 blocked 才清零、会话数超 200 淘汰最早 50 个 | `test-continue-retry.mjs`（10 条） | 同上 |
 | 什么时候不许替用户说话：默认 `autoContinue=false`、agent 还在跑、收件箱有货、`turn/end` 之后已有真人消息、`dispose` 之后排着的定时器一律不发 | `test-continue-retry.mjs`（8 条） | 同上 |
 | 配置合并：`retryMax` 归零连带关掉 `autoRetry`、`autoContinue` 只认布尔 `true` 且 `continueMax>0`、保存的设置不能偷偷打开 `autoContinue`、`continueText` 去空白并回落「继续」 | `test-continue-retry.mjs`（8 条） | 同上 |
@@ -1276,6 +1277,39 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
   造法是把 `node:fs` 的 `rmSync` 换掉：`createRequire` 拿 CJS 对象 → 赋值 → `syncBuiltinESMExports()`，
   这样 `lib/preset-default.js` 的 `import fs from "node:fs"` 才看得到替换；`finally` 里还原再 sync。
 
+### 五十九补：`continue-retry` 的三条静默出口（读事件 / 注册钩子 / 发不出去）
+
+自动续跑与自动重试整块只有 364 行，但三条出口都是「宁可什么都不做，也不把异常漏给宿主」：
+读会话事件、挂 `ctx.on`、还有把续跑那句真的塞进队列。这三条平时不响，响了就是「一次网络抖动
+把任务停在那里」或者「用户还在打字，插件先替他发了一条」。
+
+这一批 5 条（追加进 `scripts/test-continue-retry.mjs`，44 → **49 条**）把
+`lib/continue-retry.js` 推到 **行 364/364（100%）**，四件只能跑出来的事：
+
+1. **读事件有两条路，两条都炸时给空数组。** `session.snapshotEvents()` 抛错会退到
+   `session.events`；`events` 这个属性本身用 getter 抛错时，再往里退都没有了 —— 只能返回
+   `[]`。少了这个出口，一个坏 session 就让整条 `agent/status` 钩子抛出去，宿主那边的 idle
+   处理跟着断。原用例只覆盖了第一层。
+2. **`ctx.on` 有三参 / 两参两种签名。** 三参不被认时退回两参注册（此时**不再传 `global`**，
+   所以子会话看不到续跑 —— 这是可观测的差别，不是「顺手容错」）；两参也不认就一个钩子都不
+   挂，而不是让 `apply` 失败。注册尝试次数恰好是 4（两个事件 × 两种签名），这条数字本身就是
+   契约。
+3. **续跑那句发不出去要退还名额，并且留且只留一行 warn。** `followup` 抛错时
+   `sendContinue` 返回 `{ok:false, error}`，`maybeAutoContinue` 必须 `refundContinue` 再
+   `console.warn`（带 session 与 seq）。不退款 —— 下一个失败点就干看着；不退且不 warn ——
+   用户永远不会知道插件替他试过一次。
+4. **退款之后同一个失败点不会再试第二次。** `refundContinue` 故意**不清 `lastContinueSeq`**
+   （源码注释写着「同一 seq 的失败不再重复消耗 continue 预算」），所以第二轮必须换一个新的
+   `turn/end` seq 才能看到「名额回来了」。写这条用例时第一版用了同一个 seq，断言「名额回来」
+   是红的 —— 那不是 bug，是契约；两条用例合起来才把「退款」和「不重复」分得开。
+
+两条纪律（写进 `MAINTENANCE.md`）：
+
+- `refundContinue` 的语义是「名额回来 + 这个点别再试」，两件事必须各有一条用例；
+- 造「发不出去」不要 mock `sendContinue`，直接让 `agent.followup` 抛错 —— 真实调用链是
+  `followup → makeContinueMessage → source.kind: "dsh-purge"`，mock 掉就漏了「续跑消息本身
+  必须带 `dsh-purge` 标记」这件事（`hasFreshHumanTurn` 靠它不把插件的消息当真人说话）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1911,6 +1945,15 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     `lib/preset-default.js` 改成 CJS 或包一层非严格函数，这条用例就失去意义。
     检测办法：`grep -n '"type"' package.json` 确认仍是 `module`；`grep -n 'node.value = value' lib/preset-default.js`
     确认赋值仍在 `try` 里。
+
+108. **`maxFailStreak` 的「连续失败 3 次永久停手」只在 tracker 单测里钉过，钩子链路没跑。**
+    `maybeAutoContinue` 只有在 `takeContinue` 返回 true 时才发消息，`failStreak` 到达
+    `cfg.continueMax`（默认 3）之后 `takeContinue` 恒 false。要在这条链路上端到端验证，需要
+    连续三次 `followup` 抛错 + 三次不同的 `turn/end` seq，本机能跑（每条 350ms 定时器），但
+    那会让这个文件再慢 1 秒；目前的锚点是 tracker 层的 3 条用例（`#85`）加这里的一条
+    「同一 seq 不重复」。改坏的表现是「三次失败之后插件还在每轮补一句」。
+    检测办法：`grep -n "maxFailStreak" lib/continue-retry.js` 确认 `takeContinue` 里仍在判
+    `(cur.failStreak || 0) >= maxFailStreak`。
 
 ## 维护约定
 

@@ -1318,3 +1318,27 @@ try { /* 断言 */ } finally { CJS_FS.rmSync = realRm; syncBuiltinESMExports(); 
 ```
 
 `finally` 里必须**先还原再 sync 一次**，否则后面的用例会带着坏实现跑，而症状是莫名其妙的全红。
+
+## 「退款」和「这个点别再试」是两件事，各要一条用例
+
+`refundContinue(sessionId, seq)` 同时做了三件事：把 `continue` 减回去、把 `lastContinueSeq`
+**留着不清**、`failStreak += 1`。这三件里只有第一件是「退款」，后两件是「同一失败点不再消耗」。
+
+只写一条「发送失败后还能再发」的用例，会踩一个坑：用同一个 `turn/end` seq 重试，`takeContinue`
+因为 `lastContinueSeq === seq` 直接返回 false，断言「名额回来了」是红的 —— 那不是 bug。
+反过来只写「同一 seq 不重复」的用例，把 `refundContinue` 的减法删掉也照样绿（因为根本走不到
+预算判断）。
+
+判据：**一条用例换新 seq 验证「预算真的回来了」，一条用例保持同 seq 验证「同一个点不重复」**，
+两条合起来才能同时钉住这两件事。
+
+## 造「发不出去」不要 mock 发送函数，让真实的下游抛错
+
+`sendContinue` 里有 `makeContinueMessage(text)`，它给消息打的标记是
+`source.kind: "dsh-purge"`；`hasFreshHumanTurn` 靠这个标记不把插件自己发的消息当「真人说话」。
+把 `sendContinue` mock 成 `() => ({ok:false})` 就漏掉了整条消息构造：标记写错、`continueText`
+没去空白、`content[0].type` 不是 `text`，这些都测不到。
+
+正确姿势是让 `agent.followup` 抛错 —— 真实调用链（`followup → makeContinueMessage →
+source.kind`）全程照走，只是最后一步失败。这样同一条用例还能顺带断言成功路径上消息的正文
+（`assert.equal(okSent[0].content[0].text, "继续")`）。
