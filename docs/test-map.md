@@ -26,6 +26,7 @@
 | 探测真宿主树、排除 Electron 外壳依赖树 | `test-host-baseline.mjs`（`looksLikeHostTree` / `resolveAiBase`） | —（同上） |
 | 宿主树与本机主目录的定位链（`isAiBase` 判据、10 项候选表、pnpm 布局、profiles、`DSH_HOME` 优先级） | `test-host-locate.mjs`（34 条：判据 6 / pnpm 9 / 候选表 4 / walk 2 / `findAiBaseFromDshHome` 5 / 主目录 4 / 平台 4） | `lib/core.js` 81.7% |
 | 「到底该打哪一棵树」的选择链（`findAiBaseDesktop` / `findAiBaseWeb` / `pathIsUnder` / `enumeratePatchAiBases` 的 realpath 去重） | `test-host-tree-chain.mjs`（27 条：判据 4 / 安装树 3 / 选树 9 / 去重 4 / 坏候选 3 / 源码形状 1） | `lib/core.js` 85.7% |
+| 「一键应用到所有宿主 / 全部回退」真的每棵树都走到（`applyPatchesAllHosts` / `revertAllHosts` / `allPatchHostsWritten`） | `test-all-hosts.mjs`（23 条：全部成功判定 4 / 应用 9 / hooks 还原 2 / 回退 4 / 去重与安全 2 / 源码形状 2） | `lib/core.js` 87.6% |
 | 判错时不报错：打到 Electron 外壳那份树（全场 `no-file`）、或把 `~/.dsh` 当成桌面版在用的 `dsh-home` | 同上（候选表逐项顺序 + `portableHomeFromLauncher` 顺序 + `desktopDshHomeGuesses` 三平台） | 同上 |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
@@ -603,6 +604,24 @@ RED 演练 **33 条突变 → 33/33 全红**（`{"restored":true,"total":33,"red
 
 RED 演练 **15 条突变 → 15/15 全红**（`{"total":15,"red":15,"green":[],"anchor":[]}`）。第一批是 24 条 / 11 红 / 13 绿，处置分三类：①**补用例** 6 条（空格 DSH_BASE、`./..` 归一、非 AI 根不进表、`app.asar.unpacked` 真目录经包根进来、安装树里的自定义 AI 根、祖先链捡到的根不在安装树里）；②**删等价突变** 6 条（上面列的冗余守卫 + `resolveDesktopAiBase` 自己会从 execPath 推 resources，喂空 `resourcesPath` 无差别）；③**写进盲区** 1 条（官方 exe 那道闸门在能 discover 到安装树的机器上不可达）。
 
+**三十补**：`lib/core.js` 的「一键应用到所有宿主 / 全部回退」—— `applyPatchesAllHosts` / `revertAllHosts` / `allPatchHostsWritten`。二十九补钉到「从一堆候选里选哪一棵树」，这一补钉的是**选完之后有没有每一棵都真的打上、撤回时有没有每一棵都撤干净**。这是用户点「应用」「回退」时唯一走的那条路，而它此前只有单树的 `applyPatches` 有测试。
+
+判错的表现比前两补更安静：状态页是绿的（它读第一棵树）、`host:status` 的 verdict 也是 ok，可第二棵树压根没打；回退时同理，剩下一棵树带着注入继续跑。第三种失败更难发现 —— 遍历表里混进了**仓库自己的 `node_modules/@deepseek-ai`**，于是「应用」把本项目的 devDependencies 也打了补丁，只有 `npm ci` 才会复位。
+
+几条**读源码想不到、只能跑出来**的事实：
+
+- **`DSH_BASE` 必须始终指向沙箱里的树，否则会真打仓库**。`findAiBaseWeb()` 在 `DSH_BASE` 可用时提前返回；一旦它为空、或指向桌面安装树内部（会被 `isInsideDesktopInstall` 拒掉），就会退到「当前进程所在的树」——也就是 `D:\dsh-purge-maintained\node_modules\@deepseek-ai`。我第一次探针就踩了：`enumeratePatchAiBases()` 返回 `[仓库树, 桌面树]`，`applyPatchesAllHosts()` 把补丁 1 真写进了 devDependencies，还留了 `.dshpurge.bak`。所以这份测试的每条用例都先挂 `DSH_BASE`，并且有一条专门钉「宿主表里绝不能出现仓库树」。
+- **单树 report 的键是 `patch_id`，不是 `id`**。`applyPatches` 返回的行与 `mergeApplyReports` 合并后的行同名，用 `.id` 断言会拿到 `undefined`。
+- **合并后的 `report` 一条补丁只有一行，`path` 只保留第一次遇到的那棵树**。多宿主下它不足以回答「哪些树打了」，要看 `hosts[].report`。
+- **`hooksDenyBypass === false` 那条分支本来不可观测**：沙箱树里没有 hooks 配置文件时，`changed` / `failed` 恒为空数组，把判定改成恒假也测不出来。只有在树里造出 `dsh-hooks-claude-code/lib/index.js`（含 R1b 那条反向规则）与 `dsh-hooks-codex/lib/index.js`（含残留哨兵）之后，`changed` 与 `failed` 才各有内容，分支才有区分力。
+- **junction 别名确实会被去重掉**：`DSH_DESKTOP_INSTALL` 写成 `install;junction-alias` 时，宿主表仍是两项（web + 桌面各一），这是批77 那个 `realpathSync.native` 修复的直接效果 —— 修之前这里会返回三项。
+- **回退侧的 `errors` 有一个可稳定造出来的来源**：0 字节的 `.dshpurge.bak`（备份中断留下的占位）会被改名成 `.bak.bad` 并记一条 `empty_backup`，那棵树保留注入、另一棵正常回退。这比 monkeypatch 可靠。
+- **「零宿主」这条用例故意不写**：真造出来就会退到仓库树、真写盘。空补丁列表只用来钉「两棵树都进表但 report 为空」的形状。
+
+RED 演练 **22 条突变 → 22/22 全红**（`{"total":22,"red":22,"green":[],"anchor":[]}`）。牺牲掉一条突变：`discover` 表达式的花式改写会**改变行为**（真去做发现式扫描，命中本机安装树），没法安全演练，只能靠源码形状断言钉住 `options.forApply === true || options.discover === true` 与 `options.discover !== false` 这两句。
+
+顺带一条 fixture 纪律：`installTree()` 少造 `resources/runtime/cli/bin/dsh.cmd` 时，`lib/desktop.js` 的行覆盖会掉 5 行、基线直接判 FAIL。**这种情况要补造 fixture，不许 `--update` 把下降抹平**。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1002,6 +1021,14 @@ RED 演练 **15 条突变 → 15/15 全红**（`{"total":15,"red":15,"green":[],
     **②** 去重依赖 `nodeFs.realpathSync.native`：在真桌面（Electron）里，路径可能落在 `app.asar` 内部，native realpath 对 asar 路径会失败 → 退到 `hostFs.realpathSync`，而它对 junction 会返回 8.3 短名。也就是说「asar 内路径 + junction 别名」同时出现时，去重仍可能漏一次。本机是解包布局，造不出 asar 内的 junction。
     **③** `enumeratePatchAiBases` 的第一条永远是仓库自己的 `node_modules/@deepseek-ai`：在开发机上跑 `applyPatchesAllHosts` 会连 devDependencies 那份一起打。用例锁的是现状，没有断言「不该打」，因为要改它得动 `findAiBaseWeb` 的语义。
     **检测办法**：改完这一簇，除了 `node --test scripts/test-host-tree-chain.mjs`，还要在真机上跑 `npm run host:status`（看 `ai_base` 与 `patches_applied`）与 `node scripts/verify-target.mjs --pad`（看 `would-apply` 是否仍 ≈0）；再手动看一眼安装目录里有没有 junction，确认 `host:preview` 报的宿主数没有翻倍。
+77. **「每棵宿主都走到」这条链在真机上仍有射程外。**
+    `test-all-hosts.mjs`（23 条）把「遍历 → 去重 → 逐棵备份 → 逐棵打 → 汇总」的顺序与形状钉住了，但四类情形只能靠真机验：
+    **①** `revertAllHosts` 里单树抛错那条 `catch`（`errors.push([aiBase, String(...)])`）造不出来 —— 沙箱里 `revertAll` 的两条失败路径（bak 为空、bak 缺失）都被它自己的 `errors` 接住了，不会抛到外层。所以只做了源码形状断言。
+    **②** `discover` 表达式不能真改成 `discover: true` 演练：那会真的去扫本机安装树、命中真实宿主。这条只靠源码形状断言钉住 `options.forApply === true || options.discover === true` 与 `options.discover !== false`。
+    **③** 「零宿主」造不出来：`enumeratePatchAiBases()` 至少会返回仓库自己的 `node_modules/@deepseek-ai`。用例锁的是现状（宿主表不得含仓库树那条安全断言），没有断言「零宿主时的返回形状」。
+    **④** 真机多宿主下 `res.report` 一条补丁只有一行、`path` 只留第一棵树（`mergeApplyReports` 按 `patch_id` 归并）。沙箱里两棵树的路径都在临时目录，看不出「路径被丢掉」这件事的信息损失；真机上第二棵树在另一个盘符时才有感知。
+    **检测办法**：改完这一簇，除了 `node --test scripts/test-all-hosts.mjs`，还要在真机上跑一次 `npm run apply`（看状态页报的宿主数与 `host:status` 的 `ai_base` 是否一致），再 `npm run revert` 后 `cmp` 每棵树的宿主文件与 `.dshpurge.bak`；开发机额外跑 `cd node_modules/@deepseek-ai/dsh-agent-instructions/lib && grep -c "ACTIVE and MANDATORY" index.js`，确认那条不该被改动过的路径仍是原文。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。

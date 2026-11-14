@@ -599,3 +599,13 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 **三、「跳过」和「收工」是两件事。** `rewriteFiles` 读不到文件是 `continue`，不许 `return`：第一份读不到、第二份还能改，返回值必须是 `reverted`。批 76 的 RED 演练里就有一条 `continue → return "missing"` 的突变，最初是绿的 —— 因为用例只喂了一个读不到的文件。补一条「读不到 + 后面能改」之后才有区分力。
 
 **drill 自己的坑**：做行尾归一化时先 `replace(/\r\n/g, "\n")` 抹平再补 EOL，否则已经含 `\r\n` 的锚点会变成 `\r\r\n`，`indexOf` 永远 0 命中（批 76 有两条 ANCHOR 就是这么来的）。
+
+### 跑「一键应用到所有宿主」相关测试时，`DSH_BASE` 是保命的
+
+`findAiBaseWeb()` 在 `DSH_BASE` 可用时提前返回。一旦它为空、或指向某个桌面安装树内部（会被 `isInsideDesktopInstall` 拒掉），它就会退到「当前进程所在的树」——在开发机上是 `D:\dsh-purge-maintained\node_modules\@deepseek-ai`。于是 `enumeratePatchAiBases()` 会返回 `[仓库树, 桌面树]`，`applyPatchesAllHosts()` 真把补丁写进 devDependencies，还留下 `.dshpurge.bak`。
+
+所以凡是要调用 `applyPatchesAllHosts` / `revertAllHosts` / `enumeratePatchAiBases` 的测试，`DSH_BASE` 必须**始终**指向沙箱树；`test-all-hosts.mjs` 里还额外有一条断言专门盯「宿主表里不得出现仓库树」。踩了之后复原的方法：在被打过的那份备份旁边 `cp index.js.dshpurge.bak index.js && rm -f index.js.dshpurge.bak`，然后 `grep -c "ACTIVE and MANDATORY" index.js` 应为 0。
+
+### fixture 少造一个文件导致覆盖率下降，补 fixture，不要 `--update`
+
+`installTree()` 一开始没造 `resources/runtime/cli/bin/dsh.cmd`，`lib/desktop.js` 的行覆盖立刻从 1818 掉到 1813 —— 基线判定直接 FAIL。这不是「覆盖率噪声」，是这份 fixture 比真宿主少一样东西，于是真宿主会走的分支没被走到。正确处置是把 fixture 补齐（让 `findDesktopShimDir` / `listDesktopCommandRuntimeDirs` 真的能看到那个 sealed 目录），**不是**用 `check-coverage-baseline.mjs --update` 把下降抹平成新基线。判据：下降 5 行以上且集中在某个 fixture 涉及的文件，先怀疑 fixture，再怀疑代码。
