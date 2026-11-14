@@ -695,3 +695,33 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 - **在 `docs/test-map.md` 的盲区里写一条**：删除本身没有守卫，只有记录 —— 因为「某段代码不存在」这件事写成测试只会变成源码形状断言，而形状断言在重排代码时会假红。
 
 反过来说：**如果一条兜底走得到，就必须有能区分两条实现的用例**。上一批（`test-store-evidence-rules.mjs`）的「存档失败不许删」就是这种：把 `runs` 做成文件让 `mkdir` 抛错，突变「存档失败也删」立刻红。判据永远是同一个 —— 改完之后说不出「用户会看到什么不同」，这条突变就是等价突变，删掉它、别为它硬凑用例。
+
+### CRLF 文件改一处，写回时不许再 `replace(/\n/g, "\r\n")`
+
+`lib/*.js` 全是 CRLF。用脚本改一行时的正确写法：
+
+```js
+const raw = readFileSync(fp, "utf8");
+if (raw.includes("\r\r\n")) throw new Error("already broken");
+const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+const lines = raw.split(/\r?\n/);
+// ...改 lines...
+writeFileSync(fp, lines.join(eol), "utf8");
+```
+
+错误写法（我踩过）：`raw.split("\n")` → 改 → `join("\n")` → **再** `replace(/\n/g, "\r\n")`。因为每行原本已经带 `\r`，结果是 `\r\r\n`。这个错误**不会**被任何门禁发现：
+
+- `node --check` 照样通过（CR 也是合法空白）；
+- `check:eol` 数出来的是「CRLF 行数」仍然对（`\r\r\n` 里第一个 `\r` 被当行内字符）；
+- 但 V8 把 CR 与 LF **都**当行终止符，于是**报错行号翻倍**：`lib/rewind.js:384` 的异常显示成 `:767`（`384*2-1=767`，精确吻合）。我第一次遇到时照行号去读源码，读的是完全无关的一段，白花十几分钟。
+
+判据：`git diff --stat` 显示「整个文件都是改动」（644 insertions / 644 deletions）就是踩了；恢复用 `git checkout -- <file>` 重来，别在坏文件上继续改。
+
+### 给 `agent.cancel` 这类宿主方法造「抛错」时，要分清同步抛与 rejected promise
+
+`try { ignoreSettled(agent.cancel(...)); } catch { /* ignore */ }` 这一句里两层保护各自兜一类错误：
+
+- `ignoreSettled()` 兜的是**返回 rejected promise**（`async` 方法抛错）；
+- 外层 `try` 兜的是**参数求值阶段就 throw**（同步方法抛错）。
+
+只造 `async` 方法抛错的话，把外层 `try` 删掉测试全绿（等价突变），因为 `agent.cancel(...)` 在求值阶段不会抛。写法：另起一个 fixture，`cancel: () => { throw new Error(...) }`（**不带 `async`**），断言「调用发生了，异常没冒出去」。

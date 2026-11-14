@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-14T07:16:53.275Z",
-  "commit": "8643ae3",
+  "capturedAt": "2026-11-14T07:41:08.196Z",
+  "commit": "0d27ee3",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -101,12 +101,12 @@
       "brf": 1914
     },
     "lib/desktop.js": {
-      "lh": 1813,
+      "lh": 1818,
       "lf": 2272,
       "fnh": 103,
       "fnf": 116,
       "brh": 487,
-      "brf": 615
+      "brf": 614
     },
     "lib/drill-grant.js": {
       "lh": 43,
@@ -298,7 +298,7 @@
       "fnh": 16,
       "fnf": 16,
       "brh": 85,
-      "brf": 104
+      "brf": 101
     },
     "lib/profile-insert.js": {
       "lh": 392,
@@ -402,7 +402,7 @@
       "fnh": 159,
       "fnf": 166,
       "brh": 584,
-      "brf": 751
+      "brf": 761
     },
     "lib/redteam/score-rules.js": {
       "lh": 933,
@@ -410,7 +410,7 @@
       "fnh": 30,
       "fnf": 31,
       "brh": 236,
-      "brf": 280
+      "brf": 283
     },
     "lib/redteam/settings.js": {
       "lh": 78,
@@ -490,7 +490,7 @@
       "fnh": 36,
       "fnf": 46,
       "brh": 142,
-      "brf": 183
+      "brf": 182
     },
     "lib/redteam/validate.js": {
       "lh": 87,
@@ -501,12 +501,12 @@
       "brf": 40
     },
     "lib/rewind.js": {
-      "lh": 580,
+      "lh": 618,
       "lf": 644,
-      "fnh": 52,
-      "fnf": 56,
-      "brh": 258,
-      "brf": 337
+      "fnh": 56,
+      "fnf": 57,
+      "brh": 312,
+      "brf": 373
     },
     "lib/routes.js": {
       "lh": 643,

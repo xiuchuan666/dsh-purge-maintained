@@ -170,6 +170,7 @@
 | `/rewind` 的边界：seq 不连续时官方 fork 边界算不出来（报 Nothing to undo 而不是切错位置）、fork 抛错/返回空值/返回字符串 id、轮次还在跑时先 cancel 再等关闭、同会话并发两次被串行化 | `test-rewind.mjs`（7 条） | 同上 |
 | `/rewind` 的草稿：回退后 `getDraft` / `getPending` 都指同一条，`takeDraft` 只能取一次（取走后再取为 null，防重复发送） | `test-rewind.mjs`（2 条） | 同上 |
 | `/rewind` 读会话日志的三条路径（live `snapshotEvents` → `controller.inspect` → `sessionQuery.observeSession`），最后一条必须 `[Symbol.dispose]` | `test-rewind.mjs`（4 条） | 同上 |
+| `/rewind` 的五段静默失败：等轮次关闭的读盘次数与超时文案、`sessions.get` 抛错原样冒泡、`cancel:false` 一次都不 cancel、inbox 去重摘除（含日志里待发的）、串行锁的 onRejected 分支 | `test-rewind-edges.mjs`（23 条） | `lib/rewind.js` 行 580 → **618/644（96.0%）** |
 | `/rewind` 的收件箱与子会话：只收最后一次 `turn/end` 之后的 `next-turn` 插入、去重保序；本轮子会话按 catalog/descriptor 去重保序 | `test-rewind.mjs`（5 条） | 同上 |
 | 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`）的名字、空 parameters、output schema | `test-command-surface.mjs` | `lib/tools.js` 100% |
 | 三个工具的执行分支（无宿主直接报错、需确认时停手、applied/already/scrub 统计、回滚同时收 shim） | `test-command-surface.mjs` | 同上 |
@@ -685,6 +686,16 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 5. **删掉的死代码**：`:451-478` 那段「`replayCmd` 仍是 null 就用 `confirm.script` 填模板」的兜底与上面 ③ 分支逐字重复，且**永远走不到**——③ 的条件（`confirm && confirm.script`）与它一字不差，唯一可能把 `replayCmd` 留成 null 的路径是 ①（合成 curl 失败），而 ① 的 `url` 一定是 `scheme://host+path`，`parseTarget` 认不出也会退到「取第一段当主机」（`report-replay.js:60-63`），所以 `buildCurlCommand` 在那里不会返回 `null`。演练时试图为它造用例：把 `parseTarget` 的各种畸形输入都试了一遍，`url` 始终可解析 → 判定为死代码后删除，原地留 6 行注释说明理由。
 6. **覆盖率**：`lib/redteam/score-report.js` 行 1457 → **1496/1510**（分母少了 22 行，是删死代码的结果）、函数 157 → 159、分支 560 → 584；全仓行 **93.01%**。RED 演练 **13 条突变 → 13/13 全红**（另有一条 `existing.inferred` 覆盖突变判为等价并删掉，理由见下一节盲区 81）。
 
+**三十五补**：`lib/rewind.js` 的五段「静默失败」路径 —— 等轮次关闭（`waitTurnClosed`，`/:379-390`）、清 inbox（`disarmRewoundSession`，`/:410-445`）、同会话串行锁（`rewindOneSession`，`/:576-595`）、可迭代日志归一（`asEventList`，`/:19-29`）。上一批（`test-rewind.mjs`，45 条）在文件头写着这两件事「要真等，不适合放进每次提交都跑的套件」——`waitTurnClosed` 的 8 秒超时与草稿 10 分钟过期。这一批把超时改成**参数注入**（`timeoutMs` 已是形参，只是没被单独测过）之后就不再需要真等，于是把三条路径都搬进守卫，共 **23 条**（`scripts/test-rewind-edges.mjs`）。
+
+1. **`waitTurnClosed` 超时到底抛什么、期间读了几次盘**。文案是 `The turn is still running. Click Stop first, then undo.`；`timeoutMs=120` 时 `elapsed≈182ms`（睡 80ms 的粒度）、`reads>=2`。三条用例分别钉「一直开着 → 抛固定文案且真的在读盘（不是干等）」「睡一觉后关了 → 只读两次、返回的那份日志末条是 `turn/end`」「一开始就没开 → 只读一次、不睡」。**为什么值钱**：把它改成「只判一次就收工」（`while (false)`）在只看「抛没抛」的断言下照样绿，必须同时钉读盘次数。
+2. **`sessions.get` 抛错时原样冒泡，不被兜底文案吃掉**。「Cannot find the current session」只在三条读盘路（`sessions` / `controller.inspect` / `sessionQuery.observeSession`）**全都落空**时才出现。两条用例一正一反：服务自己抛 `sessions boom` → 冒泡 `sessions boom`；三个服务一个都没有 → 才报 `Cannot find the current session`。**这条一开始写错了**：先只写「抛 sessions 就报 Cannot find…」，跑出来 `actual: Error: sessions boom` —— 说明 `readSessionLog` 里 `store?.get?.(sessionId)` 的异常根本没被 catch，兜底文案属于「服务不存在」而不是「服务报错」。
+3. **`disarmRewoundSession` 到底 cancel 了没有**。默认（`options.cancel !== false`）且 `phase.kind !== "idle"` 时调 `agent.cancel({kind:"user"},{keepInbox:true})`；`{cancel:false}` **一次都不 cancel**（`doRewindOneSession` 的生产路径用的就是这个）；`idle` 也不 cancel。**为什么值钱**：fork 出来的新会话 abort 之后用户一发消息就走官方的 `wakingAfterAbort`，等于把「我刚回退、还没说话」变成「它自己又开始答了」——用户完全无法归因。
+4. **inbox 逐条摘除**：`nextTurn` + `nextStep` 合并、按 id 去重、跳过空 id、日志里 `agent/inbox/spliced`（`target: "next-turn"`）插进去那几条也要摘。四条用例分别钉「去重后只发 a、b」「不看 `nextStep` 就少摘一条 → 红」「不摘日志插入 → 红」「某一条摘不掉不影响后面几条（每条各自 try）」。**为什么值钱**：漏摘的表现是「回退之后新会话自己往下跑」，用户看到的是「我什么都没发，它自己又答了」。
+5. **三层 try/catch 都要**：`cancel` 同步抛错（真服务可能不是 async）、`cancel` 异步抛错（靠 `ignoreSettled`）、读日志抛错、读 `agent.inbox` 的 getter 抛错、`updateQueue` 抛错 —— 五处全吞。其中「同步抛」单独一条：`ignoreSettled(agent.cancel(...))` 只兜得掉 rejected promise，同步 throw 发生在**参数求值阶段**，只能靠外面那层 `try`。**这条是演练逼出来的**：最初的 fixture 用 `async` 方法抛错（= rejected promise），把外层 `try` 删掉照样全绿（等价突变），换成同步 thrower 之后才红。
+6. **同会话串行锁的两条分支**。`rewindLocks.get(key)` 为前驱链，`prev.then(onOk, onRejected)` 两条分支各跑一次 `doRewindOneSession` 并在 `finally` 里 `if (rewindLocks.get(key) === next) rewindLocks.delete(key)`。实测：并发两次 → `fork:start1 / fork:end1 / fork:start2 / fork:end2`（严格串行，各自拿到 `child-1` / `child-2`）；第一次 fork 抛错 → 第二次**仍然要跑**（`settled` = `rejected` + `fulfilled`），把 onRejected 分支删掉之后第二次会被前一次的失败永远拖着；`sessionId=''` 时不进锁直接执行。**为什么值钱**：删掉 onRejected 的表现是「一次回退失败之后，这个会话的 `/rewind` 就再也不响应了」——不报错、不日志，只有重开窗口才好。
+7. **覆盖率**：`lib/rewind.js` 行 580 → **618/644（96.0%）**、函数 52 → 56、分支 258 → 312；全仓行 **93.11%**。RED 演练 **17 条突变 → 17/17 全红**（另删掉两条等价突变：`!id` 那半个判据从 `ids` 的两个来源就已经过滤掉、`if (!key)` 早退在串行语义上不可观测，理由见盲区 83）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1131,6 +1142,14 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 82. **`lib/desktop.js` 的行命中会在 1813/1818 之间抖，抖动是同一组四行。**
     差集固定是 `lib/desktop.js:857-860`（`listDesktopPackageRoots()` 里 argv 带 `desktop-cli.js` / `host-process-entry.js` 的那个分支）。观测：同一 commit 连跑四次 `npm run test:full`，三次 1813、一次 1818；把沾到候选表的所有测试文件逐个单跑，没有一个覆盖到那四行；没有任何测试改写 `process.argv`。**触发者未定位**。
     后果被门禁兜住了：基线按低值（1813）记，向上 +5 不报红、向下仍会红（`MAINTENANCE.md` 的「基线取本机实测的低值」一节）。真机上这一支的价值只有「桌面壳以 `desktop-cli.js` 形态启进程时能不能定位到包根」，本机进程是 `resources/app/lib/main.js` 形态，走不到那里 —— 所以它属于「测得到但用不上」的分支。
+
+83. **`lib/rewind.js` 还有三处「改坏了也测不出来」的地方。**
+    **①** 草稿的 10 分钟过期（`DRAFT_TTL_MS`）：`Date.now` 在模块里直接调用，要测只能改全局计时器，而那会把同一进程里其他用例的时间判断一起改掉（`node --test` 是同进程跑一个文件）。所以过期分支仍然零命中；真出现「回退后草稿取不出来」时，先看是不是 10 分钟这条线。
+    **②** `disarmRewoundSession` 里 `if (!id || seen.has(id)) continue;` 的 `!id` 那半个判据不可观测：`ids` 的两个来源（`pendingInboxInserts()` 与 `agent.inbox` 循环）都各自先判过 `message?.id`，空 id 进不了数组。演练时把 `!id` 删掉测试全绿（等价突变），保留它只为「将来有人加第三个 id 来源」。
+    **③** `rewindOneSession` 的 `if (!key) return doRewindOneSession(...)` 早退只有性能意义：进锁也能跑通（`''` 这个键谁都不会并发），行为断言区分不开。演练时把它删掉测试全绿，于是只钉「sessionId 为空时只 fork 一次」这个结果，不钉「有没有进锁」。
+    **④** `waitTurnClosed` 的默认 8000ms 与 80ms 睡眠粒度：测试一律显式传 `timeoutMs`，所以「默认值被人改成 800 / 80000」不会红。真机上这条线决定「点了回退要干等多久」，改动时请连带看一眼 `lib/rewind.js:379` 的形参默认值。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-rewind-edges.mjs scripts/test-rewind.mjs`；再在真宿主机上手工走一遍「轮次还在跑时点回退」（应提示先 Stop）、「连着点两次回退」（应一次成功一次跟进而不是卡死）、「回退后什么都不发」（应安静，不该自己冒出回答）。
 
 ## 维护约定
 
