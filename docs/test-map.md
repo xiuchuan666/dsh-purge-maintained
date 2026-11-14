@@ -266,6 +266,7 @@
 | mnemon / subprocess / doctor / market 四簇的注入结果：`resolveGitBranch` 换成读 `.git` + `for (let i = 0; i < 64; i++)` + `//#region` 保住、**replacement 里没有 marker 所以二次调用必回 `pattern_miss`**、stdio 块后补 `windowsHide: true`、doctor 三处（spawn 包装 / `dshSpawnSpec` 改走 node bin.js / stdio 不 inherit）、market 的 import 补 `existsSync`+`dirname` 与 respawn 改走 node bin.js | `test-silence-flash.mjs`（11 条） | 同上 |
 | `silenceCmdFlash` 的返回结构（hide 段摊平 + 九段分项 + `ok`）与 `ok: hideOk && liangshenOk && preflightOk` 三段合成、`liangshenOk` 只容忍四个值（源码形状——空 home 里两个输入恒在容忍清单内，行为用例测不出） | `test-silence-flash.mjs`（3 条） | 同上 |
 | market 的 import 段必须**同时**看「缺 `existsSync`」与「有 `importNeedle`」两个条件（源码形状：少了后半段 `String.replace` 本就是无操作，行为等价） | `test-silence-flash.mjs`（1 条） | 同上 |
+| `revertCmdFlash` 的五处逐字节回退：subprocess 的 `windowsHide` 连注释与**注入时补的逗号**一起摘、custom-bash 的三行防线回到 `return await ctx…`、phase1 折回 LF 后还原人设集合与 filter 并摘两条注释、doctor 的 spawn 包装 / `dshSpawnSpec` / stdio 三处各归位、market 的 `respawnInvocation` 与 import 两行；外加「传进来的 aiBase 必须传下去」「七个 key 的顺序」「五个清单函数的候选与去重」 | `test-cmd-flash-revert.mjs`（37 条） | `lib/core.js` 84% |
 | `patchShim` 的三个入口守卫：无目录回 `{error:"no_shim_dir"}`（`""` / `null` / `undefined` 三种入参都算）、空目录三个 `missing` 且一个文件都不新建、键顺序固定 `dsh.cmd` → `dsh.ps1` → `dsh`（`SHIM_NAMES` 的顺序就是写盘顺序） | `test-shim-patch.mjs`（3 条） | `lib/core.js` 73.85% |
 | 密封桌面目录短路：`DSH Desktop/host-commands/bin` 与 `DeepSeek Harness/runtime-commands/bin` 都回 `{skipped_sealed_desktop:true, scrubbed:[…]}`，**目录内容一字不动、不落 bak**；形状像密封但不是 `bin` 结尾的路径不短路 | `test-shim-patch.mjs`（4 条） | 同上 |
 | `isTextShim` 的二进制判定：NUL 出现在偏移 300（超过只读的前 120 字节、仍在前 512 内）也算二进制、零字节文件算二进制、`Write-Host` 开头算二进制；`#` / `REM` / `@echo` / `#!` 四种开头算文本；`openSync` 抛错时按二进制跳过，不冒险往里写 | `test-shim-patch.mjs`（6 条） | 同上 |
@@ -560,6 +561,27 @@ RED 演练 **31 条突变 → 31/31 全红**（`{"restored":true,"total":31,"red
 RED 演练 **30 条突变 → 30/30 全红**（`{"total":30,"red":30,"green":[],"miss":[],"restored":true}`）。三条被换掉的等价突变值得记下来，因为都是「改完用户看不出区别」：①`firstAiBase` 去掉 `path.normalize`（`path.join` 早就折平了）；②`isPnpmNodeModules` 去掉 `isDir(nmDir)`（对文件路径来说后面两个判据本来也都是 false）；③`firstAiBase` 遇空白候选就放弃 —— 这条最初是绿的，因为用例只喂了「全是空」的数组，补一条 `['', null, good]` 才有区分力。
 
 顺带**一处必须登记的地方**：`scripts/test-patch-registry.mjs` 的「core 的公开导出名一字不差」是拿拆分母树 `docs/origin/core-split-baseline-8066985` 对拍的，加 14 个 `export` 会让它红。改法是加 `EXPORT_EXTRA` 白名单（只放开这些名字、别的一律红、白名单里出现过期的名字也红）—— 不是为了让它变绿，是为了让「下一次悄悄多导出一个」仍然是红的。
+**二十八补**：`lib/core.js` 的「卸载/回退那一侧」—— `revertCmdFlash` 与它的两个私有帮手（`worseRevertHit` / `rewriteFiles`）、五个清单函数，之前**一行都没跑过**。
+
+这一簇是十一补那批 `silence*` 的逆操作：卸载插件、回退补丁、升级后自愈，走的都是它。判错的表现比注入侧更安静 —— 注入错会闪黑框（用户看得见），**回退错只会留下痕迹**：宿主里还躺着 `[dsh-purge]` 标记、`windowsHide: true` 还在、`resolved` 还是被改写的那一段，而 `dsh-purge` 自己已经卸干净了，谁也不会再去看那份文件。更坏的一种是「回退得差一个逗号」：文件还能跑，但和原文不再逐字节相同 —— 下次拿 `.dshpurge.bak` 对拍会以为是别人改的，`verify-target` 也会把它算成另一个状态。
+
+新增 `scripts/test-cmd-flash-revert.mjs`（**37 条**），`lib/core.js` 行覆盖 4241 → **4364/5194（84.0%、+123 行）**、函数 293 → **299**、分支 1406 → 1456。
+
+这一批顺手修掉两个真 bug，形状都是「一处判对、另一处判错」：
+
+- **`revertCmdFlash(aiBase, dshHome)` 的 subprocess 分支不听 `aiBase`**：形参收下了，闭包里却另起一次 `findAiBase()`。平时两者相等，所以看不出来；一旦调用方指定了树（升级后对旧树回退、`host:preview` 里的沙箱回退），回退就打在**另一棵树上**，指定的那棵纹丝不动、返回值还是 `reverted`。修法是把 `aiBase` 一路传给 `listSubprocessLocalFiles(dshHome, aiBase)`。
+- **subprocess 的 `windowsHide` 回退不是逐字节的**：注入时会在 `detached:` 那行补一个逗号，而回退用的两条 `String.replace` 里第一条就把「注释 + `windowsHide: true`」整段吃掉了，于是第二条（专门处理前置逗号的那条）永远匹配不到，逗号留了下来。现在合并成一条 `/,?\n\t\t\/\/ …\n\t\twindowsHide: true/`，逗号随注释一起带走。
+
+几条**只能跑出来**的现状：
+
+- `worseRevertHit` 的 rank 是 `missing`(0) < `absent`(1) < `reverted`(2)，`error:` 前缀无论先后都赢 —— 也就是「一次写失败之后，后面的成功不许把它盖掉」。这条只有把「先失败后成功」和「先成功后失败」都跑一遍才立得住。
+- `rewriteFiles` 里「读到不存在的文件」是**跳过**，不是失败；同时它**不许提前收工** —— 第一份读不到、第二份还能改，返回值必须是 `reverted`。这两条分别对应「跳过」与「别 return」两个方向，任何一边改错都会让卸载少退一份文件。
+- doctor 的 `dshSpawnSpec` 回退有**前置闸门**：文件里必须出现 `[dsh-purge] dsh.cmd → node bin.js (no cmd.exe)` 才会替换。fixture 漏了这行标记，回退就是静默不动，而返回值照样 `reverted`（因为前一段 spawn 包装确实还原了）。
+- `listLiangshenBootstrapFiles` 是**按面分两份**的：`DSH_SURFACE=web` 只收 `profiles/web/…` 与 `.agent-presets/…`，`desktop` 只收 `profiles/desktop/…` 与共享那份。写用例时若只造一份 fixture，两个面都会「通过」，改成两份才看得出 `keepSurfaceFile` 到底在筛什么。
+- `listSubprocessLocalFiles(dshHome, aiBase)` 的去重是有意义的：`aiBase` 指到 `profiles/web/node_modules/@deepseek-ai` 时，它推的第一条与 profile 循环推的那条是**同一个绝对路径**，出现两次会让 `revertCmdFlash` 对同一文件回退两次（第二次必然 `absent`，把 `reverted` 顶成 `absent` 的旧 rank 规则下就是真的误报）。
+
+RED 演练 **33 条突变 → 33/33 全红**（`{"restored":true,"total":33,"red":33,"green":[],"anchor":[]}`）。第一批跑出来是 19 红 / 12 绿 / 2 ANCHOR，三处处置都写进了纪律：①两条 GREEN 是「突变方向没被用例覆盖」（`?? 0 → ?? 9` 只影响 `next` 是未知词的那一侧；`absent` 那一支只在前一份已 `reverted` 时才有区别）→ 补两条反向用例而不是删突变；②`市场 needle` 那条 GREEN 是因为用例只断言了「marker 没了、import 两行」，没断言**win32 头逐字节回到原文** → 补 `assert.ok(text.includes(MARKET_HEAD))`；③两条 ANCHOR 是 drill 自己的 bug —— 我的 `fix()` 把已经含 `\r\n` 的锚点又按 `\n` 换成 `\r\n`，产出 `\r\r\n`（教训：归一化要 `replace(/\r\n/g,"\n")` 先抹平再补 EOL）。
+
 
 
 ## 五、前端产物链（client.js）
@@ -948,6 +970,13 @@ RED 演练 **30 条突变 → 30/30 全红**（`{"total":30,"red":30,"green":[],
     **③`findAiBaseFromDshHome` 的第四条路**（`findAiBaseFromRequire` 走 `createRequire` 解析 `@deepseek-ai/dsh/package.json`）：要一份能被 Node 解析器认的 `node_modules` 布局（含 `package.json` 的 `exports`），本机 fixture 造得出来但成本远高于收益，目前只有前三条路有用例。
     **④`requireFrom` / `findAiBaseFromRequire` 本身**：它们靠 `createRequire` 的解析顺序，改坏的表现是「装了但找不到」，而不是抛错。
     **检测办法**：改完这一簇，除了 `node --test scripts/test-host-locate.mjs`，还要在真机上跑 `npm run host:status`（看 `ai_base` 指的是不是 `resources/app/dsh/node_modules/@deepseek-ai` 那一份、`patches_applied` 是不是 79 左右）与 `node scripts/verify-target.mjs`（看 `would-apply` 是不是 0 附近）。
+75. **「回退到原文」这件事只测到了「我喂的那几个 fixture 能回到我写的那份原文」。**
+    `test-cmd-flash-revert.mjs`（37 条）把五个回退分支、rank 规则、清单函数都钉住了，但三类东西仍在射程外：
+    **① 真实的宿主原文**：fixture 里的 needle/patched 是我照着 `lib/core.js` 的字面量手写回来的，真实宿主文件被注入之前的形态（缩进、行尾、周边注释）只靠「两处字面量一致」间接保证。真正的判据是「拿 `.dshpurge.bak` 与回退结果逐字节比」—— 那需要一台装过插件、又被卸载过的机器，本机可以手动验，但写进用例就是在测历史。
+    **② 五个 `revert*` 的写盘失败路径**：只对 `rewriteFiles` 做了 `hostFs.writeFileSync` 抛错的 monkeypatch，`revertHideConsoleFromBin` / `revertBinPreflight` 内部各自的写盘失败没有分别造（它们会回 `error:` 前缀，但错误文案依 `String(Error)` 而定，钉了也是钉 Node 的措辞）。
+    **③ `revertCmdFlash` 与 `silenceCmdFlash` 的往返**：本批只在「固定 patched 文本 → 回退成固定 plain 文本」一个方向上验证；真正要紧的往返（silence → revert → silence，看是否回到第一次的结果、以及是否留下重复注释）没有端到端用例，因为那要把 11 补那簇的参数再造一遍。
+    **检测办法**：在真机上跑一次「装 → 卸」，然后 `git diff --no-index` 或 `cmp` 比对宿主文件与 `.dshpurge.bak`；再跑一次「装 → 卸 → 装」，看 `windowsHide` 那段注释是不是只剩一份。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。

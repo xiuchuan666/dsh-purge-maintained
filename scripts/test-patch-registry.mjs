@@ -58,6 +58,16 @@ const EXPORT_EXTRA = new Set([
   'homeHasHarnessData',
   'desktopDshHomeGuesses',
   'findWslWindowsDshHome',
+  // 批76：「回退那半」（revertCmdFlash 与它的两个帮手 + 五个文件清单）原来一行都测不到，
+  // 全部是模块内私有函数。回退错了的表现是「卸载后宿主还留着我们注入的代码」，
+  // 一句日志都不报，所以必须能单独调。
+  'worseRevertHit',
+  'rewriteFiles',
+  'listSubprocessLocalFiles',
+  'listLiangshenCustomBashFiles',
+  'listLiangshenBootstrapFiles',
+  'listDoctorCliFiles',
+  'listDshmarketRestartFiles',
 ])
 
 test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {

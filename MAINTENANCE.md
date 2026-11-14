@@ -570,3 +570,14 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 普通修改以小提交落在 `main`。发现问题时用 `git revert <commit>` 保留可追踪的回退记录；不要用历史覆盖作为日常回退手段。基线首个提交为 `fa8d09dec92cf582412c28566273147076e79f24`。
 
 详细设计与本阶段边界见 [测试地图](docs/test-map.md)、[统一验证与 CI 设计](docs/maintenance-verification.md)、[宿主适配基线设计](docs/maintenance-host-baseline.md)、[前端产物链设计](docs/maintenance-client-chain.md) 与 [补丁注册表拆分设计](docs/maintenance-core-split.md)，以及[测试机制设计](docs/superpowers/specs/2026-11-11-test-mechanism-design.md)、[拦截面定位与五态判定设计](docs/maintenance-choke-facility.md)。
+
+
+### 回退侧的三条纪律（写测试与被测代码各一条）
+
+**一、回退必须逐字节，不能「功能上等价」。** 注入时为了语法会在相邻行补逗号（`detached: platform !== "win32",`），摘掉注释块之后那个逗号就孤立地留在原地 —— Node 照样跑，只有对拍才发现还差一个字节。所以 `revertCmdFlash` 的 subprocess 回退现在是一条 `/,?\n\t\t\/\/ …\n\t\twindowsHide: true/`：**逗号归它管**。写这类回退时唯一的判据是「把注入前的原文喂进去，回退后必须 `===` 原文」，不是「读起来一样」。
+
+**二、收下形参就要用形参。** `revertCmdFlash(aiBase, dshHome)` 曾经在 subprocess 分支里另起一次 `findAiBase()`。开发机上两者永远相等，所以这个 bug 活了很久，直到「指定树回退」的用例出现。凡函数签名里带宿主树/主目录的，回退侧与被回退侧必须走同一个值；测试要有一条「把 aiBase 指到别处，文件不许动」的用例，否则这类 bug 完全没有观测面。
+
+**三、「跳过」和「收工」是两件事。** `rewriteFiles` 读不到文件是 `continue`，不许 `return`：第一份读不到、第二份还能改，返回值必须是 `reverted`。批 76 的 RED 演练里就有一条 `continue → return "missing"` 的突变，最初是绿的 —— 因为用例只喂了一个读不到的文件。补一条「读不到 + 后面能改」之后才有区分力。
+
+**drill 自己的坑**：做行尾归一化时先 `replace(/\r\n/g, "\n")` 抹平再补 EOL，否则已经含 `\r\n` 的锚点会变成 `\r\r\n`，`indexOf` 永远 0 命中（批 76 有两条 ANCHOR 就是这么来的）。
