@@ -202,12 +202,13 @@
 | 写与删：新建、覆盖 bundle/flat 各自先备份旧内容、拒非法名与 256KB、显式描述优先于 frontmatter、失败回滚、删除找不到抛错 | `test-skills.mjs`（7 条） | 同上 |
 | 导入：目录按 frontmatter 名建目录、坏 frontmatter 用目录名兜底且不改写文档、无 frontmatter 补 render、单 `.md` 导入、拒从 `skills` 自己导入、拒软链到 `skills` 里（`realpath` 判重）、`importFileTree` 的 base64/utf8 与空/过多/越界/超大四类拒绝、`importArchive` 的空包/12MB/`..` 条目/超 200 条目/解包后 50MB 上限 | `test-skills.mjs`（12 条） | 同上 |
 | 找根与状态：含 `SKILL.md` 的目录当根并停止下钻、最多 4 层、命中后不再往下找、`skillsStatus` 不带正文 | `test-skills.mjs`（5 条） | 同上 |
-| 13 条 `exact` 路由的注册面（路径、顺序、标签唯一、都是 `exact`） | `test-exact-routes.mjs`（1 条） | `lib/routes.js` 93% |
-| 只读路由的方法白名单与参数：`status` / `last-user` / `rewind/options` / `rewind` GET / `hooks-deny` GET | `test-exact-routes.mjs`（11 条） | `lib/routes.js` 93% |
-| `/status` 的四种形态：进度期回上次载荷、未就绪 503、就绪全字段、`gatherState` 抛错 500 | `test-exact-routes.mjs`（4 条） | `lib/routes.js` 93% |
-| `/apply` 的整条链：405、定位失败、无宿主、需提示词、成功时 10 步副作用顺序、`pattern_not_found` 仍可重启、`write_failed` 不重启 | `test-exact-routes.mjs`（8 条） | `lib/routes.js` 93% |
-| `/revert` / `/uninstall` / `/drill-grant` / `/override` / `/own-servers` 的守卫与副作用 | `test-exact-routes.mjs`（14 条） | `lib/routes.js` 93% |
-| `/restart` 的三道闸：清洗未完成、`clean:false`、密封包走 `restartSealedDesktopIfNeeded` | `test-exact-routes.mjs`（6 条） | `lib/routes.js` 93% |
+| 13 条 `exact` 路由的注册面（路径、顺序、标签唯一、都是 `exact`） | `test-exact-routes.mjs`（1 条） | `lib/routes.js` 99.9% |
+| 只读路由的方法白名单与参数：`status` / `last-user` / `rewind/options` / `rewind` GET / `hooks-deny` GET | `test-exact-routes.mjs`（11 条） | `lib/routes.js` 99.9% |
+| `/status` 的四种形态：进度期回上次载荷、未就绪 503、就绪全字段、`gatherState` 抛错 500 | `test-exact-routes.mjs`（4 条） | `lib/routes.js` 99.9% |
+| `/apply` 的整条链：405、定位失败、无宿主、需提示词、成功时 10 步副作用顺序、`pattern_not_found` 仍可重启、`write_failed` 不重启 | `test-exact-routes.mjs`（8 条） | `lib/routes.js` 99.9% |
+| `/revert` / `/uninstall` / `/drill-grant` / `/override` / `/own-servers` 的守卫与副作用 | `test-exact-routes.mjs`（14 条） | `lib/routes.js` 99.9% |
+| `/restart` 的三道闸：清洗未完成、`clean:false`、密封包走 `restartSealedDesktopIfNeeded` | `test-exact-routes.mjs`（6 条） | `lib/routes.js` 99.9% |
+| 13 条路由的**失败出口**：每个依赖抛错都回 500 且收尾进度、方法不对一律 405、排重启/修 CLI/seed 三类「只告警不拦」的分支、坏 JSON 与超 512KB 请求体 | `test-exact-routes.mjs`（22 条） | `lib/routes.js` 行 689/690 |
 | `/redteam/api` 桥的准入三道闸：只接受 POST（405）、跨站/同站拒（403）、非 JSON 拒（415） | `test-redteam-bridge.mjs`（7 条） | `lib/redteam/bridge.js` 100% |
 | 桥的来源判定五种情形：cross-site / same-site 直拒、无 Origin 放行（curl）、`null` 只在本机放行、`app://` 只在本机放行、端口不同算跨源、非法 URL 拒 | `test-redteam-bridge.mjs`（7 条） | `lib/redteam/bridge.js` 100% |
 | 桥的 op 路由顺序：平台 → 代理 → 更新 → 技能 → 兜底，每层认领即短路 | `test-redteam-bridge.mjs`（5 条） | `lib/redteam/bridge.js` 100% |
@@ -777,6 +778,20 @@ fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? BOM +
 
 RED 演练 **18 条突变 → 18/18 全红**（`restored: true`，无等价突变、无锚点 MISS）。每条都能说清「用户会看到什么不同」：规则文件该删没删 / 该退回旧版却留了新版 / meta 残留 / 用户原件被规则正文覆盖 / 规则列表里混进 `_bad.md` 与目录 / 读不出来的规则把整次激活搞死。
 
+**三十九补**：13 条 `exact` 路由的**失败出口**（`lib/routes.js` 行 93% → **99.86%**）。上一批把每条路由的正常路径与参数校验跑通了，这一批补另一半：把依赖调用换成抛错，确认 handler 回的是 500 而不是 200，方法不对的一律 405 且 `Allow` 头说清楚。
+
+七条只能跑出来的事实：
+
+1. **`/apply` 的五个失败点各自处理方式不同，不是一律 500**。`commitOverrideOnApply` 抛错只 `console.warn` 继续打补丁（正文提交失败不该拦住建补丁）；`repairOfficialCliAfterUnpack` 抛错要收进响应体的 `cli_repair = { ok: false, error }`；`seedPromptInjectAtBoot` 抛错只把 `override_installed` 写成 `error:<msg>`；`resolveOfficialAiBase` 抛错才是 500 并 `endApply`。三个「不拦」的分支如果误写成 500，用户看到的是「补丁全打上了但面板报错」，比真失败更难判断。
+2. **`/update` POST 排重启抛错被吞掉，更新结果照常 200**。`hostctl.scheduleRestart` 在 `try` 里单独包一层，失败只打日志 —— 因为「下载安装成功了、只是没排上重启」不能回滚成一次失败。
+3. **`readJsonBody` 在坏 JSON 与超 512KB 时都抛异常 → 路由回 500，不是 400**。面板发坏请求得到的是 `ok:false` + `request body too large` / `Unexpected token`，而进度条会被 `endApply` 收尾（`getApplyProgress().active === false`）。
+4. **`/hooks-deny` 读盘失败回 500，不会用上一次的值冒充成功**。GET 走 `refreshHooksDenySettings()`（先读盘再回），读失败就得让用户知道开关状态未知。
+5. **`/rewind` POST 抛错回 500 而不是 409**。409 留给「回退被拒」（`result.ok === false`），异常一律 500 —— 面板据此区分「这次不许退」与「退的过程炸了」。
+6. **`/uninstall` 抛错时不排清理重启**。`scheduleCleanupRestart` 只在成功分支里调，否则会在卸载失败后照样重启宿主，把用户刚看到一半的错误抹掉。
+7. **`/own-servers` 的成功分支仍然走不到**：`lib/net-scope.js` 的 `writeAllowText()` 引用未声明的 `allowCache`（上游 1.1.94 刻意留空），所以 `sendJson(response, 200, ...)` 那一行是死代码。这是本批唯一剩下的未覆盖行（`lib/routes.js:618`），属现状锁定，不修。
+
+RED 演练按行号定位（19 条突变，19/19 全红）：把每个 `sendJson(response, 500, ...)` 改成 200、把两个 `writeHead(405, ...)` 改成 200、把三处「只告警」改回 `throw e`、把 `if (arch) core.writeUnpackedAsarStamp(arch)` 置空、把 `onHost` 里的 `applied: info.index || 0` 改成 `0`。全部按 `MUTS = [label, 行号, 该行必须包含的片段, 替换后的整行]` 形式做单行替换，比锚点子串稳：`sendJson(response, 500, { ok: false, error: String(e) });` 在文件里出现十几次，靠子串必撞。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1262,6 +1277,11 @@ RED 演练 **18 条突变 → 18/18 全红**（`restored: true`，无等价突�
     **③** `saveRule` 回滚段里的两个内层 `try { … } catch { /* 回滚失败,原错继续抛 */ }`：要触发「回滚本身也失败」，需要在回滚写入的那一刻再让磁盘拒绝一次，而 monkeypatch 出来的失败是**持续性**的（会同时打断第一次写入），所以造不出「第一次写成功、回滚写失败」。这两层 catch 只有源码形状断言（「回滚在 `throw e` 之前」），没有行为用例。
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-rules-rollback.mjs scripts/test-rules-store.mjs`（16 + 30 条应全绿）；再在真机上手工走一次回滚 —— 停掉桌面端、`chmod 0o444`（或把目录设只读）让 `$DSH_HOME/AGENTS.md` 写不进去，然后在面板里保存并激活一条规则：应看到保存失败，并且 `rules/<id>.md` 与 `rules/<id>.json` 都还是**动手之前**的内容。
+
+87. **`lib/routes.js` 只剩一行没跑到；另外 `lib/rewind.js` 的分支命中数会在 311/312 之间抖。**
+
+- `lib/routes.js:618`（`/own-servers` POST 成功时的 `sendJson(response, 200, …)`）走不到：`lib/net-scope.js` 的 `writeAllowText()` 引用未声明的 `allowCache`，任何 POST 都在下一行前抛错。属上游 1.1.94 刻意留空，测试里已现状钉住「当前回 500」。
+- `lib/rewind.js` 的 `brh` 同一 commit 同一台机器连跑 5 次：4 次 312、1 次 311（`brf` 恒 373）。差的那一个是 `waitTurnClosed` / `rewindLocks` 里「先被拒还是先被兑现」的顺序分支，取决于两个 Promise 的 settle 先后，测试无法钉顺序。处置：**不**给 `lib/rewind.js` 加 `ENV_TOLERANCE`（该文件的容差按 `scripts/coverage-baseline-lib.mjs` 的规矩要先在干净 worktree 里复现同一下跌，本机复现不出来）；若 `npm run test:full` 报 `↓ lib/rewind.js 分支 312 → 311 (-1)`，重跑一次即可，**连续两次 311 才算真倒退**。
 
 ## 维护约定
 

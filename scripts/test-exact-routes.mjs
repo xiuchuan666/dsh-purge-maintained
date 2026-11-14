@@ -14,9 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { routeSpecs } from '../lib/routes.js'
 import { getApplyProgress, resetApplyProgress } from '../lib/apply-progress.js'
-
 const sandbox = mkdtempSync(join(tmpdir(), 'dshpurge-routes-'))
-
 test.after(() => {
   try {
     rmSync(sandbox, { recursive: true, force: true })
@@ -24,9 +22,7 @@ test.after(() => {
     // Windows 上偶发 EPERM，交给系统清理。
   }
 })
-
 /* ------------------------------------------------------------ 假 request/response */
-
 function makeRequest({ method = 'GET', url = '/dsh-purge/x', body, headers = {} } = {}) {
   const chunks = body === undefined ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]
   return {
@@ -38,7 +34,6 @@ function makeRequest({ method = 'GET', url = '/dsh-purge/x', body, headers = {} 
     },
   }
 }
-
 function makeResponse() {
   const res = { status: 0, headers: {}, body: '', ended: false }
   res.writeHead = (status, headers) => {
@@ -51,11 +46,9 @@ function makeResponse() {
   }
   return res
 }
-
 function jsonOf(res) {
   return res.body ? JSON.parse(res.body) : null
 }
-
 async function call(label, request) {
   const entry = routeSpecs(baseDeps()).find((item) => item.label === label)
   assert.ok(entry, `route ${label} 必须存在`)
@@ -63,9 +56,7 @@ async function call(label, request) {
   await entry.spec.handler(request, response)
   return response
 }
-
 /* ------------------------------------------------------------ 假依赖 */
-
 function baseDeps() {
   const calls = []
   const home = join(sandbox, 'home')
@@ -237,25 +228,20 @@ function baseDeps() {
   }
   return deps
 }
-
 function routeOf(label, deps = baseDeps()) {
   const entry = routeSpecs(deps).find((item) => item.label === label)
   assert.ok(entry, `route ${label} 必须存在`)
   return entry
 }
-
 async function run(label, request, deps = baseDeps()) {
   const response = makeResponse()
   await routeOf(label, deps).spec.handler(request, response)
   return response
 }
-
 test.beforeEach(() => {
   resetApplyProgress()
 })
-
 /* ------------------------------------------------------------ 注册面 */
-
 test('routeSpecs 给出 13 条 exact 路由，路径与标签一一对应', () => {
   const specs = routeSpecs(baseDeps())
   assert.equal(specs.length, 13)
@@ -282,16 +268,13 @@ test('routeSpecs 给出 13 条 exact 路由，路径与标签一一对应', () =
   }
   assert.equal(new Set(specs.map((s) => s.label)).size, 13, '标签不能重复，否则面板会互相覆盖')
 })
-
 /* ------------------------------------------------------------ /status */
-
 test('/status 只认 GET，其它方法回 405 且带 Allow', async () => {
   const res = await run('dsh-purge: status', makeRequest({ method: 'POST' }))
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'GET')
   assert.equal(res.body, '')
 })
-
 test('/status 在清洗进行中时回 200 带 apply_progress，并用上次载荷做底', async () => {
   const deps = baseDeps()
   deps.webState = { ready: false, lastStatusPayload: { ok: true, ai_base: '/old' } }
@@ -305,7 +288,6 @@ test('/status 在清洗进行中时回 200 带 apply_progress，并用上次载�
   assert.equal(body.ready, true, '有上次载荷就算就绪')
   assert.equal(body.apply_progress.active, true)
 })
-
 test('/status 在 web 树没就绪时回 503 而不是假绿', async () => {
   const deps = baseDeps()
   deps.webState = { ready: false, lastStatusPayload: null }
@@ -314,7 +296,6 @@ test('/status 在 web 树没就绪时回 503 而不是假绿', async () => {
   assert.deepEqual(jsonOf(res).ok, false)
   assert.equal(jsonOf(res).ready, false)
 })
-
 test('/status 就绪时给出面板需要的全部字段并缓存载荷', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: status', makeRequest(), deps)
@@ -335,7 +316,6 @@ test('/status 就绪时给出面板需要的全部字段并缓存载荷', async 
   assert.equal(body.apply_progress.active, false)
   assert.equal(deps.webState.lastStatusPayload.ok, true, '成功的载荷要缓存起来给进度期做底')
 })
-
 test('/status 在 gatherState 抛错时回 500 且仍带 apply_progress', async () => {
   const deps = baseDeps()
   deps.core.gatherState = async () => {
@@ -346,7 +326,6 @@ test('/status 在 gatherState 抛错时回 500 且仍带 apply_progress', async 
   assert.match(jsonOf(res).error, /boom/)
   assert.equal(jsonOf(res).apply_progress.active, false)
 })
-
 test('/status 找不到宿主时 applied 归零并给出 missing_ai_base', async () => {
   const deps = baseDeps()
   deps.core.gatherState = async () => ({ surface: 'web', ai_base: '', patches_applied: 9, dsh_home: deps.home })
@@ -357,9 +336,7 @@ test('/status 找不到宿主时 applied 归零并给出 missing_ai_base', async
   assert.equal(body.patches_applied, 0, '没有宿主时不能把历史计数当成已打补丁')
   assert.equal(body.patches_total, 0)
 })
-
 /* ------------------------------------------------------------ /hooks-deny */
-
 test('/hooks-deny GET 走 refreshHooksDenySettings（读盘后再回）', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: hooks-deny', makeRequest(), deps)
@@ -367,13 +344,11 @@ test('/hooks-deny GET 走 refreshHooksDenySettings（读盘后再回）', async 
   assert.equal(jsonOf(res).hooksDenyBypass, false)
   assert.ok(deps.calls.some((c) => c[0] === 'refreshHooksDenySettings'))
 })
-
 test('/hooks-deny POST 只接受布尔，字符串 "false" 被拒 400', async () => {
   const res = await run('dsh-purge: hooks-deny', makeRequest({ method: 'POST', body: { hooksDenyBypass: 'false' } }))
   assert.equal(res.status, 400)
   assert.match(jsonOf(res).error, /must be boolean/)
 })
-
 test('/hooks-deny POST 写入并回写实际值', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: hooks-deny', makeRequest({ method: 'POST', body: { hooksDenyBypass: false } }), deps)
@@ -381,15 +356,12 @@ test('/hooks-deny POST 写入并回写实际值', async () => {
   assert.equal(jsonOf(res).hooksDenyBypass, false)
   assert.deepEqual(deps.calls.find((c) => c[0] === 'setHooksDenySettings'), ['setHooksDenySettings', { hooksDenyBypass: false }])
 })
-
 test('/hooks-deny 其它方法回 405 且 Allow 列出两种', async () => {
   const res = await run('dsh-purge: hooks-deny', makeRequest({ method: 'PUT' }))
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'GET, POST')
 })
-
 /* ------------------------------------------------------------ /last-user 与 /rewind/options */
-
 test('/last-user 把 sessionId 去掉空白后透传，非 GET 回 405', async () => {
   const deps = baseDeps()
   const ok = await run('dsh-purge: last user', makeRequest({ url: '/dsh-purge/last-user?sessionId=%20s1%20' }), deps)
@@ -399,7 +371,6 @@ test('/last-user 把 sessionId 去掉空白后透传，非 GET 回 405', async (
   assert.equal(bad.status, 405)
   assert.equal(bad.headers.allow, 'GET')
 })
-
 test('/rewind/options 透传 sessionId，异常回 500', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: rewind options', makeRequest({ url: '/dsh-purge/rewind/options?sessionId=s2' }), deps)
@@ -412,9 +383,7 @@ test('/rewind/options 透传 sessionId，异常回 500', async () => {
   assert.equal(err.status, 500)
   assert.match(jsonOf(err).error, /nope/)
 })
-
 /* ------------------------------------------------------------ /rewind */
-
 test('/rewind GET 有 sessionId 取草稿，没有则取待定', async () => {
   const deps = baseDeps()
   const draft = await run('dsh-purge: rewind', makeRequest({ url: '/dsh-purge/rewind?sessionId=s3' }), deps)
@@ -422,13 +391,11 @@ test('/rewind GET 有 sessionId 取草稿，没有则取待定', async () => {
   const pending = await run('dsh-purge: rewind', makeRequest(), deps)
   assert.equal(jsonOf(pending).pending, 'p')
 })
-
 test('/rewind POST 缺 sessionId 回 400（不能把 undefined 当会话去回退）', async () => {
   const res = await run('dsh-purge: rewind', makeRequest({ method: 'POST', body: {} }))
   assert.equal(res.status, 400)
   assert.match(jsonOf(res).error, /sessionId/)
 })
-
 test('/rewind POST 只认 mode=round，其它值静默按 once', async () => {
   const deps = baseDeps()
   await run('dsh-purge: rewind', makeRequest({ method: 'POST', body: { sessionId: 's4', mode: 'round' } }), deps)
@@ -437,7 +404,6 @@ test('/rewind POST 只认 mode=round，其它值静默按 once', async () => {
   const modes = deps.calls.filter((c) => c[0] === 'applyRewind').map((c) => c[2])
   assert.deepEqual(modes, ['round', 'once', 'once'], '大小写不匹配与未知值都按 once')
 })
-
 test('/rewind POST 失败回 409 而不是 200（面板据此判断没回退成功）', async () => {
   const deps = baseDeps()
   deps.rewind.applyRewind = async () => ({ ok: false, error: 'session busy' })
@@ -445,15 +411,12 @@ test('/rewind POST 失败回 409 而不是 200（面板据此判断没回退成�
   assert.equal(res.status, 409)
   assert.equal(jsonOf(res).ok, false)
 })
-
 test('/rewind 其它方法回 405', async () => {
   const res = await run('dsh-purge: rewind', makeRequest({ method: 'DELETE' }))
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'GET, POST')
 })
-
 /* ------------------------------------------------------------ /update */
-
 test('/update GET 走 checkUpdate，POST 走 handleUpdateOp 并透传 body', async () => {
   const deps = baseDeps()
   const got = await run('dsh-purge: update', makeRequest(), deps)
@@ -462,7 +425,6 @@ test('/update GET 走 checkUpdate，POST 走 handleUpdateOp 并透传 body', asy
   assert.equal(posted.status, 200)
   assert.deepEqual(deps.calls.find((c) => c[0] === 'handleUpdateOp'), ['handleUpdateOp', { op: 'install' }])
 })
-
 test('/update POST 的 needsFullQuit 会置粘性标记，restartAfter 会排重启', async () => {
   const deps = baseDeps()
   deps.updater.handleUpdateOp = async () => ({ ok: true, needsFullQuit: true, restartAfter: true })
@@ -471,21 +433,17 @@ test('/update POST 的 needsFullQuit 会置粘性标记，restartAfter 会排重
   assert.ok(deps.calls.some((c) => c[0] === 'setBootFullQuit' && c[1] === true))
   assert.ok(deps.calls.some((c) => c[0] === 'scheduleRestart'))
 })
-
 test('/update 其它方法回 405', async () => {
   const res = await run('dsh-purge: update', makeRequest({ method: 'PATCH' }))
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'GET, POST')
 })
-
 /* ------------------------------------------------------------ /apply */
-
 test('/apply 只认 POST', async () => {
   const res = await run('dsh-purge: apply', makeRequest())
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'POST')
 })
-
 test('/apply 定位失败时回 500 并把进度标成 locate 错误', async () => {
   const deps = baseDeps()
   deps.core.resolveOfficialAiBase = async () => {
@@ -498,7 +456,6 @@ test('/apply 定位失败时回 500 并把进度标成 locate 错误', async () 
   assert.equal(progress.active, false, '失败后进度必须收尾，否则面板一直转圈')
   assert.equal(progress.stage, 'locate')
 })
-
 test('/apply 找不到宿主回 500 且不打补丁', async () => {
   const deps = baseDeps()
   deps.core.resolveOfficialAiBase = async () => ({ aiBase: '' })
@@ -507,7 +464,6 @@ test('/apply 找不到宿主回 500 且不打补丁', async () => {
   assert.equal(jsonOf(res).error, '找不到宿主')
   assert.equal(deps.calls.some((c) => c[0] === 'applyPatchesAllHosts'), false)
 })
-
 test('/apply 需要提示词时回 400 带 needPrompt 并清掉进度', async () => {
   const deps = baseDeps()
   deps.rejectIfNeedPrompt = () => ({ needPrompt: true, error: '缺提示词', injectSource: 'none' })
@@ -521,7 +477,6 @@ test('/apply 需要提示词时回 400 带 needPrompt 并清掉进度', async ()
   assert.equal(getApplyProgress().active, false)
   assert.equal(deps.calls.some((c) => c[0] === 'applyPatchesAllHosts'), false)
 })
-
 test('/apply 成功时按顺序走完 定位→override→补丁→shim→flash→seed 并回统计', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: { content: 'x' } }), deps)
@@ -554,7 +509,6 @@ test('/apply 成功时按顺序走完 定位→override→补丁→shim→flash�
   ])
   assert.equal(getApplyProgress().stage, 'done')
 })
-
 test('/apply 补丁全部 pattern_not_found 时仍算「提示词就绪」并允许重启', async () => {
   const deps = baseDeps()
   deps.core.summarizeApplyReport = () => ({ applied: 0, already: 0, failed: [{ status: 'pattern_not_found' }] })
@@ -563,7 +517,6 @@ test('/apply 补丁全部 pattern_not_found 时仍算「提示词就绪」并允
   assert.equal(body.complete, false, 'complete 只认零失败')
   assert.equal(body.restarting, true, '提示词已写入就重启，不能被对不上版本的代码补丁拦住')
 })
-
 test('/apply 有失败且不是 pattern_not_found 时不重启也不标已应用', async () => {
   const deps = baseDeps()
   deps.core.summarizeApplyReport = () => ({ applied: 0, already: 0, failed: [{ status: 'write_failed' }] })
@@ -573,7 +526,6 @@ test('/apply 有失败且不是 pattern_not_found 时不重启也不标已应用
   assert.equal(deps.calls.some((c) => c[0] === 'markPatchesApplied'), false)
   assert.equal(getApplyProgress().error, 'incomplete')
 })
-
 test('/apply 抛错时回 500 并收尾进度', async () => {
   const deps = baseDeps()
   deps.core.applyPatchesAllHosts = async () => {
@@ -584,9 +536,7 @@ test('/apply 抛错时回 500 并收尾进度', async () => {
   assert.match(jsonOf(res).error, /patch boom/)
   assert.equal(getApplyProgress().active, false)
 })
-
 /* ------------------------------------------------------------ /revert */
-
 test('/revert 只认 POST，有宿主时同时回滚补丁与 shim', async () => {
   const deps = baseDeps()
   const bad = await run('dsh-purge: revert', makeRequest(), deps)
@@ -600,7 +550,6 @@ test('/revert 只认 POST，有宿主时同时回滚补丁与 shim', async () =>
   assert.match(body.note, /prompt-inject\.md 保留/)
   assert.equal(getApplyProgress().kind, 'revert')
 })
-
 test('/revert 没有宿主时跳过 revertAll 但仍收 shim', async () => {
   const deps = baseDeps()
   deps.core.gatherState = async () => ({ ai_base: '', dsh_home: deps.home })
@@ -610,16 +559,13 @@ test('/revert 没有宿主时跳过 revertAll 但仍收 shim', async () => {
   assert.equal(deps.calls.some((c) => c[0] === 'revertAll'), false)
   assert.equal(deps.calls.some((c) => c[0] === 'revertAllShims'), true)
 })
-
 test('/revert 回滚出错时进度标 incomplete', async () => {
   const deps = baseDeps()
   deps.core.revertAll = async () => ({ reverted: [1], errors: ['e'] })
   await run('dsh-purge: revert', makeRequest({ method: 'POST' }), deps)
   assert.equal(getApplyProgress().error, 'incomplete')
 })
-
 /* ------------------------------------------------------------ /uninstall */
-
 test('/uninstall 成功时回 200 并排清理重启', async () => {
   const deps = baseDeps()
   const bad = await run('dsh-purge: uninstall', makeRequest(), deps)
@@ -630,7 +576,6 @@ test('/uninstall 成功时回 200 并排清理重启', async () => {
   assert.equal(jsonOf(res).fullApp, false)
   assert.ok(deps.calls.some((c) => c[0] === 'scheduleCleanupRestart'))
 })
-
 test('/uninstall 失败时回 500 且不排重启', async () => {
   const deps = baseDeps()
   deps.uninstaller.uninstallPurge = async () => ({ ok: false, errors: ['还原失败'] })
@@ -639,9 +584,7 @@ test('/uninstall 失败时回 500 且不排重启', async () => {
   assert.equal(deps.calls.some((c) => c[0] === 'scheduleCleanupRestart'), false)
   assert.equal(getApplyProgress().error, '还原失败')
 })
-
 /* ------------------------------------------------------------ /drill-grant */
-
 test('/drill-grant GET 未授权时 granted=false，POST 后变 true 并落盘', async () => {
   const deps = baseDeps()
   const first = await run('dsh-purge: drill-grant', makeRequest(), deps)
@@ -653,15 +596,12 @@ test('/drill-grant GET 未授权时 granted=false，POST 后变 true 并落盘',
   const third = await run('dsh-purge: drill-grant', makeRequest(), deps)
   assert.equal(jsonOf(third).granted, true, '授权要落盘，插件升级后不再弹窗')
 })
-
 test('/drill-grant 其它方法回 405', async () => {
   const res = await run('dsh-purge: drill-grant', makeRequest({ method: 'DELETE' }))
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'GET, POST')
 })
-
 /* ------------------------------------------------------------ /override */
-
 test('/override GET 先 seed 再读，回 ui 与注入快照', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: override', makeRequest(), deps)
@@ -673,13 +613,11 @@ test('/override GET 先 seed 再读，回 ui 与注入快照', async () => {
   assert.equal(body.injectSource, 'prompt')
   assert.ok(deps.calls.some((c) => c[0] === 'refreshHungOperator'))
 })
-
 test('/override POST 非字符串回 400（null 不能当成「清空」写进去）', async () => {
   const res = await run('dsh-purge: override', makeRequest({ method: 'POST', body: { content: 42 } }))
   assert.equal(res.status, 400)
   assert.match(jsonOf(res).error, /content must be a string/)
 })
-
 test('/override POST 需要提示词时回 400 且不回显已保存内容', async () => {
   const deps = baseDeps()
   deps.rejectIfNeedPrompt = () => ({ needPrompt: true, error: '缺提示词' })
@@ -688,7 +626,6 @@ test('/override POST 需要提示词时回 400 且不回显已保存内容', asy
   assert.equal(jsonOf(res).content, '')
   assert.equal(deps.calls.some((c) => c[0] === 'saveOverrideContent'), false)
 })
-
 test('/override POST 保存成功后回写框里的实际正文', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: override', makeRequest({ method: 'POST', body: { content: 'new' } }), deps)
@@ -697,9 +634,7 @@ test('/override POST 保存成功后回写框里的实际正文', async () => {
   assert.equal(jsonOf(res).defaultContent, 'd')
   assert.ok(deps.calls.some((c) => c[0] === 'saveOverrideContent'))
 })
-
 /* ------------------------------------------------------------ /own-servers */
-
 test('/own-servers GET 读白名单，POST 非字符串回 400', async () => {
   const deps = baseDeps()
   const got = await run('dsh-purge: own-servers', makeRequest(), deps)
@@ -709,7 +644,6 @@ test('/own-servers GET 读白名单，POST 非字符串回 400', async () => {
   assert.equal(bad.status, 400)
   assert.match(jsonOf(bad).error, /content must be a string/)
 })
-
 // 现状锁定：writeAllowText 在 1.1.94 里是个空壳（`allowCache = ...` 引用了未声明
 // 的变量，且忽略入参），所以 POST 永远 500。这不是本轮改出来的——基线提交里
 // lib/net-scope.js 一字未动。它和地域闸门、解限逻辑同属上游刻意留空的部分，
@@ -721,21 +655,17 @@ test('/own-servers POST 当前回 500（writeAllowText 是上游空壳，非本�
   assert.equal(res.status, 500)
   assert.match(jsonOf(res).error, /allowCache is not defined/)
 })
-
 test('/own-servers 其它方法回 405', async () => {
   const res = await run('dsh-purge: own-servers', makeRequest({ method: 'PUT' }))
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'GET, POST')
 })
-
 /* ------------------------------------------------------------ /restart */
-
 test('/restart 只认 POST', async () => {
   const res = await run('dsh-purge: restart', makeRequest())
   assert.equal(res.status, 405)
   assert.equal(res.headers.allow, 'POST')
 })
-
 test('/restart 清洗没完成时回 ok:false 并清掉粘性标记', async () => {
   const deps = baseDeps()
   deps.ensureRestartReady = async () => ({ ok: false, error: '还有 3 条没打上', pending: [1, 2, 3] })
@@ -748,7 +678,6 @@ test('/restart 清洗没完成时回 ok:false 并清掉粘性标记', async () =
   assert.ok(deps.calls.some((c) => c[0] === 'setBootFullQuit' && c[1] === false))
   assert.equal(deps.calls.some((c) => c[0] === 'scheduleRestart'), false)
 })
-
 test('/restart 计划里 clean=false 时取消重启（写不进宿主就别重启）', async () => {
   const deps = baseDeps()
   deps.hostctl.scheduleRestart = () => ({ restarting: true, clean: false })
@@ -757,7 +686,6 @@ test('/restart 计划里 clean=false 时取消重启（写不进宿主就别重�
   assert.match(jsonOf(res).error, /清洗没有写进当前宿主/)
   assert.equal(jsonOf(res).restarting, false)
 })
-
 test('/restart 正常路径回 restarting 与 asar 状态', async () => {
   const deps = baseDeps()
   const res = await run('dsh-purge: restart', makeRequest({ method: 'POST' }), deps)
@@ -769,7 +697,6 @@ test('/restart 正常路径回 restarting 与 asar 状态', async () => {
   assert.equal(body.fullApp, false)
   assert.equal(body.note, '正在重启。')
 })
-
 test('/restart 密封包走 restartSealedDesktopIfNeeded 并标 needsFullQuit', async () => {
   const deps = baseDeps()
   deps.core.desktopAsarStillSealed = () => true
@@ -779,7 +706,6 @@ test('/restart 密封包走 restartSealedDesktopIfNeeded 并标 needsFullQuit', 
   assert.equal(body.restarting, true)
   assert.equal(deps.calls.some((c) => c[0] === 'scheduleRestart'), false, '密封包不能走普通重启')
 })
-
 test('/restart 抛错回 500', async () => {
   const deps = baseDeps()
   deps.ensureRestartReady = async () => {
@@ -788,4 +714,232 @@ test('/restart 抛错回 500', async () => {
   const res = await run('dsh-purge: restart', makeRequest({ method: 'POST' }), deps)
   assert.equal(res.status, 500)
   assert.match(jsonOf(res).error, /clean boom/)
+})
+
+/* ------------------------------------------------------------ 失败路径：每条路由的 500 / 405 出口
+ *
+ * 上面按路由分组跑的是「正常路径 + 参数校验」。这一段集中钉另一半：把每个被
+ * 依赖调用换成抛错，确认 handler 回的是 500 而不是 200、也不会把进度条留在
+ * 半路；方法不对的一律 405，且 Allow 头说清楚允许什么。
+ *
+ * 为什么值得单独写：面板上「点了没反应」与「点了报错」是两种完全不同的体感，
+ * 而这条分界线全在这几个 catch 里。少一个 catch，异常会冒到宿主那里变成
+ * 连接断开，用户看到的是转圈，不是错误信息。
+ */
+
+test('/hooks-deny GET 读盘失败回 500，不用上次的值冒充成功', async () => {
+  const deps = baseDeps()
+  deps.core.refreshHooksDenySettings = () => {
+    throw new Error('settings read boom')
+  }
+  const res = await run('dsh-purge: hooks-deny', makeRequest(), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /settings read boom/)
+})
+
+test('/hooks-deny POST 写盘失败回 500，不回显那个没落盘的值', async () => {
+  const deps = baseDeps()
+  deps.core.setHooksDenySettings = () => {
+    throw new Error('settings write boom')
+  }
+  const res = await run('dsh-purge: hooks-deny', makeRequest({ method: 'POST', body: { hooksDenyBypass: true } }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /settings write boom/)
+})
+
+test('/last-user 读会话失败回 500，不把空串当结果', async () => {
+  const deps = baseDeps()
+  deps.rewind.readLastUserText = async () => {
+    throw new Error('last user boom')
+  }
+  const res = await run('dsh-purge: last user', makeRequest({ url: '/dsh-purge/last-user?sessionId=s1' }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /last user boom/)
+})
+
+test('/rewind/options 只认 GET', async () => {
+  const res = await run('dsh-purge: rewind options', makeRequest({ method: 'POST' }))
+  assert.equal(res.status, 405)
+  assert.equal(res.headers.allow, 'GET')
+})
+
+test('/rewind GET 取草稿抛错回 500（不是悄悄回空草稿）', async () => {
+  const deps = baseDeps()
+  deps.rewind.takeDraft = () => {
+    throw new Error('draft boom')
+  }
+  const res = await run('dsh-purge: rewind', makeRequest({ url: '/dsh-purge/rewind?sessionId=s1' }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /draft boom/)
+})
+
+test('/rewind POST 回退抛错回 500，而不是 409', async () => {
+  const deps = baseDeps()
+  deps.rewind.applyRewind = async () => {
+    throw new Error('rewind boom')
+  }
+  const res = await run('dsh-purge: rewind', makeRequest({ method: 'POST', body: { sessionId: 's1' } }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /rewind boom/)
+})
+
+test('/update GET 检查更新失败回 500', async () => {
+  const deps = baseDeps()
+  deps.updater.checkUpdate = async () => {
+    throw new Error('check boom')
+  }
+  const res = await run('dsh-purge: update', makeRequest(), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /check boom/)
+})
+
+test('/update POST 操作失败回 500', async () => {
+  const deps = baseDeps()
+  deps.updater.handleUpdateOp = async () => {
+    throw new Error('op boom')
+  }
+  const res = await run('dsh-purge: update', makeRequest({ method: 'POST', body: { op: 'download' } }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /op boom/)
+})
+
+test('/update POST 排重启抛错被吞掉，更新结果照常回 200', async () => {
+  const deps = baseDeps()
+  deps.updater.handleUpdateOp = async () => ({ ok: true, restartAfter: true })
+  deps.hostctl.scheduleRestart = () => {
+    throw new Error('restart boom')
+  }
+  const res = await run('dsh-purge: update', makeRequest({ method: 'POST', body: { op: 'install' } }), deps)
+  assert.equal(res.status, 200)
+  assert.equal(jsonOf(res).ok, true)
+})
+
+test('/apply 请求体不是 JSON 时回 500（readJsonBody 抛出，不是当成空对象继续打补丁）', async () => {
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: '{not json' }))
+  assert.equal(res.status, 500)
+  assert.equal(getApplyProgress().active, false)
+})
+
+test('/apply 请求体超过 512KB 直接拒，不读完再判断', async () => {
+  const huge = 'x'.repeat(600 * 1024)
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: JSON.stringify({ content: huge }) }))
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /request body too large/)
+})
+
+test('/apply 解包过的安装树会把 archive 路径记进 stamp', async () => {
+  const deps = baseDeps()
+  deps.core.resolveOfficialAiBase = async () => ({
+    aiBase: '/ai/base',
+    extracted: true,
+    handoff: { archive: '/ai/base/app.asar' },
+  })
+  // baseDeps 的那个桩不记参数（别的用例只看「有没有被调」），这里换一个记参数的。
+  deps.core.writeUnpackedAsarStamp = (arch) => deps.calls.push(['stamp', arch])
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: {} }), deps)
+  assert.equal(res.status, 200)
+  assert.deepEqual(deps.calls.filter((c) => c[0] === 'stamp'), [['stamp', '/ai/base/app.asar']])
+})
+
+test('/apply 没解包（或没有 archive）时不写 stamp', async () => {
+  const deps = baseDeps()
+  deps.core.resolveOfficialAiBase = async () => ({ aiBase: '/ai/base', extracted: true, handoff: {} })
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: {} }), deps)
+  assert.equal(res.status, 200)
+  assert.equal(deps.calls.some((c) => c[0] === 'writeUnpackedAsarStamp'), false)
+})
+
+test('/apply 提交 override 抛错只告警，补丁照打（正文提交失败不该拦住建补丁）', async () => {
+  const deps = baseDeps()
+  deps.core.commitOverrideOnApply = async () => {
+    throw new Error('override boom')
+  }
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: {} }), deps)
+  assert.equal(res.status, 200)
+  assert.equal(deps.calls.some((c) => c[0] === 'applyPatchesAllHosts'), true)
+})
+
+test('/apply 的 onHost 回调把「第几个宿主、是哪棵树」写进进度条', async () => {
+  const deps = baseDeps()
+  let seen = null
+  deps.core.applyPatchesAllHosts = async (_patches, options) => {
+    options.onHost({ index: 2, aiBase: '/ai/base' })
+    seen = getApplyProgress()
+    return { report: [{ patch_id: 1, name: 'one', status: 'applied' }], hosts: [{ aiBase: '/ai/base' }], hookDenyRestoreFailed: [] }
+  }
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: {} }), deps)
+  assert.equal(res.status, 200)
+  assert.equal(seen.stage, 'patch')
+  assert.equal(seen.applied, 2)
+  assert.equal(seen.detail, '/ai/base')
+})
+
+test('/apply 修 CLI 启动器抛错时记进 cli_repair，不拦主流程', async () => {
+  const deps = baseDeps()
+  deps.core.repairOfficialCliAfterUnpack = () => {
+    throw new Error('cli boom')
+  }
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: {} }), deps)
+  assert.equal(res.status, 200)
+  const body = jsonOf(res)
+  assert.equal(body.cli_repair.ok, false)
+  assert.match(body.cli_repair.error, /cli boom/)
+})
+
+test('/apply seed 提示词抛错时 override_installed 以 error: 开头', async () => {
+  const deps = baseDeps()
+  deps.core.seedPromptInjectAtBoot = () => {
+    throw new Error('seed boom')
+  }
+  const res = await run('dsh-purge: apply', makeRequest({ method: 'POST', body: {} }), deps)
+  assert.equal(res.status, 200)
+  assert.match(jsonOf(res).override_installed, /^error:seed boom/)
+})
+
+test('/revert 回滚抛错时回 500 并收尾进度', async () => {
+  const deps = baseDeps()
+  deps.core.revertAll = async () => {
+    throw new Error('revert boom')
+  }
+  const res = await run('dsh-purge: revert', makeRequest({ method: 'POST' }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /revert boom/)
+  assert.equal(getApplyProgress().active, false)
+})
+
+test('/uninstall 抛错时回 500 且不排清理重启', async () => {
+  const deps = baseDeps()
+  deps.uninstaller.uninstallPurge = async () => {
+    throw new Error('uninstall boom')
+  }
+  const res = await run('dsh-purge: uninstall', makeRequest({ method: 'POST' }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /uninstall boom/)
+  assert.equal(deps.calls.some((c) => c[0] === 'scheduleCleanupRestart'), false)
+})
+
+test('/override GET 读正文失败回 500', async () => {
+  const deps = baseDeps()
+  deps.core.readOverrideForUi = async () => {
+    throw new Error('override read boom')
+  }
+  const res = await run('dsh-purge: override', makeRequest(), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /override read boom/)
+})
+
+test('/override POST 保存失败回 500，不回显没落盘的内容', async () => {
+  const deps = baseDeps()
+  deps.core.saveOverrideContent = async () => {
+    throw new Error('override save boom')
+  }
+  const res = await run('dsh-purge: override', makeRequest({ method: 'POST', body: { content: 'x' } }), deps)
+  assert.equal(res.status, 500)
+  assert.match(jsonOf(res).error, /override save boom/)
+})
+
+test('/override 其它方法回 405 且 Allow 列出两种', async () => {
+  const res = await run('dsh-purge: override', makeRequest({ method: 'PUT' }))
+  assert.equal(res.status, 405)
+  assert.equal(res.headers.allow, 'GET, POST')
 })

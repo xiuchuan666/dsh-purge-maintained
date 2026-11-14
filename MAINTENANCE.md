@@ -736,6 +736,25 @@ fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? LIE :
 2. **逐字节比较**，不要比 `JSON.parse` 之后的对象。上一版 meta 的缩进、键顺序、结尾换行都算「用户的东西」；用对象比较会把「重新序列化覆盖了原格式」判成通过。
 3. **持续性失败造不出「第一次成功、回滚失败」**。monkeypatch 让磁盘拒绝是持续性的，它会同时打断第一次写入。所以「回滚本身也失败」那两层内层 `catch` 只能靠源码形状断言（「回滚段在 `throw e` 之前」），要写进盲区，别硬凑 fixture。
 
+### 一行里有十几处同样的 `sendJson(response, 500, …)`：演练按行号改，不按子串改
+
+`lib/routes.js` 里 `sendJson(response, 500, { ok: false, error: String(e) });` 这种行出现十几次，`response.writeHead(405, { allow: "GET" });` 也有两处一字不差。做 RED 演练时用子串当锚点必然撞，`nth` 又会在下次插行后失效。
+
+这一批改成**按行号单行替换**，每条突变写成四元组：
+
+```js
+// [label, 1-based 行号, 该行必须包含的片段, 替换后的整行]
+["/hooks-deny GET 500→200", 141, "sendJson(response, 500", '              sendJson(response, 200, { ok: false, error: String(e) });'],
+```
+
+第二项是「这一行现在长什么样」的断言 —— 行号会随着将来的插入而漂，但只要那一行不再包含该片段就把这条记成 ANCHOR 而不是当作有效突变，所以漂了会立刻看得见，不会静默测错地方。第三项写成替换后的**整行**（连缩进），避免拼接出零缩进的非法 JS。
+
+三条纪律：
+
+1. **BASE 必须来自 `git show HEAD:<file>`，并在开始前与工作区比对**（`norm(head) !== orig` 就直接退出码 2）。工作区若带未提交改动，drill 的「还原」只会把半注入的内容写回去 —— 这个坑本项目踩过一次（`lib/extract-asar.js` 停在半注入状态后所有测试 `SIGTERM`）。
+2. **每轮 `finally` 写回原文，结束后再读一遍比对**，把结果并进 `{"restored": true, …}` 一起输出。只看 RED/GREEN 数量而不看 `restored`，等于相信一个可能已经把文件改坏的过程。
+3. **分片跑**（`node .tmp87-drill.mjs 0 10` / `10 19`）：单次命令超过约两分钟会被外层掐断，掐断时 `finally` 未必跑完。
+
 ### 纯函数模块：先跑探针把「现状」抄成一张表，再决定哪几条是该钉的现状
 
 `lib/redteam/ip-utils.js` 这批没有 fixture（不碰库、不碰文件、不读环境），所以写法跟前面的批次完全不同。有效的顺序是三段：
