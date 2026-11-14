@@ -995,3 +995,24 @@ try { … } finally { process.argv[1] = orig; }
 `officeSkillAssetSources()` 读的是真实安装树。开发机上它存在 → `[heal-office-skills] healed=true` 会打；CI 的干净机器上不存在 → `reason:"no-source"`、一行都不打。写成「必须恰好一行」在 CI 上必红，写成「必须 0 行」在开发机上必红。
 
 可移植写法：断言 **≤ 1 行**；如果有一行，则必须 `healed=true` 且目标文件真的落盘（`existsSync`）；如果 0 行，则目标文件不许存在。**无论哪种都要加一条「真机那份 `SKILL.md` 的 mtime 前后不变」** —— 那是「测试没摸真机」的唯一证据。
+
+### 「私有函数一行没覆盖」先问：线上真的有输入走进去吗
+
+红队工具那八个函数此前一行都没覆盖，原因不是「没人写测试」，而是**真实参数面里根本
+没有它们的目标形状**：把 `apply()` 收到的 64 个 `parameters` 全树遍历，
+`type:'object'` 的嵌套节点一个都没有，所以 `sealObjectSchemas` 的对象分支从来没有输入。
+三步判据：
+
+1. **先看这个分支的输入从哪来。** 如果它的输入只由注册表（工具定义、补丁表、清单文件）
+   产生，就把注册表**整个跑一遍**并把命中计数打出来 —— 计数为 0 就说明这是纯保险分支，
+   不要拿「写了用例覆盖率就上去了」自我安慰，要直接调函数造样例。
+2. **再看这个函数该不该在 `export` 里。** 判据是「有没有别的地方需要它」：本仓库
+   `scripts/test-patch-registry.mjs:46` 的导出名单断言只针对 `lib/core.js`，
+   `scripts/surface-lib.mjs` 的 `Object.keys()` 只用于 `host:rehearse` 的 surface 对拍，
+   其余文件加 `export` 不会让任何门禁变红 —— 但加之前要 `grep -rn "<file>.js" scripts/*.mjs`
+   确认没有「导出名单一字不差」的暗桩。
+3. **最后判等价突变。** 这一批 25 条突变全红、没有等价项，是因为每条都对应一个
+   「用户会看到什么不同」（绑定键分叉 / 名额超卖 / 工具消失）。
+
+同类先例：`lib/bom-guard.js` 的 `readJsonNoBom`（全仓只有定义处一个名字 → 删）、
+`lib/profile-insert.js` 的重开段三行（上一道 `if` 已把行全收走 → 删）。

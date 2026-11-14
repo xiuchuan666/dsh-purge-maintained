@@ -927,6 +927,51 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 **覆盖率**：`lib/index.js` 行 403 → **419/429（97.7%）**、函数 30 → 31/39、分支 67 → 74/108；`lib/desktop.js` 行 1813 → **1837/2272**、函数 103 → 105/116（那两条用例顺带把 `healOfficeSkillsRuntimeOnDisk` 与 `inspectRuntimePayload` 的调用链跑到了）。全仓行 **93.95% → 94.07%** / 函数 85.31% / 分支 90.24%。
 
+## 四十七补：红队工具注册面的边角（参数封口 / FIFO 上限 / 根会话上溯 / 实时并发 / 桩库）
+
+`scripts/test-tools-edges.mjs`（27 条）。这一批没有改动生产行为，只给 `lib/redteam/tools.js` 里
+八个私有函数加 `export`（`sealObjectSchemas` / `makeDefineTool` / `capMap` / `sessionInfoOf` /
+`resolveRootSession` / `bindingKeyOf` / `liveRunningChildren` / `reservationList`），
+把 `test-redteam-tools.mjs`（36 条，走 64 个工具的对外行为）与 `test-tools-resolve.mjs`
+（26 条，走定义器解析与 `subagent/end`）都没碰的 21 行补上。
+
+只有在这台机器上跑一遍才知道的七件事：
+
+1. **真实参数面里没有一个 `type:'object'` 的嵌套节点。** 把 `apply()` 收到的 64 个
+   `parameters` 全树遍历，`objSealed` / `objClosed` / `shouldNotExist` / `props` / `apObj`
+   五个标记一个都没置位（只有 5 个参数带数组）。所以 `sealObjectSchemas` 的对象分支
+   在线上是**纯保险**，只能直接调函数造样例来测 —— 这也解释了为什么它此前一行都没覆盖。
+2. **封口的两个默认值方向相反且都合理**：`{ type:'object' }`（没有 properties）→
+   `additionalProperties = true`；`{ type:'object', properties:{…} }` → `false`。
+   反过来封会把「自由形状的对象」写成合法空对象，或把「已知字段的对象」写成可塞任意键。
+3. **`capMap` 只劫持 `set`，同键重设不淘汰。** `!m.has(k) && m.size >= cap` 才删最早键 ——
+   长会话里同一个 session id 反复绑定不应该把自己挤掉。突变「满员不淘汰」与「淘汰那步不做」
+   都会让 `bindings` / `reservations` 无限涨。
+4. **`resolveRootSession` 的父不在内存 ≠ 找不到根。** `store.get(parentId)` 返回 `undefined`
+   或抛错时，**父 id 本身就是稳定根键**（`{rootId: info.parentId, chain: [..., parentId]}`）——
+   冷启动 / 父会话被回收时若回落到「自己」，同一家族的绑定键就会在重启后分叉。
+5. **父子互指的死环靠 `guard < 64` 停下**，不是靠「见过就停」：`chain` 长度恒为 64、
+   首尾分别是起点与第二层。这条上限也是唯一能防住 `while` 死循环的东西。
+6. **`liveRunningChildren` 的三态要用三个不同返回值区分**：注册表不可用 →
+   `{available:false, error:'subagents 注册表不可用…'}`；`listChildren` 抛错 →
+   `{available:false, error:'列子会话失败：…'}`；返回非数组 → `{available:true, running:0}`。
+   把非数组当空表而不是当错误，是因为宿主在「还没有子会话」时可能回 `null`。
+7. **`apply()` 拿不到 store 时仍然注册满 64 个工具。** `ctx.redteam` 的 getter 抛错 →
+   退到 `ctx.get('redteam')` → 都没有就 warn 一条
+   `redteam-tools: host ctx.redteam unavailable — tools will report store_missing`
+   并塞一个三件套桩库（`openEngagement` 抛「红队资产库不可用」、`listEngagements` 回 `[]`、
+   `stats` 回 `{}`）。桩库的意义是让工具**存在但报错**，而不是让插件装不上。
+
+RED 演练 25 条突变 → **25/25 全红**（分两片 `0 13` / `13 25`，`restored:true`，无 ANCHOR、
+无等价突变）。行号口径就是改完后文件的真实行号（`138 / 141 / 142 / 144 / 147 / 148 / 164 /
+166 / 167 / 168 / 191 / 193 / 219 / 232 / 242 / 244 / 361 / 362 / 366 / 367 / 370 / 377 /
+459 / 465 / 467`）。
+
+覆盖率：`lib/redteam/tools.js` 行 479 → **500/501**（唯一剩下的 `:131` 是
+`loadDefineTool()` 的 `return resolveDefineTool(...)` 兜底 —— 本机能直接解析到宿主
+`@deepseek-ai/dsh-tools`，所以走不到，CI 上才走）、函数 36 → **39/42**、分支 142 → 194。
+全仓行 94.07% → **94.12%** / 函数 85.36% / 分支 90.37%。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -994,6 +1039,7 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 | IP / 网段 / slug 的十个纯函数：`cidrOf` 的 IPv4 取前三段与 IPv6 取前四组（带端口的 IP、IPv4-mapped 都原样返回）、`scopeOfIp` 的 172.16–31 与 100.64–127 边界 + fe80::/10 + IPv4-mapped 剥壳、`ipToInt` 的 32 位无符号与「只看位数不看范围」、`isIpv6` 的字符表与段数上限、`expandIpv6` 的 `::` 补齐、`slugTarget` / `slugPoc` / `defaultPocFilename` / `slugify` 的六处现状怪癖 | `test-ip-utils.mjs`（53 条） | `lib/redteam/ip-utils.js` 行 116 → **140/140**（分支 73/74） |
 | 演练台库的筛选面与报告面：`listAssets` 的五个筛选（service / fingerprint / provenance / priority / scope）、`sort=todo` 与 `sort=ports` 两条排序串、`listShots` 的四个过滤、`deleteScorePoint` 的内置点拒绝与事务回滚、`saveScorePoint` 名称必填、`addScoreHit` 的 `point_name` 解析与两种警告、报告的「复现请求」段、`searchPocs` 的来源筛选、`listEngagements({stats:true})` 的坏库兜底、`refreshDefaultPrompts` 的 `.bak`、`readAttackFile` 的越界拒绝 | `test-store-core-facets.mjs`（26 条） | `lib/redteam/store-core.js` 行 3741 → **3794/3822**（分支 1368/1584） |
 | 证据账本的十四条失败出口与两个计数：`record` 四道前置校验（`operation` 必填、`result` 不可为 null 但可为 `""`/`0`/`false`、`confidence` 四档、`authority` 六种）、`record` / `get` / `list` 三个 catch 的返回值各不相同（`{ok:false}` / `undefined` / **`{error}` 对象而不是数组**）、`countUnverified` 数裸条数而 `countUnresolvedClaims` 按 `supporting_ev_ids` 反查闭环（升级后前者不降、后者降）、坏 JSON 的四列各自回落到默认值、`upgrade` 四分支（未找到 / `derived` 拒绝 / 已 observed 原样 / claimed→observed 写新记录并用 `supporting_ev_ids` 链回原件、`subagent-report` 换成 `tool-output`、`recorded_by` 默认 `coordinator`）、`residual_unknown` 的 question/severity 校验、去重键折叠空白而存的是原文、`resolve` 只认 `resolved\|contradicted`（`withdrawn` 给干净校验错，不再走到 SQLite 的 CHECK） | `test-evidence-ledger-edges.mjs`（30 条） | `lib/redteam/evidence-ledger.mjs` 行 **516/516**、函数 20/20、分支 92.2% |
+| 红队工具注册面的边角：参数封口（`{type:'object'}` 无 properties 封 `true`、有 properties 封 `false`、已封的不覆盖、`properties`/`items`/`additionalProperties` 三层递归）、`makeDefineTool` 四处都封、`capMap` 满员淘汰最早而同键重设不淘汰、`sessionInfoOf` 读 `header` 抛错时只丢父 id、`resolveRootSession` 父不在内存时用父 id 当根键 + 父子互指在 64 层停下、`bindingKeyOf` 的 rootId/sessionId/chain、`liveRunningChildren` 三态（注册表不可用 / 列失败 / 非数组当空表）、`reservationList` 无预留回空数组、`apply` 的 `ctx.redteam` getter 抛错时 warn 一条并注册满 64 个工具（桩库 `openEngagement` 报「红队资产库不可用」） | `test-tools-edges.mjs`（27 条：`sealObjectSchemas` 6 / `makeDefineTool` 2 / `capMap` 2 / `sessionInfoOf` 2 / `resolveRootSession` 5 / `bindingKeyOf` 2 / `reservationList` 1 / `liveRunningChildren` 4 / `apply` 2 / 源码形状 1） | `lib/redteam/tools.js` 行 479 → **500/501**（唯一剩下的 `:131` 是 `loadDefineTool()` 兜底，本机解析得到宿主所以走不到） |
 
 ---
 
@@ -1461,6 +1507,20 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
     1. **`140-142`（`watchWebTreeReady` 的 no-inject 早退）经 `apply()` 永远走不到**：`installWebServer` 无条件调用 `ctx.inject`，所以「没有 inject 的宿主」在进 `watchWebTreeReady` 之前就已经 TypeError 了。**检测办法**：`grep -n 'typeof ctx?.inject !== "function"' lib/index.js` 必须命中一行且紧随 `mark();` 与 `return;`；如果哪天 `installWebServer` 改成先探测再 inject，这条就该补用例。
     2. **`229-230`（seed 的 catch）**：`syncPromptInjectOnDiskSync` 内部已把 `atomicWriteSync` 整段包进 try/catch 并转成 `{action:"error", reason}`，所以 `seedPromptInjectAtBoot` 在三种坏现场（home 是文件、home 不存在、`prompt-inject.md` 是目录）下都只返回 error 而不抛；`DSH_HOME` 里塞 NUL 也会被 `process.env` 吞掉。**检测办法**：`grep -n "seed prompt-inject failed:" lib/index.js` 必须命中一行；真机上把 `$DSH_HOME` 换成只读卷再启动，日志里应出现这一行。
     3. **`271-275`（settle 的 `isInactiveContextError` catch）**：`settleInstalledPatches` 在沙箱里从不 reject（它自己把每一步都 try 住了），所以「异步阶段才发现 ctx 没了」这一支只能用源码形状确认。**检测办法**：`grep -n "isInactiveContextError(e)" lib/index.js` 必须命中；真机上在 settle 期间发一次 `/revert` 让 ctx 被 dispose，日志里应出现 `settle skipped: inactive context`。
+
+**95. `lib/redteam/tools.js:131` 的 `loadDefineTool()` 兜底**
+
+`loadDefineTool()` 先试 `createRequire(import.meta.url)('@deepseek-ai/dsh-tools')`，
+失败才 `return resolveDefineTool(defineToolCandidates())`。本机（开发机）第一条就解析成功
+（插件自己的 `node_modules` 里有宿主包），所以 `:131` 恒不走；CI 上那条走得到，但 CI 不统计
+覆盖率。判据：`grep -n "return resolveDefineTool(defineToolCandidates())" lib/redteam/tools.js`
+只有一处，且其上一行是 `} catch { /* 插件自己的 node_modules 里没有，再扫宿主 */ }`。
+检测办法：在干净机器上跑 `node --test --experimental-test-coverage scripts/test-tools-resolve.mjs`
+，`resolveDefineTool` 的调用次数应 ≥1；本机会是 0。
+
+此外这一批有两个「只能源码形状钉」的点，都写在 `test-tools-edges.mjs` 的最后一条里：
+桩库三件套（`openEngagement` 抛 / `listEngagements` 回 `[]` / `stats` 回 `{}`）与
+`loadDefineTool` 的兜底句。它们的行为分支已分别有直接用例，形状断言只是防有人顺手删掉。
 
 ## 维护约定
 
