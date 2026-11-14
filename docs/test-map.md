@@ -288,6 +288,7 @@
 | `dsh.cmd` 的两条分支（`isWindows` 是模块级常量，只能按真实平台断言）：Windows 上只剥不注入 —— 没注入回 `skipped_win_cmd`、已注入回 `stripped_win_cmd` 且剥完 `end` 行删掉、`begin` 行留着（现状锁定）；非 Windows 上照常注入并补 `@ECHO off` 兜底行（那条兜底只能源码形状钉，Windows 上走不到） | `test-shim-patch.mjs`（4 条） | 同上 |
 | legacy 与剥离：`DSH_PERMISSION_MODE` 让 `shimInjectCurrent` 判假（已注入也重打，`begin` 计数变 2）、旧单行头整段换新块、`stripShimInject` 六形态（闭合块 begin 占位 / 旧头带关键字 / 旧头不带关键字 / 旧头之后不复位 / 未闭合整份原样返回 / 末行无换行只剩 begin）、悬空 begin 再打会变两个 begin（现状锁定，二次才 `already_patched`） | `test-shim-patch.mjs`（8 条） | 同上 |
 | 符号链接与 module root：真链接写的是目标文件、链接仍是链接、bak 落在目标旁边；悬空链接先被 `isFile` 判 false 记 `missing`；`dsh-app-boot` 找不到时 **Windows 是「写完才发现」`error:module_root_lost`，非 Windows 是事前拦 `skipped_no_module_root` 且一字节不写、不落 bak** | `test-shim-patch.mjs`（4 条） | 同上 |
+| apply 把软链启动器覆盖成 bin.js 拷贝之后的自愈链（#157）：官方入口三个候选位置、向上八层找 `dsh-app-boot`（空目录也算）、相对链接一律正斜杠且 `..` 开头不补 `./`、先 `unlink` 再 `symlink`、`catch` 回空串、win32 与非 `dsh` 名字都不动、两种 `skipped_no_module_root` 出口 | `test-shim-launcher-heal.mjs`（18 条） | `lib/core.js` 行 4714/5205 |
 | 备份的四种结局：bak 已存在不覆盖（保留旧 bak）、`copyFile` 抛错记 `dsh#bak: "bak_failed:boom"` 但仍 `patched`、只读文件回 `error:…EPERM` 而 bak 已落好、密封目录的 bak 搬到 `$DSH_HOME/dsh-purge/shim-backups/` 且摘要吃路径（两个不同密封目录的同名启动器 bak 名不撞） | `test-shim-patch.mjs`（4 条） | 同上 |
 | `listShimDirsForPatch` / `patchAllShims`：`DSH_SURFACE=desktop` 回 `[]` 且 `patchAllShims()` 回 `{}`、PATH 上的密封 `bin` 会被剔掉而普通 `bin` 会留下（前提校验后才断言）、结果里没有密封目录 | `test-shim-patch.mjs`（3 条） | 同上 |
 | `shimFileStatus` 比 `shimIsPatched` 多认一个 `dsh-purge cli entry`（两个判据故意不一致，现状锁定）、读失败回 `original` 而不是抛 | `test-shim-patch.mjs`（3 条） | 同上 |
@@ -1056,6 +1057,40 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 
 **仍然测不到的**：`findWslWindowsDshHome` 的命中分支（`/mnt/c/Users` 在 Windows 上不存在，只能在真 WSL 里跑）与 `desktopHomeCandidates` 里 `process.resourcesPath` 那一项（只有 Electron 进程里有值），见盲区 74。
 
+### 五十二补：软链启动器自愈链（#157）
+
+`apply` 早期版本会把 npm 全局的 `dsh` 软链启动器覆盖成一份 `bin.js` 拷贝 —— 那份拷贝
+在别的目录下找不到 `@deepseek-ai/dsh-app-boot`，于是 `dsh` 一跑就报模块不存在。
+`lib/core.js:4456-4539` 这八个函数就是收拾这件事的：认得出来、找得到官方入口、把拷贝
+换回软链。它们原来一行都没测过，因为「写盘那一侧」看着像要真改用户启动器。
+
+这一批 18 条只看这八个函数本身（写盘目标全落在 `mkdtemp` 里），下面七条是只能跑出来的：
+
+1. **整条自愈链的触发前提是「非 win32 且文件名正好是 `dsh`」**。`resolveShimWriteTarget`
+   第一段 `if (process.platform === "win32" || fname !== "dsh") return { writeFp: fp, … }`
+   把两件事一起挡了，且挡在自愈之前。所以用例必须用 `asPlatform("linux", …)` 驱动，
+   并且要专门钉住「win32 上即使内容像拷贝来的 bin.js 也一字节不动」和「名字是 `dsh-cli`
+   的启动器不碰」—— 这两条判据各自能被单独删掉而不影响其余用例。
+2. **官方入口必须放在「向上走查不到」的位置**。`officialBinJsNearLauncher` 的候选里有
+   `<dir>/../lib/node_modules/…` 与 `<dir>/../node_modules/…`，而 `canResolveAppBoot(fp)`
+   是从 `dirname(fp)` 逐级向上找 `node_modules/@deepseek-ai/dsh-app-boot`。把官方入口放在
+   `root/node_modules` 时，`canResolveAppBoot` 已经为真，自愈分支（要求 `!canResolveAppBoot`）
+   根本进不去 —— 这不是实现的问题，是用例造错了位置。写自愈用例一律放
+   `<dir>/../lib/node_modules`。
+3. `canResolveAppBoot` 最多向上 **8 层**，且 `dsh-app-boot` **空目录也算**（`isDir(hit)`
+   那一半）。第九层才命中的 fixture 必须判 false，否则「层数上限」这条判据没有守卫。
+4. `posixRelLink` 三条独立规矩：同一个文件回原路径；`..` 开头的**不补** `./`（补了就是
+   `.//../x`，软链会指错）；`path.sep` 全转 `/`（Windows 上建软链要正斜杠才跨平台可用）。
+5. `healCopiedLauncher` 的顺序是 **先 `unlinkSync` 再 `symlinkSync`**，`catch` 里回 `""`。
+   反过来写在 Windows 上会留下半个文件；`catch` 改成回 `fp` 则调用方会拿一个「已经不存在
+   的文件」去写。
+6. `shimKindOf` 的兜底是 **`"sh"` 不是 `"unknown"`**；而且 `dsh.js` 这种名字在
+   `resolveShimWriteTarget` 里根本进不到自愈链（`fname !== "dsh"` 早退）。要测「node 类型
+   但解析不到 app-boot 就跳过」这一支，必须让文件叫 `dsh`、靠 shebang 判成 node。
+7. **给 `lib/core.js` 加 `export` 会撞上注册表测试**：`scripts/test-patch-registry.mjs` 的
+   `EXPORT_EXTRA` 名单是「只许放开、不许新增」的白名单，本轮加八个名字漏同步，单文件跑绿、
+   全量跑红一条。加 `export` 之后先跑一遍 `npm run check` 再写文档。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1613,6 +1648,28 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 
 98. **后台重启真的能跑起来这件事，本机一条都没验过。** `scripts/test-web-restart.mjs` 的 13 条全在**假 `spawn`** 上跑：它证明的是「调用了谁、带了什么参数、延时多少、env 里有什么」，不证明 `lib/restart-web.js` 与 `lib/uninstall-restart.js` 真的能把 server 从旧 pid 手里接过来。真跑一次需要：一个真的监听端口的 server、一次真的 detached spawn、一个真的会退出的父进程 —— 三件事凑一起就会把跑测试的进程杀掉，所以这台机器造不出可靠 fixture。同理 `process.exit` 被替换后，`setTimeout` 的回调**一次都没执行过**（只钉了延时值），「250ms 之后真的退出」不在守卫范围内。**检测办法**：手工 `dsh web` 起一个会话，在面板上点一次「重启」与一次「卸载后清理」，用 `netstat -ano | findstr :<port>` 看端口是否换到新 pid、旧 pid 是否消失、临时目录里的 `dsh-purge-uninst-<pid>.mjs` 是否在清理结束后被删掉。
 99. **`spawnRestartHelper` 里那句 `core.silenceCmdFlash()` 会去改宿主的 `bin.js`，而且没法重定向。** 它内部走 `findAiBase()`，而 `findAiBase()` 的候选里有一条锚在 `lib/core.js` **自己所在的位置**（不是 `cwd`、也不是 `DSH_BASE`）—— 于是本机会恒定落到 `D:\dsh-purge-maintained\node_modules\@deepseek-ai`。本机现状是 `entry: "already_injected"`（幂等，SHA-256 跑前跑后不变，测试结尾专门断言了这一点）；但如果哪天那份 `bin.js` 被 `npm ci` 换成未注入版，这条测试就会**真的去改 node_modules 里的文件**。CI 上没有这棵树时它是早退，所以不会红。**检测办法**：`git status --porcelain node_modules` 无用（被 gitignore），改用 `sha256sum node_modules/@deepseek-ai/dsh/lib/bin.js` 在跑 `node --test scripts/test-web-restart.mjs` 前后比对；不一致就说明那份 `bin.js` 已经不是注入版了。
+
+100. **`canResolveAppBoot` 里 `isFile(hit/package.json) || isDir(hit)` 的左半永远不决定结果。**
+    要让 `isFile` 为真，`dsh-app-boot` 必须存在且里有 `package.json` —— 那时它必然是目录，
+    `isDir(hit)` 已经为真；反过来若 `dsh-app-boot` 是个文件，`path.join(hit, "package.json")`
+    也不存在。所以这个 `||` 的左操作数是纯保险。删掉它没有任何用例会红（本批演练里唯一
+    一条等价突变），按「等价突变要删掉、不为它硬凑 fixture」的规矩保留原样、记在这里。
+    检测办法：`grep -n 'isFile(path.join(hit, "package.json")) || isDir(hit)' lib/core.js`。
+
+101. **`lib/reapply.js` 的十六处 catch 与 `lib/core.js:1908-1933`（web 面 ai-base 兜底）
+     在这台机器上构造不出来。**
+    前者（`13 14 120 121 127 128 155 156 175 176 189 190 195 196 232 233`）的触发条件是
+    「`core.*` 命名空间抛出」，而模块用 `import * as core` 引入 —— 命名空间对象只读，
+    属性不可 monkeypatch；磁盘层面的坏法（`existsSync` / `statSync` / `readdirSync` /
+    `realpathSync` / `lstatSync` 全换抛错）实测都只让这些函数回 `null` / `false`，不抛。
+    唯一能测的是 `:13-14`（`pluginVersion` 自己的 `fs.readFileSync`），已由
+    `test-reapply-flows.mjs` 覆盖。
+    后者要走到，得让 `findAiBaseFromRunningProcess()` 先落空 —— 它拿 `process.argv[1]`
+    向上走，而测试文件在插件仓库里，仓库自身的 `node_modules/@deepseek-ai` 必先命中。
+    只有插件仓库不含这棵树时才会往下走，本机造不出来。
+    检测办法：`grep -n 'catch' lib/reapply.js | head -20` 与
+    `grep -n 'findAiBaseWeb\\|npmQuery' lib/core.js`；真机上若要验，把插件仓库临时移到
+    不含 `node_modules/@deepseek-ai` 的目录再跑 `npm run host:status`。
 
 ## 维护约定
 

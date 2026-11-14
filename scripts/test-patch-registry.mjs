@@ -78,6 +78,17 @@ const EXPORT_EXTRA = new Set([
   // 单独调：前者钉防环与去重，后者钉根去重与「落在桌面安装树里不算」。
   'findAiBaseRecursive',
   'scanHomeRootsForAiBase',
+  // 批100：apply 曾把软链 launcher 覆盖成 bin.js 拷贝（#157），自愈链是四个纯判定 + 两个
+  // 真动手的函数。判错的表现是「启动器被换成一份找不到模块根的拷贝」，跑起来才报错，
+  // 所以每个判据都要能单独调。
+  'isSymlinkPath',
+  'canResolveAppBoot',
+  'looksLikeCopiedBinJs',
+  'officialBinJsNearLauncher',
+  'posixRelLink',
+  'healCopiedLauncher',
+  'resolveShimWriteTarget',
+  'shimKindOf',
 ])
 
 test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {

@@ -1125,3 +1125,40 @@ try {
 
 - **`put(dir, {})` 这种「只建目录」的调用不能省 mkdir。** 把 mkdir 写在 `Object.entries(files)` 循环体里，空对象就一次都不建，后面所有 `isDir` 判断全 false，症状是「我明明造了目录」。
 - **回退阶梯要逐级断言，不只断言「最后拿到了对的那个」。** 桌面主目录定位有六级（`DSH_HOME` → 候选里有数据 → `~/.dsh` 有数据 → 候选里没数据就回第一个 → 什么都没有仍回 `~/.dsh` 路径 → web 面先看启动器旁），少一级也只会在特定机器上表现成「写进去的提示词不生效」。
+
+## 「向上逐级查」的自愈，fixture 要放在查不到的位置
+
+软链启动器自愈那条链（`lib/core.js:4456-4539`）里有两个函数是一对：
+
+- `officialBinJsNearLauncher(fp)` 只看三个**指定**位置：`<dir>/../lib/node_modules/…`、
+  `<dir>/../node_modules/…`、`<dir>/../../lib/node_modules/…`；
+- `canResolveAppBoot(fp)` 从 `dirname(fp)` 开始**逐级向上**，每层查
+  `node_modules/@deepseek-ai/dsh-app-boot`，最多八层。
+
+自愈分支的判据是 `looksLikeCopiedBinJs(text) && !canResolveAppBoot(fp)`。把官方入口放在
+`root/node_modules/@deepseek-ai/` 时，`canResolveAppBoot` 已经为真，自愈根本不会发生 ——
+我第一次就是这么写的，用例红在 `healed === false`，而实现完全正确。
+
+规矩：**要测「找不到所以去别处找」这一类分支，fixture 必须放在逐级查找看不到、只有指定
+候选看得到的那一格**（这里是 `<dir>/../lib/node_modules`），并且另用一条用例钉住
+「按层数上限确实停下来了」（第九层才命中要判 false）。
+
+## 给模块加 `export` 之后，跑一遍全量再写文档
+
+`lib/core.js` 的导出名被 `scripts/test-patch-registry.mjs:46` 的 `EXPORT_EXTRA` 白名单钉着：
+新名字不在名单里 → `unexpected new core export`；名单里的名字不再导出 → `stale EXPORT_EXTRA entry`。
+这条断言只在全量跑时才会命中（`node --test scripts/test-new-file.mjs` 永远绿），而它又是
+「补丁注册表没被动过」的唯一守卫。所以顺序固定为：改 `lib/` → 跑新文件 → **跑
+`npm run check`** → 才去写 `docs/test-map.md` 与提交信息。
+
+## 依赖 `import * as core` 抛错的 catch，是测不到的
+
+`lib/reapply.js` 里十六处 `catch` 的触发条件都是「`core.*` 抛了」，而这个模块用
+`import * as core from "./core.js"` —— 命名空间对象的属性只读，`core.findAiBase = …` 会抛
+`TypeError: Cannot assign to read only property`，`monkeypatch` 这条路直接封死。
+
+不要因为「把 `fs.*` 全换成抛错」看着像能造，就去写：实测 `core.findAiBase()` 在这种环境下
+仍然回 `null`（内部层层 try/catch 吞掉），`core.patchStatus(<不存在路径>)` 照样回 86 行，
+`desktopAsarStillSealed()` 在沙箱假树里回 `false`。**判据是「这条 catch 的触发条件能不能由
+磁盘状态造成」**：能（`pluginVersion` 自己的 `fs.readFileSync`）就写用例；不能就写进
+`docs/test-map.md` 的盲区，附一句怎么在真机上验。
