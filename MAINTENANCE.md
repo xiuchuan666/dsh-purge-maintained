@@ -1449,3 +1449,32 @@ core.rememberCommittedOverride(home, "");
 - **攻击步骤要 `asset_id` + `point_id` 都给**：`hitTrace` 查的是
   `attack_step WHERE asset_id = ? AND point_id = ?`，少一个就查不到，`steps` 恒空、
   `stepSeqOf` 永远回兜底值，排序的第二三级键就测不到了。
+
+## 只给必需字段的 fixture 测不到「那一列为空的老数据」
+
+`shotBrief` 里有六个 `||` 兜底（`kind`、`mime`、`label`、`note`、`target`、`source_ref`）。
+用 `addShot()` 造出来的行，这些列**一定有默认值**（`kind` 落 `screenshot`、`mime` 落 `image/png`），
+所以照常写用例时那六个分支永远不执行 —— drill 里"去掉 `kind` 兜底"会是一条 GREEN。
+
+正确的造法是**先正常写一行，再把可空列置 NULL**：
+
+```js
+const made = store.addShot(id, { data_base64: 'iVBORw0KGgo=', point_id: ..., hit_id: ... })
+const nulled = store.db(id)
+  .prepare('UPDATE shot SET kind = NULL, mime = NULL, label = NULL, note = NULL, target = NULL, source_ref = NULL WHERE id = ?')
+  .run(made.id).changes
+assert.equal(nulled, 1, '前提：列要允许 NULL，才能构造出「老库那行」');
+```
+
+判据：只要兜底写的是 `x.col || <常量>`，就问一句「这一列在什么情况下会是 NULL / 空」——
+答案通常是「老版本的库」或「别的写入路径」，两种都不可能靠正常 API 造出来，只能直接改库。
+
+## 「写操作 + 读回来」要分两次断言，只信返回值不算落盘
+
+`dispatch(store, { op: 'platformConfigSave' })` 的返回值是**刚算出来的摘要**，它长什么样跟有没有写盘无关：
+
+- 只断言 `saved.ok === true` → 不落盘也绿；
+- 只断言 `saved.runtime.effective === 'linux'` → 不落盘也绿（摘要是在内存里按入参算的）。
+
+必须**再发一次 `platformConfigGet`** 读回来。这类"写一次、读一次"的分发口在本仓还有几处
+（`templateSave`、`settingsSave`），判据是同一条：**写的证据只能来自第二次读**。

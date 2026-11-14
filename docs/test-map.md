@@ -1442,6 +1442,20 @@ RED 演练 11 条突变全红（11/11）。
 RED 演练 **7 条突变 → 7/7 全红**：②分支不返回命令 / 改标 `template` / 闸门恒假 /
 不跳过没记命令的步骤（`trace.steps[0]`）/ `seqs` 恒空 / 兜底改成 0 / 并列时不再比 seq。
 
+**六十四补**：`lib/redteam/store-core.js` 的**最后 27 行** —— 配置落盘的分发口（`:672-675`）、截图计数的两级回填（`:1605-1610`）、`shotBrief` 的六个兜底（`:1612-1616`）、目标分组里的 `assetIpOf` 回查（`:3341-3344`、`:3352-3355`）、以及「复现请求」段落（`:3369-3375`）。补完这个文件 **3822/3822 行（100%）**。
+
+五处都属于「算错了不报错，只是界面/报告少一点东西」：
+
+1. **`platformConfigSave` 少落一次盘** → 返回的还是内存里那份摘要，面板看着"保存成功"，下次打开却是旧平台。用例不能只断言返回值的 `ok`，必须**写完再读一次**（`platformConfigGet`）才算钉住落盘。顺带钉住它的返回是 `platformSummary` **平铺对象**（`runtime` / `config` / `tools.items` 都在顶层），不是 `{ platform: … }`。
+2. **截图计数分两级回填**：点级 `it.shot_total` 按 `point_id` 求和，命中级 `h.shot_count` 只数挂在它自己身上的那张。少一级的表现是"代表图有了，但命中行上不显示张数"。两个 `|| 0` 缺一不可 —— 去掉之后无截图的得分点 `shot_total` 变 `undefined`，界面会渲染出 `NaN`。
+3. **`shotBrief` 的六个兜底**（`kind` → `screenshot`、`mime` → `image/png`、`label`/`note`/`target`/`source_ref` → `''`）。**正常写入的行这几列一定有值**，所以只靠 `addShot()` 造的数据永远测不到兜底 —— 必须 `UPDATE shot SET … = NULL` 把可空列置空，那才是老库里真实存在的行。这也是本批唯一一条"要先想清楚这行代码为谁存在"的用例。
+4. **`assetIpOf(undefined)` 必须早退**：凭据/权限/清单三条线都用 `assetIpOf(asset_id) || slugTarget(host)` 求分组键。`assetId === null || undefined` 不早退的话 `getAsset(id, null)` 会把整份报告炸掉；早退之后键回落成 `slugTarget(host)`（`http://loose.example:8080/x` → `loose.example`），不会多出一个没有名字的分组。
+5. **「复现请求」段**是报告里唯一"能直接粘进 Burp / Yakit"的东西。三条细节：`request` 与 `response` 都要去掉 CR（留着粘进 Burp 会多出空行）、`response` 截到 2000 字（否则报告能有几十兆）、`label` 缺省时用 `method + ' ' + url`。截断那条断言要落在 **x 的个数 = 2000 − 状态行长度**（`HTTP/1.1 200 OK\n\n` 去掉 CR 后是 17 字符 → 1983），写 `2000` 会红。
+
+**造现场的两个前提**（踩过才知道）：`addScoreHit` 必须有 `evidence`（否则 `score hit evidence required`）；`addVuln` 要 `status: 'confirmed'` 且 `severity` 中危以上才会进 `reportTargets` 的收录口径（默认 `open` 会整条被过滤掉，报告里什么都看不到，容易误判成"这段代码没跑"）。
+
+RED 演练 **13 条突变 → 13/13 全红**：配置不落盘 / 只回 `ok` 不回摘要 / 点级计数恒 0 / 点级计数去掉兜底 / 命中级计数恒 0 / `label`、`kind`、`mime` 三个兜底各去掉一个 / `assetId` 不设防 / 凭据分组不回落 `host` / 不写复现请求标题 / `label` 不回落 `method+url` / 响应不截断。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1511,6 +1525,7 @@ RED 演练 **7 条突变 → 7/7 全红**：②分支不返回命令 / 改标 `t
 | IP / 网段 / slug 的十个纯函数：`cidrOf` 的 IPv4 取前三段与 IPv6 取前四组（带端口的 IP、IPv4-mapped 都原样返回）、`scopeOfIp` 的 172.16–31 与 100.64–127 边界 + fe80::/10 + IPv4-mapped 剥壳、`ipToInt` 的 32 位无符号与「只看位数不看范围」、`isIpv6` 的字符表与段数上限、`expandIpv6` 的 `::` 补齐、`slugTarget` / `slugPoc` / `defaultPocFilename` / `slugify` 的六处现状怪癖 | `test-ip-utils.mjs`（53 条） | `lib/redteam/ip-utils.js` 行 116 → **140/140**（分支 73/74） |
 | 演练台库的筛选面与报告面：`listAssets` 的五个筛选（service / fingerprint / provenance / priority / scope）、`sort=todo` 与 `sort=ports` 两条排序串、`listShots` 的四个过滤、`deleteScorePoint` 的内置点拒绝与事务回滚、`saveScorePoint` 名称必填、`addScoreHit` 的 `point_name` 解析与两种警告、报告的「复现请求」段、`searchPocs` 的来源筛选、`listEngagements({stats:true})` 的坏库兜底、`refreshDefaultPrompts` 的 `.bak`、`readAttackFile` 的越界拒绝 | `test-store-core-facets.mjs`（26 条） | `lib/redteam/store-core.js` 行 3741 → **3794/3822**（分支 1368/1584） |
 | 证据账本的十四条失败出口与两个计数：`record` 四道前置校验（`operation` 必填、`result` 不可为 null 但可为 `""`/`0`/`false`、`confidence` 四档、`authority` 六种）、`record` / `get` / `list` 三个 catch 的返回值各不相同（`{ok:false}` / `undefined` / **`{error}` 对象而不是数组**）、`countUnverified` 数裸条数而 `countUnresolvedClaims` 按 `supporting_ev_ids` 反查闭环（升级后前者不降、后者降）、坏 JSON 的四列各自回落到默认值、`upgrade` 四分支（未找到 / `derived` 拒绝 / 已 observed 原样 / claimed→observed 写新记录并用 `supporting_ev_ids` 链回原件、`subagent-report` 换成 `tool-output`、`recorded_by` 默认 `coordinator`）、`residual_unknown` 的 question/severity 校验、去重键折叠空白而存的是原文、`resolve` 只认 `resolved\|contradicted`（`withdrawn` 给干净校验错，不再走到 SQLite 的 CHECK） | `test-evidence-ledger-edges.mjs`（30 条） | `lib/redteam/evidence-ledger.mjs` 行 **516/516**、函数 20/20、分支 92.2% |
+| 演练台库的最后几处回填：`platformConfigSave` 写盘后要**再读一次**才算钉住、截图按得分点与按命中两级计数（`shot_total` / `shot_count` 的 `\|\| 0`）、`shotBrief` 六个兜底（必须把可空列 `UPDATE … = NULL` 才是老库那行）、`assetIpOf(undefined)` 早退与 `assetIpOf(asset_id) \|\| slugTarget(host)` 的键回落、报告里「复现请求」段（去 CR / 截 2000 字 / `label` 回落 `method + url`） | `test-store-core-remainder.mjs`（10 条） | `lib/redteam/store-core.js` 行 **3822/3822（100%）** |
 | 红队工具注册面的边角：参数封口（`{type:'object'}` 无 properties 封 `true`、有 properties 封 `false`、已封的不覆盖、`properties`/`items`/`additionalProperties` 三层递归）、`makeDefineTool` 四处都封、`capMap` 满员淘汰最早而同键重设不淘汰、`sessionInfoOf` 读 `header` 抛错时只丢父 id、`resolveRootSession` 父不在内存时用父 id 当根键 + 父子互指在 64 层停下、`bindingKeyOf` 的 rootId/sessionId/chain、`liveRunningChildren` 三态（注册表不可用 / 列失败 / 非数组当空表）、`reservationList` 无预留回空数组、`apply` 的 `ctx.redteam` getter 抛错时 warn 一条并注册满 64 个工具（桩库 `openEngagement` 报「红队资产库不可用」） | `test-tools-edges.mjs`（27 条：`sealObjectSchemas` 6 / `makeDefineTool` 2 / `capMap` 2 / `sessionInfoOf` 2 / `resolveRootSession` 5 / `bindingKeyOf` 2 / `reservationList` 1 / `liveRunningChildren` 4 / `apply` 2 / 源码形状 1） | `lib/redteam/tools.js` 行 479 → **500/501**（唯一剩下的 `:131` 是 `loadDefineTool()` 兜底，本机解析得到宿主所以走不到） |
 | 演练台体检的「下一步该做什么」五条分支各自单独走到：linux 首次无 `setup.sh`（「这是正常情况，不是故障」+ `crt.sh` 降级）、有脚本没跑过（只让用户自己 `--check`，不许智能体 `--yes`）、有 marker 缺 `FOFA_KEY`（「有缺口」，`ok:false`）、配齐但技能坏（`ok:false`、`onboarding.complete:false`、`broken[].fixes` 来自 `issues[].fix`、`fix_note` 是另一件事）、全干净（`next === '全部可用，可以开工。'`）；外加 `runtime_hint` 的 linux 两行文案、`fromBundle` 翻假后逐条 `skills.get` 取正文、`skills.get` 抛错仍出结论、`include` 点名时才不并进随包技能 | `test-recon-preflight-edges.mjs`（9 条） | `lib/redteam/tool-specs-recon.js` 行 532 → **551/585**（唯一剩下的 `171-204` 不可达） |
 
