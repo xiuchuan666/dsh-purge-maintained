@@ -16,6 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 // 诊断日志 dsh-purge-desktop.log 落在 os.tmpdir() 下，全仓共用一份；node --test
 // 默认并行跑各 test-*.mjs，各自往同一个文件追加。logDelta() 靠「文件字节数前后
@@ -729,4 +730,172 @@ test("identity：源码钉住 wrapDisposers / wrappedPrompts 的回收口径", (
   assert.match(SRC, /if \(wrappedPrompts\.has\(prompt\)\) return d;/);
   assert.match(SRC, /for \(const d of wrapDisposers\) \{/);
   assert.match(SRC, /installSubagentRoleCapture\(ctx\);/);
+});
+
+test("identity：session/created 与 agent-preset/selected 回调真的被调到时，会重新包一次 assemble", () => {
+  useHome("id-hook-fire");
+  const wrap = trackEffects(fakeCtx());
+  // 先挂一个空 prompt：这两个回调的作用就是「换代理之后立刻补包」，
+  // 所以断言点必须是「回调触发后新代理也被包上」，而不是「回调注册了」。
+  const first = { assemble: async () => ({ sections: [] }) };
+  withPrompt(wrap.ctx, first);
+  iw.installIdentityOverride(wrap.ctx, { enabled: true });
+  assert.equal(first.assemble._dshPurgeWrapped, true, "init 那次已经包上");
+
+  const second = { assemble: async () => ({ sections: [] }) };
+  wrap.ctx.systemPrompt = second;
+  assert.equal(second.assemble._dshPurgeWrapped, undefined, "换代理后暂时还没包");
+
+  wrap.hooks.get("session/created")[0].fn();
+  assert.equal(second.assemble._dshPurgeWrapped, true, "session/created 必须把新代理补包");
+
+  const third = { assemble: async () => ({ sections: [] }) };
+  wrap.ctx.systemPrompt = third;
+  wrap.hooks.get("agent-preset/selected")[0].fn();
+  assert.equal(third.assemble._dshPurgeWrapped, true, "切预设会换掉 assemble，必须补包");
+});
+
+test("identity：agent/pre-step 回调每次都补包，并把 next 的返回值原样交回", () => {
+  useHome("id-prestep-fire");
+  const wrap = trackEffects(fakeCtx());
+  withPrompt(wrap.ctx, { assemble: async () => ({ sections: [] }) });
+  iw.installIdentityOverride(wrap.ctx, { enabled: true });
+  const handler = wrap.hooks.get("agent/pre-step")[0].fn;
+
+  const fourth = { assemble: async () => ({ sections: [] }) };
+  wrap.ctx.systemPrompt = fourth;
+  const payload = { turn: 7 };
+  let called = 0;
+  const out = handler(payload, () => {
+    called += 1;
+    return "DOWNSTREAM";
+  });
+  assert.equal(called, 1, "有 next 就必须调一次");
+  assert.equal(out, "DOWNSTREAM", "next 的返回值要原样交回瀑布");
+  assert.equal(fourth.assemble._dshPurgeWrapped, true, "pre-step 也要补包（包在 next 之前）");
+
+  const fifth = { assemble: async () => ({ sections: [] }) };
+  wrap.ctx.systemPrompt = fifth;
+  assert.equal(handler(payload, undefined), payload, "没有 next 时返回 payload 本身");
+  assert.equal(fifth.assemble._dshPurgeWrapped, true);
+});
+
+test("identity：气闸里 rewriteLiveAssembly 抛错时退回上游装配，并留一行 warn + 一条日志", async () => {
+  useHome("id-assemble-boom");
+  const wrap = trackEffects(fakeCtx());
+  withPrompt(wrap.ctx, { assemble: async () => ({ sections: [] }) });
+  // 让 rewriteLiveAssembly 在第一行就读到会抛的 config（它先读 config.enabled）。
+  // 真实世界里这条路的触发条件是「配置对象被宿主换成代理后读属性抛」，
+  // 后果是每轮装配都退回宿主原稿 —— 也就是注入整体失效，但用户看不到报错。
+  const poisoned = {
+    get enabled() {
+      throw new Error("cfg boom");
+    },
+  };
+  iw.installIdentityOverride(wrap.ctx, poisoned);
+  const handler = wrap.hooks.get("system-prompt/assemble")[0].fn;
+
+  const assembly = { sections: [{ name: "base", text: "x" }] };
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...args) => warned.push(args.map(String).join(" "));
+  let out;
+  try {
+    out = await handler(assembly, {});
+  } finally {
+    console.warn = realWarn;
+  }
+  assert.equal(out, assembly, "抛错时必须原样退回上游装配，不能返回 undefined");
+  assert.equal(warned.length, 1, "要有且只有一行 warn");
+  assert.match(warned[0], /rewriteLiveAssembly failed: cfg boom/);
+});
+
+test("identity：密封槽坏掉（提示词正文读不出来）时退回勾选的本地 cwd 规则", () => {
+  const home = useHome("id-cwd-fallback");
+  const cwd = path.join(SANDBOX, `proj-${homeSeq}`);
+  fs.mkdirSync(cwd, { recursive: true });
+  fs.mkdirSync(path.join(home, "dsh-purge"), { recursive: true });
+  const ruleFile = path.join(cwd, "AGENTS.md");
+  fs.writeFileSync(ruleFile, "本地 cwd 规则正文\n", "utf8");
+  fs.writeFileSync(
+    path.join(home, "dsh-purge", "cwd-selections.json"),
+    JSON.stringify({ paths: [ruleFile] }),
+    "utf8",
+  );
+  const require2 = createRequire(import.meta.url);
+  const CJS_CRYPTO = require2("node:crypto");
+  const REAL_DECIPHER = CJS_CRYPTO.createDecipheriv;
+  const syncBuiltin = require2("node:module").syncBuiltinESMExports;
+  const out = [];
+  // 先把上个用例可能留下的「已提交正文 / 钉子正文」清掉，否则 refreshHungOperator
+  // 会直接命中缓存，full 不为空，这条兜底根本走不到。
+  core.hangOperatorPrompt("");
+  core.rememberCommittedOverride(home, "");
+  // 打破密封槽：normal（提示词正文）读不出来 → full 是空串 → 才轮到本地 cwd 规则。
+  // 这条兜底真实触发条件是「安装被解包/搬动后加密槽坏了」，表现是「AI 完全不知道
+  // 用户是谁」；没有它，用户把规则勾了也白勾。
+  CJS_CRYPTO.createDecipheriv = () => {
+    throw new Error("sealed broken");
+  };
+  syncBuiltin();
+  try {
+    assert.equal(core.defaultOverrideText(), "", "前提：密封槽真的坏了");
+    const assembled = iw.rewriteLiveAssembly(
+      { enabled: true },
+      { sections: [], variables: {} },
+      { agent: { session: { header: { cwd } } } },
+      { mode: "full", taskKind: "general" },
+    );
+    for (const section of assembled?.sections || []) out.push(String(section?.text || ""));
+  } finally {
+    CJS_CRYPTO.createDecipheriv = REAL_DECIPHER;
+    syncBuiltin();
+  }
+  const flat = out.join("\n");
+  assert.match(flat, /本地 cwd 规则正文/, "提示词读不出来时必须退到用户勾选的 cwd 规则");
+});
+
+test("mnemon：挂不上时每 1500ms 重试一次，effect 回收必须把定时器清掉", async () => {
+  let calls = 0;
+  const ctx = {
+    on() {
+      calls += 1;
+      throw new Error("on boom");
+    },
+    effect(fn) {
+      this.__cleanup = fn;
+    },
+  };
+  iw.installMnemonMessageStrip(ctx, {});
+  assert.equal(ctx.__dshPurgeMnemonStrip, true);
+  const afterFirst = calls;
+  assert.ok(afterFirst >= 1, "第一次尝试就发生了");
+  await new Promise((r) => setImmediate(r));
+  assert.equal(calls, afterFirst + 1, "queueMicrotask 那次重试也要试一次");
+  assert.equal(typeof ctx.__cleanup, "function", "挂不上也要把回收器登记好");
+  ctx.__cleanup()();
+  const settled = calls;
+  await new Promise((r) => setTimeout(r, 1600));
+  assert.equal(calls, settled, "回收之后 1500ms 的定时器必须已经被清掉，不能再试");
+});
+
+test("mnemon：挂上之后回收器要真的把那层瀑布摘掉", () => {
+  const offs = [];
+  let disposed = 0;
+  const ctx = {
+    on(name, fn, opts) {
+      offs.push({ name, opts });
+      return () => {
+        disposed += 1;
+      };
+    },
+    effect(fn) {
+      this.__cleanup = fn;
+    },
+  };
+  iw.installMnemonMessageStrip(ctx, { stripMnemon: true });
+  assert.equal(offs.length, 1, "挂上就不再重试");
+  assert.deepEqual(offs[0].opts, { global: true, prepend: true });
+  ctx.__cleanup()();
+  assert.equal(disposed, 1, "回收必须把挂上去的那层摘掉，否则热重载会叠层");
 });

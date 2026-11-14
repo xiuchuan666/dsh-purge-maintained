@@ -1342,3 +1342,37 @@ try { /* 断言 */ } finally { CJS_FS.rmSync = realRm; syncBuiltinESMExports(); 
 正确姿势是让 `agent.followup` 抛错 —— 真实调用链（`followup → makeContinueMessage →
 source.kind`）全程照走，只是最后一步失败。这样同一条用例还能顺带断言成功路径上消息的正文
 （`assert.equal(okSent[0].content[0].text, "继续")`）。
+
+## 「非常态才走到」的代码，先问它保护的是哪一条用户可见的后果
+
+覆盖率的最后几个百分点通常都是这种代码：加密槽坏了才走的分支、宿主 `ctx.on` 抛错才走的重试、
+配置对象被换成代理才走的 catch。它们的共同点是**跑不到就说明环境已经不对**，所以「测不到」
+常常只是「没有把环境弄坏」。
+
+判据不是「这行是什么语义」，而是「这行不在的时候用户会看到什么」：
+
+- mnemon 层挂不上的 1500ms 重试：不清理定时器 → 热重载后 `pre-step` 上叠两层过滤 →
+  中间插件返回的 `decision` 每轮被滤 N 次（用户看到的是「消息莫名其妙少了」）。
+- 密封槽坏掉时的 cwd 规则兜底：没有它 → AI 完全不知道用户是谁（用户看到的是「它不认得我的规矩了」）。
+- 气闸里 `rewriteLiveAssembly` 抛错的 catch：不 catch → 宿主拿到 `undefined` 装配 → 整轮炸掉；
+  或者 catch 了但没 warn → 注入整体失效而日志里一行都没有。
+
+把这三句写进用例注释，比写「覆盖第 112 行」有用得多：半年后有人想删掉这段兜底时，
+他能读到「删了会怎样」。
+
+## 造「全局缓存已经被热过」的现场：换 home，并且清掉钉子和已提交正文
+
+`refreshHungOperator` 的缓存键是 `home + mtime + rev`，但在这之上还有两层模块级状态：
+`hungOperatorPrompt()` 的钉子、`rememberCommittedOverride()` 的已提交正文。这两层**不随 home 变**。
+
+所以想造「refresh 返回空」，只换一个新的 `DSH_HOME` 是不够的 —— 前一个用例留下的钉子会让
+`refreshHungOperator` 直接命中，`full` 永远非空，那条「退到本地规则」的分支永远走不到。
+必须显式清掉：
+
+```js
+core.hangOperatorPrompt("");
+core.rememberCommittedOverride(home, "");
+```
+
+顺序也有讲究：清完再打破密封槽、再调被测函数。反过来（先打破再清）也能过，但如果中间任何一步
+触发了一次 `refreshHungOperator`，缓存就被热了，后面再怎么清都白搭。

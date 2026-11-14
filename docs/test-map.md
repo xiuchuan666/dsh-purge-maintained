@@ -147,12 +147,13 @@
 | 注入快照与闸门 `injectSnapshot` / `rejectIfNeedPrompt` / `ensureRestartReady`（快照三字段形状、空提示词时回 `needPrompt:true` 与固定文案、重启前先问 `core.ensureHostClean()`） | `test-prompt-source.mjs`（8 条，含文案与形状的源码断言） | 同上 |
 | 装配决策输入 `shouldInjectAssembly` / `readSessionEvents`（默认 full/general、只有 `origin:"subagent"` 算子会话、续跑标记只消费一次变 `lastRole:"retry"`、事件优先 `snapshotEvents` 抛错退 `events` 再兜 `[]`） | `test-prompt-source.mjs`（8 条） | 同上 |
 | 诊断日志 `purgeLog` / `logAssembleDecision`（`ISO [tag] k=v` 单行、值里的空白换 `_`、`undefined` 写空、对象写 `[object_Object]`、超 2MB 翻滚成 `.1`、装配决策固定四字段） | `test-prompt-source.mjs`（5 条） | 同上 |
-| mnemon 插件消息剥离 `installMnemonMessageStrip`（没 `ctx.on` 不落标记、装一次挂一条带 `global+prepend`、重复安装被标记挡住、`mounted` 闸让微任务补挂只补一次且 1500ms 迟到重试不叠第二层、没滤掉返回同一对象、`messages` 不是数组也补成 `[]`、`stripMnemon:false` 一条都不滤） | `test-inject-write.mjs`（12 条） | `lib/inject-write.js` 96% |
+| mnemon 插件消息剥离 `installMnemonMessageStrip`（没 `ctx.on` 不落标记、装一次挂一条带 `global+prepend`、重复安装被标记挡住、`mounted` 闸让微任务补挂只补一次且 1500ms 迟到重试不叠第二层、没滤掉返回同一对象、`messages` 不是数组也补成 `[]`、`stripMnemon:false` 一条都不滤） | `test-inject-write.mjs`（12 条） | `lib/inject-write.js` 行 363/363 |
 | 每轮装配改写 `rewriteLiveAssembly`（默认段序 `dsh-purge`→`dshpg-capabilities`→原段→`deployment:persona-suffix`→`dsh-purge:anchor`、`enabled:false` 只挂 3 段、`stripMnemon:false` 保留 `mnemon-memory`、`anchorMode:"off"` 去掉锚点段） | `test-inject-write.mjs`（4 条） | 同上 |
 | 改写缓存的签名覆盖面（`policy` 从 `fallback` 变 `strict` 变 `always` 每次都必须重算、`revision` / `session` 参与签名、命中判定必须比 `undefined` 不能真值判断、换 assembled 对象不复用、cwd 落 `last-cwd.txt`） | `test-inject-write.mjs`（5 条，含 `if (cached !== undefined) return cached;` 的源码断言） | 同上 |
 | 装配诊断行 20 个字段（字段顺序固定、`afterCloser` 必须是正数、`anchorApplied` 默认 `true` 关掉锚点时 `false` 且 `injectTail:false`、`chatml` 命中 `<project_instructions>`、`injectBytes` 万级） | `test-inject-write.mjs`（3 条） | 同上 |
 | `closerFollowBytes`（闭标记之后还剩多少字：没有段/没有标记一律 `-1`、多段先按空行拼、闭标记出现多次按**最后**一次算、空段被 filter 掉） | `test-inject-write.mjs`（4 条） | 同上 |
 | 装配挂载 `installIdentityOverride`（4 类钩子与 `global/prepend` 选项、`__dshPurgeDisabled` 停用立即生效、有 next 用下游结果而下游抛错退回上游、旧签名自己动手、`next` 取最后一个参数不是 `args[2]`、guard 内层抛错给空装配、`prepareAssemble` 幂等且隔离层补分段与锚点、`guard.wrap` 签名不变不刷日志、cleanup 清六个 flag 且能重装、400ms 轮询必须 unref） | `test-inject-write.mjs`（15 条） | 同上 |
+| 三条只在非常态下才执行的出路：mnemon 层挂不上时的 1500ms 重试与 effect 回收（不清定时器会多试一次、不摘 disposer 会叠层）、提示词正文读不出来（密封槽坏）时退到用户勾选的本地 cwd 规则、气闸里 `rewriteLiveAssembly` 抛错时原样退回上游装配 + 一行 warn；三条 `ctx.on` 回调被真的调用后必须把新代理补包 | `test-inject-write.mjs`（+6 条） | `lib/inject-write.js` 行 363/363 |
 
 **本轮的进展**：注入决策树原来埋在 `rewriteLiveAssembly` 里，只有真正跑起宿主才走得到，改错了没有任何红字。现已抽成 `lib/identity.js` 的 `decideInject`（纯函数，逐行比对过抽取前后行为一致），由 `test-prompt-inject.mjs` 的 31 条用例钉住；缓存签名与命中规则抽成 `lib/live-cache.js`（`liveCacheSignature` / `sessionKeyOf` / `createLiveCache`），由 `test-live-cache.mjs` 的 37 条用例钉住，且拆分前后 2304 组输入的签名逐字对拍一致（`.tmp-exp/sig-parity.mjs`，一次性）。规则集读写（含备份与恢复的三条分支）已由 `test-rules-store.mjs` 的 30 条用例钉住——这组最怕的是「用户手写的 AGENTS.md 被另一条规则的内容悄悄盖掉」，因此备份/恢复的每个分支都单独立了用例。 这一轮补的是 `lib/identity.js`：它原来只有 69% 行覆盖，`installAssembleGuard` 整块（`lib/identity.js:904-1018`）与身份覆盖、红队操作稿、预设继承全都没有守卫，改坏了的表现是「注入没生效但也不报错」。现由 `test-identity-assembly.mjs` 的 141 条用例钉住，行覆盖 69% → 99%（`375-376` 的正则永不抛、`withOwnServers` 的两条因 `lib/net-scope.js` 的 `ownServerNote()` 恒空而不可达、`decideInject` 由 `test-prompt-inject.mjs` 覆盖、`rewritePromptAssembly:1090-1099` 的兜底块在常规输入下不可达）。 这一轮另外两件事：一是把 `lib/redteam/store-core.js` 从 5429 行拆到 3832 行，计分三件套搬进 `lib/redteam/score-report.js`、元数据与阶段口径搬进 `lib/redteam/engagement-meta.js`，类里只留四个一行转发（详见第十节盲区 33 与 `MAINTENANCE.md` 的「巨型文件拆分」）；二是给行尾约定加了常驻守卫 `npm run check:eol` —— 起因是 `lib/redteam/score-report.js` 入库时被 git 的 `autocrlf` 压成 LF 而工作区是 CRLF，本地与 CI 都全绿、仓库里存的却是另一份字节。现在 `.gitattributes` 用 `* -text` 关掉全部转换，`scripts/check-eol.mjs` 查「文件内不许混行尾 / 已入库不许变 / 新文件符合同目录多数派」三件事，外加一条「索引 blob 与工作区只差行尾」的 autocrlf 指纹检测（这条第一版写错了、检测静默失效，靠负向验证才抓出来，见盲区 34）。
 
@@ -1310,6 +1311,41 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
   `followup → makeContinueMessage → source.kind: "dsh-purge"`，mock 掉就漏了「续跑消息本身
   必须带 `dsh-purge` 标记」这件事（`hasFreshHumanTurn` 靠它不把插件的消息当真人说话）。
 
+### 六十补：`inject-write` 到 100% —— 三条只在非常态下才会执行的出路
+
+`lib/inject-write.js` 是「注入到底有没有生效」的最后一段执行路径，363 行里剩下的 12 行全是
+**平时不响、响了就说明环境已经不对** 的那种代码：
+
+1. **mnemon 剥离层挂不上时的 1500ms 重试与 effect 回收**（`lib/inject-write.js:64-74`）。
+   `late()` 在 `ctx.on` 抛错的宿主机上第一次必然失败 → `queueMicrotask` 再试 → 还失败就
+   `setTimeout(late, 1500)`。这段的回收器要做两件事：清掉那个定时器、把已经挂上的 disposer
+   摘掉。两条各一条用例：一条让 `ctx.on` 一直抛，回收之后**再等 1600ms 断言调用次数不再涨**
+   （不清定时器就会多试一次）；另一条让 `ctx.on` 成功、断言回收之后**disposer 恰好被调用一次**
+   （不摘就会在热重载时叠层，中间插件返回的 `decision` 每轮被过滤 N 次）。
+2. **提示词正文读不出来时退到用户勾选的本地 cwd 规则**（`:111-113`）。`readInjectFallback`
+   正常永远非空（内置正文在密封槽里），只有「安装被搬动/解包后加密槽坏了」才会给空串；
+   这时 `rules.readSelectedCwdInject(dshHome, cwd)` 是用户唯一还剩的一层身份信息。造法：
+   `createRequire` 拿 CJS 的 `node:crypto` → 让 `createDecipheriv` 抛错 → `syncBuiltinESMExports()`，
+   先断言 `core.defaultOverrideText() === ""`（前提），再让 `rewriteLiveAssembly` 跑一次，
+   断言产物里出现 `AGENTS.md` 的正文。
+   **两个前置条件**：`useHome()` 换一个新的 `DSH_HOME`（否则 `hungCache` 命中上一个用例的正文），
+   并且 `core.hangOperatorPrompt("")` + `core.rememberCommittedOverride(home, "")` 先把
+   「钉子正文 / 已提交正文」清掉 —— 不清的话 `refreshHungOperator` 直接返回缓存，`full` 不为空，
+   这条兜底根本走不到（第一版就是这么红的）。
+3. **气闸里 `rewriteLiveAssembly` 抛错时退回上游装配**（`:267-271`）。造法不是 mock：把
+   `installIdentityOverride` 的 `config` 换成一个 `get enabled() { throw }` 的对象——
+   `rewriteLiveAssembly` 第一行就读 `config.enabled`。断言三件事：返回值**是上游那个对象本身**
+   （不是 `undefined`，否则宿主拿到空装配）、`console.warn` 恰好一行、`assemble.rewriteFail`
+   那条日志还在。
+
+另有三条 `ctx.on` 回调（`session/created` / `agent-preset/selected` / `agent/pre-step`）原来只
+测了「注册了」，本批改成**真的调用一次**：换掉 `ctx.systemPrompt` 之后调回调，断言新代理被
+`installAssembleGuard` 补包（`assemble._dshPurgeWrapped === true`）。这是这三条回调存在的
+唯一理由 —— 宿主换掉 assemble 之后如果不补包，第二轮注入就走原生路径被 token 预算裁掉。
+
+`lib/inject-write.js` 行 **351 → 363/363（100%）**，分支 79.75%。RED 演练 3 条突变全红
+（回收不摘 disposer / 回收不清定时器 / cwd 兜底闸门恒假）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1954,6 +1990,15 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     「同一 seq 不重复」。改坏的表现是「三次失败之后插件还在每轮补一句」。
     检测办法：`grep -n "maxFailStreak" lib/continue-retry.js` 确认 `takeContinue` 里仍在判
     `(cur.failStreak || 0) >= maxFailStreak`。
+
+109. **`installMnemonMessageStrip` 的 1500ms 迟到重试只在「一直挂不上」的路径上验证过。**
+    真实世界里更常见的形态是「第一次挂不上、1500ms 后宿主就绪、第二次挂上」，也就是
+    `retryTimer` 触发的那次 `late()` 成功。这条路径要等 1500ms 真实时间（用例会慢一倍），
+    而且成功之后 `mounted` 变 true，与「一开始就成功」在外部几乎同形（差别只有一次
+    `ctx.on` 调用与 `retryTimer` 是否已被清）。目前钉的是「不清理就会多试一次」这个反向证据。
+    改坏的表现是「热重载之后 pre-step 瀑布上叠了两层过滤」。
+    检测办法：`grep -n "let mounted = false" lib/inject-write.js` 确认闸门仍在；真机上连续
+    热重载 3 次后用 `grep -c "\[mnemon\]"` 看日志有没有重复。
 
 ## 维护约定
 
