@@ -68,6 +68,11 @@ const EXPORT_EXTRA = new Set([
   'listLiangshenBootstrapFiles',
   'listDoctorCliFiles',
   'listDshmarketRestartFiles',
+  // 批77：「该打哪一棵树」这条链原来也全是私有函数。它判错不抛错 —— 打到 Electron
+  // 外壳那份就是全 no-file（看着像「补丁都不兼容」），打到 npm 全局那份宿主读不到。
+  'pathIsUnder',
+  'findAiBaseWeb',
+  'findAiBaseDesktop',
 ])
 
 test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {

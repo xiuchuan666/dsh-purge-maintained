@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-14T02:03:40.563Z",
-  "commit": "b503663",
+  "capturedAt": "2026-11-14T02:40:30.377Z",
+  "commit": "8e1d8ff",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -93,20 +93,20 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 4364,
-      "lf": 5194,
-      "fnh": 299,
-      "fnf": 336,
-      "brh": 1456,
-      "brf": 1770
+      "lh": 4454,
+      "lf": 5198,
+      "fnh": 305,
+      "fnf": 338,
+      "brh": 1509,
+      "brf": 1836
     },
     "lib/desktop.js": {
-      "lh": 1812,
+      "lh": 1818,
       "lf": 2272,
       "fnh": 103,
       "fnf": 116,
-      "brh": 466,
-      "brf": 601
+      "brh": 484,
+      "brf": 611
     },
     "lib/drill-grant.js": {
       "lh": 43,

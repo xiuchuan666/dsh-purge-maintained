@@ -556,6 +556,24 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 另外：给 `lib/core.js` 加 `export` 会撞 `scripts/test-patch-registry.mjs` 的「公开导出名一字不差」——那是拿 `docs/origin/core-split-baseline-8066985` 对拍的。正确做法是把它加进该文件的 `EXPORT_EXTRA` 白名单（同时保留「删导出必红」「白名单过期也红」两条），**不要**把断言放宽成「子集」。
 
+### `hostFs` 不是 `node:fs`：任何 `fs.x.y` 形式的原生扩展属性都是 `undefined`
+
+`lib/core.js` 顶上的 `fs` 是 `hostFs`（`lib/extract-asar.js:164`），它把 `node:fs` 的每个同步方法用 `route()` 包成箭头函数（为了在 Electron 里把 asar 路径路由到 `original-fs`）。箭头函数**没有**原函数的扩展属性，于是：
+
+- `fs.realpathSync.native` → `undefined`（`node:fs` 上那个是函数）；
+- 同类还有 `fs.readFileSync` 之外任何带 `.native` / `.x` 的用法（例如 `fs.statSync.native`、`fs.promises` 的扩展）—— 一律先想「`hostFs` 里有没有这个键」。
+
+代价是**代码能跑、异常被吞、功能静默失效**。真实例子：`enumeratePatchAiBases()` 的去重写着 `real = fs.realpathSync.native(n)`，外面一个 `catch { /* 保持 n */ }`，于是每次都抛 `TypeError: fs.realpathSync.native is not a function`、每次都退回原路径 —— 注释标着「M37 避免 symlink/junction 打成两套」，而这条去重**从 1.1.94 起一次都没生效过**。找它的办法只有一个：让两条指向同一棵树的路径同时进候选表，然后数表里有几条。
+
+写这类代码的正确姿势：
+
+- **原生扩展优先用 `node:fs`**（`lib/core.js` 顶上已有 `import nodeFs from "node:fs"`）：`nodeFs.realpathSync.native(n)` 一定存在；只有 asar 内路径才需要 `hostFs`。
+- **回退链要写全**：`try { nodeFs 的 native } catch { try { hostFs 的普通版 } catch { 保持原样 } }`。少一层就会出现「在解包布局上对、在 asar 布局上静默失效」。
+- **非 native 的 `realpathSync` 对 junction 会返回 8.3 短名**（`C:\Users\ADMINI~1\…`），和长名不是同一个字符串 —— 也就是说它是**不完整的**归一，只能当兜底，不能当唯一实现。
+- **写测试时把 `hostFs` 当普通对象用**：它的属性是可写数据属性，`hostFs.writeFileSync = () => { throw ... }` 能直接造出写失败路径（批 76 就靠这个测 `error:` 前缀）。但 `nodeFs` 的不要改，它是真 `node:fs`。
+
+顺带记一条 fixture 事实：`os.tmpdir()` 在 Windows 上返回的常常是 8.3 短路名（`…\Temp\` 里的上层是 `ADMINI~1`），而 `fs.realpathSync.native()` 返回长名。所以「同一路径的两种写法」在临时目录里天天都会出现 —— 这既是批 77 那个 bug 能被看见的原因，也是写路径断言时最容易踩的坑：**断言路径相等前先 `path.normalize` + 统一斜杠 + 小写，或者干脆两边都过一遍 `realpathSync.native`**。
+
 ## 更新链路（已固定为离线）
 
 维护仓库是私有的，GitHub 的 `codeload` / `api` / `raw` / `jsdelivr` 对匿名请求全部 404。因此：

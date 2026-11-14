@@ -25,6 +25,7 @@
 | 宿主版本兼容判定（major.minor.patch.pre 全等） | `lib/core.js` `hostCompat`，被 `host:status` 间接覆盖 | `lib/core.js` 49% |
 | 探测真宿主树、排除 Electron 外壳依赖树 | `test-host-baseline.mjs`（`looksLikeHostTree` / `resolveAiBase`） | —（同上） |
 | 宿主树与本机主目录的定位链（`isAiBase` 判据、10 项候选表、pnpm 布局、profiles、`DSH_HOME` 优先级） | `test-host-locate.mjs`（34 条：判据 6 / pnpm 9 / 候选表 4 / walk 2 / `findAiBaseFromDshHome` 5 / 主目录 4 / 平台 4） | `lib/core.js` 81.7% |
+| 「到底该打哪一棵树」的选择链（`findAiBaseDesktop` / `findAiBaseWeb` / `pathIsUnder` / `enumeratePatchAiBases` 的 realpath 去重） | `test-host-tree-chain.mjs`（27 条：判据 4 / 安装树 3 / 选树 9 / 去重 4 / 坏候选 3 / 源码形状 1） | `lib/core.js` 85.7% |
 | 判错时不报错：打到 Electron 外壳那份树（全场 `no-file`）、或把 `~/.dsh` 当成桌面版在用的 `dsh-home` | 同上（候选表逐项顺序 + `portableHomeFromLauncher` 顺序 + `desktopDshHomeGuesses` 三平台） | 同上 |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
@@ -584,6 +585,24 @@ RED 演练 **33 条突变 → 33/33 全红**（`{"restored":true,"total":33,"red
 
 
 
+**二十九补**：`lib/core.js` 的「到底该打哪一棵树」—— `findAiBaseDesktop` / `findAiBaseWeb` / `pathIsUnder` / `enumeratePatchAiBases`。二十七补钉的是「怎么找到候选」，这一补钉的是「候选摆出来后选哪一个、同一棵树会不会被算两次」。判错的表现和上一补一样安静，但后果更直接：补丁全打在 Electron 外壳那份上，`targetFiles()` 返回 0 文件，状态页一片 no-file，看着像「这个版本全不兼容」；或者同一棵真宿主被算成两棵，`applyPatchesAllHosts` 打两遍（第二遍自然全是 already，但报告里的「宿主数」就永远比真实多一）。
+
+关键突破是**真宿主探测链可以在沙箱里跑**：`desktop.findDesktopAppExecutable()` / `listDesktopPackageRoots()` 都吃 `process.env.DSH_DESKTOP_INSTALL`（逗号或分号分隔），所以造一棵 `<dir>/DeepSeek Harness.exe` + `resources/app/dsh/node_modules/@deepseek-ai` + `dsh-agent-instructions/lib` + `dsh/package.json` + `resources/runtime/cli/bin/dsh.cmd` 的树，就能让整条链走到真分支，而全程只碰临时目录。新增 `scripts/test-host-tree-chain.mjs`（**27 条**），`lib/core.js` 行覆盖 4364 → **4454/5198（85.7%、+90 行）**、函数 299 → **305**、分支 1456 → 1509。
+
+这一批修掉一个**从 1.1.94 起就没生效过**的去重：
+
+- `enumeratePatchAiBases` 的 `add()` 里写着 `real = fs.realpathSync.native(n)`（注释还标着 M37「避免 symlink / junction 两条路径打成两套」），但这里的 `fs` 是 `hostFs`（`lib/extract-asar.js:164`）—— 它的同步方法被 `route()` 包成箭头函数，**`hostFs.realpathSync.native` 是 `undefined`**，于是每次都抛 TypeError 被 `catch` 吞掉，去重键退化成路径字符串本身。实测：一个 junction 指向同一棵树时会进两条，`applyPatchesAllHosts` 里第二道 `path.normalize` 去重也救不回来（两条路径字符串不同）。现在先试 `nodeFs.realpathSync.native`（`node:fs` 里那个真 native），失败再退 `hostFs.realpathSync`，最后才保持原样。
+- 顺带发现**非 native 的 `realpathSync` 对 junction 会返回 8.3 短名**（`ADMINI~1`）：一条路径解析成长名、另一条解析成短名，键仍然不同。所以这条回退只对「不涉及 junction」的路径有效，真正解决 8.3 与长名归一的只有 native 那条。用例把两种形态都造了出来（`test-host-tree-chain.mjs` 的第 2、3 条去重用例）。
+
+几条**读源码想不到、只能跑出来**的现状：
+
+- `findAiBaseDesktop` 的 `owned`（从 `process.execPath` 推出来的那份）**永远优先于**「当前进程是官方 exe 就返回 null」那道闸门 —— 也就是说，只要机器上能 discover 到安装树，官方 exe 闸门就走不到。用例里只钉了「`owned` 为空时才轮到它」，以及它的兄弟分支「祖先链上捡到的 AI 根必须在桌面安装树里，否则回 null」。
+- `enumeratePatchAiBases` 的第一条永远是**仓库自己的** `node_modules/@deepseek-ai`（`findAiBaseWeb()`），所以在开发机上跑 `applyPatchesAllHosts` 会连 devDependencies 那份一起打。这是现状，写进了用例（`仓库自己的 node_modules 也在表里`）与盲区。
+- 候选表里 `DSH_BASE` 那一条（`if (env) add(path.normalize(env))`）在真实调用序列里是**冗余**的：指到桌面安装树里会被 `findAiBaseDesktop` 先收走，指到树外会被 `findAiBaseWeb` 先收走。它唯一的作用是「两处都拒了的坏候选也别塞进来」，所以只能钉「不是 AI 根就不进表」这一面。
+- `pathIsUnder` 的 `!c` 守卫是**冗余**的（空 child 既不等也不前缀于任何 root）；`findAiBaseWeb` 的 `if (env && env.trim())` 条件里的 `trim` 也是冗余的（函数体里那句 `path.normalize(env.trim())` 才是真归一）。这两处都按「改完说不出用户会看到什么不同」从 RED 演练里删掉，而不是硬凑用例。
+
+RED 演练 **15 条突变 → 15/15 全红**（`{"total":15,"red":15,"green":[],"anchor":[]}`）。第一批是 24 条 / 11 红 / 13 绿，处置分三类：①**补用例** 6 条（空格 DSH_BASE、`./..` 归一、非 AI 根不进表、`app.asar.unpacked` 真目录经包根进来、安装树里的自定义 AI 根、祖先链捡到的根不在安装树里）；②**删等价突变** 6 条（上面列的冗余守卫 + `resolveDesktopAiBase` 自己会从 execPath 推 resources，喂空 `resourcesPath` 无差别）；③**写进盲区** 1 条（官方 exe 那道闸门在能 discover 到安装树的机器上不可达）。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -977,6 +996,12 @@ RED 演练 **33 条突变 → 33/33 全红**（`{"restored":true,"total":33,"red
     **③ `revertCmdFlash` 与 `silenceCmdFlash` 的往返**：本批只在「固定 patched 文本 → 回退成固定 plain 文本」一个方向上验证；真正要紧的往返（silence → revert → silence，看是否回到第一次的结果、以及是否留下重复注释）没有端到端用例，因为那要把 11 补那簇的参数再造一遍。
     **检测办法**：在真机上跑一次「装 → 卸」，然后 `git diff --no-index` 或 `cmp` 比对宿主文件与 `.dshpurge.bak`；再跑一次「装 → 卸 → 装」，看 `windowsHide` 那段注释是不是只剩一份。
 
+76. **「同一棵树只打一次」与「官方 exe 那条闸门」在真机上仍有射程外。**
+    `test-host-tree-chain.mjs`（27 条）把选树与去重的判据钉住了，但三类情形只能靠真机验：
+    **①** `findAiBaseDesktop` 里「当前进程就是官方 exe → 返回 null」这条闸门，在能 discover 到安装树的机器上**走不到**（`owned` 先返回）。要造出它的现场，需要一台进程真是 `DeepSeek Harness.exe`、且没有可发现安装树的机器 —— 本机做不到，所以只钉了「`owned` 为空时轮到它」这个前提。
+    **②** 去重依赖 `nodeFs.realpathSync.native`：在真桌面（Electron）里，路径可能落在 `app.asar` 内部，native realpath 对 asar 路径会失败 → 退到 `hostFs.realpathSync`，而它对 junction 会返回 8.3 短名。也就是说「asar 内路径 + junction 别名」同时出现时，去重仍可能漏一次。本机是解包布局，造不出 asar 内的 junction。
+    **③** `enumeratePatchAiBases` 的第一条永远是仓库自己的 `node_modules/@deepseek-ai`：在开发机上跑 `applyPatchesAllHosts` 会连 devDependencies 那份一起打。用例锁的是现状，没有断言「不该打」，因为要改它得动 `findAiBaseWeb` 的语义。
+    **检测办法**：改完这一簇，除了 `node --test scripts/test-host-tree-chain.mjs`，还要在真机上跑 `npm run host:status`（看 `ai_base` 与 `patches_applied`）与 `node scripts/verify-target.mjs --pad`（看 `would-apply` 是否仍 ≈0）；再手动看一眼安装目录里有没有 junction，确认 `host:preview` 报的宿主数没有翻倍。
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
