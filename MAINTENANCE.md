@@ -876,3 +876,55 @@ grep -rn "hitTrace" lib/redteam/score-report.js     # 有命中 → 函数本身
    ```
 
 3. **想真让 COMMIT / ROLLBACK 分出差异，就得让失败发生在「已经写成功一部分」之后**（例如让第二个 `DELETE` 失败），而这通常要改生产代码加注入点 —— 收益不足时，按「整句去掉」写突变、并把这层限制写进盲区（本例已写进盲区 90 第 4 条）。
+
+### 「拿不到服务就退回去」的每个 catch 都是可测的：把服务做成抛错的那一个
+
+`lib/rewind.js` 里有一层约定：任何宿主服务都用 `service(ctx, name)` 取，取不到、取的时候抛错，一律回 `undefined` 继续走。这一层以前一条测试都没有，理由是「`ctx.get` 抛错造不出来」—— 其实只要给的 ctx 自己抛就行：
+
+```js
+const ctx = { get() { throw new Error("service boom"); } };
+assert.equal(rw.service(ctx, "sessions"), undefined);
+```
+
+同一套写法把这一簇全部覆盖到了：`getAgent` 的 `agents.get` 抛错、`liveSession` 的 `sessions.get` 抛错、`readSessionLog` 的 `observeSession` 返回的句柄 `[Symbol.dispose]` 抛错、`resetRequestSeries` 的三个字段各自抛错。要点有三条：
+
+1. **一个字段一个 `try` 的函数，要单独造「只有第一个抛」的输入**。`resetRequestSeries` 是三段独立 `try`，如果只造「全都抛」的 agent，写成一句大 `try` 也能全绿 —— 必须断言「第一个抛之后，后两个仍然被写到」（`[['gen', -1], ['clear']]`）。
+2. **getter 抛错与 setter 抛错是两条路**。`Object.defineProperty(agent, "frozenMessages", { get() { throw } })` 才能打到第三句，只写 `{ set() { throw } }` 打不到。
+3. **`[Symbol.dispose]` 抛错只影响清理，不影响返回值**。所以断言要分两条：一条断「正文照常返回」，一条断「disposer 被调用过」（用一个数组记次数）。只断前者的话，把 `finally { disposeObservation(observed) }` 整段删掉也是绿的。
+
+### 模块级常量造成的「等不起」，用替换 `Date.now` 来测，不要改常量
+
+`DRAFT_TTL_MS` 是 `10 * 60 * 1000` 的模块常量。想测「草稿过期」，既不能等 10 分钟，也不能改常量（改了就是在测另一份代码）。可行且不污染的做法只有一条：**在一个用例里把全局 `Date.now` 换成「真实时间 + 11 分钟」，`finally` 里还原**。
+
+```js
+const realNow = Date.now;
+try {
+  Date.now = () => realNow() + 11 * 60 * 1000;
+  assert.equal(rw.getDraft(id), null);
+  assert.equal(rw.getPending(), null);
+} finally {
+  Date.now = realNow;
+}
+// 时钟拨回来之后再问一次 —— 这一句才是「记录被真的删掉」的证据
+assert.equal(rw.getDraft(id), null);
+assert.equal(rw.getPending(), null);
+```
+
+三条纪律：
+
+1. **只换 `Date.now`**，别去动 `performance.now` / 定时器（模块里所有过期判据都走 `Date.now`，换别的既无效又会牵连 `node --test` 的超时统计）。
+2. **`finally` 必须还原**，否则同文件后续用例全部处于「未来」，`getDraft` 会一律回 null，看起来像「草稿功能坏了」。
+3. **必须有「拨回来再问一次」的断言**。只断拨快之后是 null 的话，「`lastPending = null` 换成 `void 0`」这种突变是绿的（因为函数紧接着 `return null`）—— 拨回来再问才能把「记录真的被删掉」与「每次靠时间判据回 null」分开。
+
+### 等价突变的第五种：同一函数里前后两道判据互相兜底
+
+前四种是「两条判据互为补偿」「无可观测差异」「平台归一化吃掉差异」「事务在无脏写时分不出 COMMIT/ROLLBACK」。第五种是**同一个函数里，前一道守卫与后一道兜底给出同一个值**：
+
+```js
+function service(ctx, name) {
+  if (!ctx || typeof ctx.get !== "function") return undefined;   // 这道
+  try { return ctx.get(name); } catch { return undefined; }       // 与这道
+}
+```
+
+把第一道删掉，`{}` 会抛 `ctx.get is not a function`，被第二道吃掉，返回同样 `undefined`。判据：**把守卫删掉之后，是否存在一个输入能让两个版本的返回值（或副作用）不同** —— 找不到就是等价，直接删掉那条突变，不要为它硬凑用例；但要留一行注释说明「这道守卫目前是冗余的，一旦下面的 catch 改成别的值它就重新必要」。

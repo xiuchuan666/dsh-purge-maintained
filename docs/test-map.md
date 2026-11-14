@@ -172,6 +172,7 @@
 | `/rewind` 的草稿：回退后 `getDraft` / `getPending` 都指同一条，`takeDraft` 只能取一次（取走后再取为 null，防重复发送） | `test-rewind.mjs`（2 条） | 同上 |
 | `/rewind` 读会话日志的三条路径（live `snapshotEvents` → `controller.inspect` → `sessionQuery.observeSession`），最后一条必须 `[Symbol.dispose]` | `test-rewind.mjs`（4 条） | 同上 |
 | `/rewind` 的五段静默失败：等轮次关闭的读盘次数与超时文案、`sessions.get` 抛错原样冒泡、`cancel:false` 一次都不 cancel、inbox 去重摘除（含日志里待发的）、串行锁的 onRejected 分支 | `test-rewind-edges.mjs`（23 条） | `lib/rewind.js` 行 580 → **618/644（96.0%）** |
+| `/rewind` 的第二批兜底：`service` / `getAgent` / `liveSession` 在被调用方自身抛错时一律回空、`observeSession` 句柄的 disposer 一定被调用且抛错被吞、`resetRequestSeries` 三个字段各自独立兜错（含 getter 抛错）、父子指针成环时回到入口会话、`createBlank` 的三级建法、`hideRewoundSource` 的 registry → workspaces → detachSession 三级、草稿与 pending 的到点作废（替换 `Date.now` 模拟，拨回时钟后再查一次） | `test-rewind-edges2.mjs`（24 条） | `lib/rewind.js` 行 618 → **644/644（100%）**、分支 365/365 |
 | `/rewind` 的收件箱与子会话：只收最后一次 `turn/end` 之后的 `next-turn` 插入、去重保序；本轮子会话按 catalog/descriptor 去重保序 | `test-rewind.mjs`（5 条） | 同上 |
 | 3 个模型工具（`purge_status` / `purge_apply` / `purge_revert`）的名字、空 parameters、output schema | `test-command-surface.mjs` | `lib/tools.js` 100% |
 | 三个工具的执行分支（无宿主直接报错、需确认时停手、applied/already/scrub 统计、回滚同时收 shim） | `test-command-surface.mjs` | 同上 |
@@ -861,6 +862,27 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 **一个等价突变的判据**：把 `catch` 里的 `db.exec('ROLLBACK')` 换成 `db.exec('COMMIT')` 时，测试**仍然全绿** —— 因为这条路上「还没成功写过任何东西」（`DELETE FROM score_hit` 就失败了，事务里没有脏数据），`COMMIT` 与 `ROLLBACK` 的可见效果相同。能区分的是把回滚整句**去掉**（`BEGIN` 会报「事务未结束」）。所以演练里那一条突变写成「不回滚」，并在测试里补了 `assert.doesNotThrow(BEGIN/COMMIT)` 这条断言。
 
 **覆盖率**：`lib/redteam/store-core.js` 行 3741/3831 → **3794/3822**（分母 −9 是删掉的两处死代码）、函数 250 → **251/259**、分支 1290 → **1368/1584**；全仓行 **93.81%** / 函数 84.66% / 分支 90.02%。RED 演练 **26 条突变 → 26/26 全红**（无 ANCHOR、无等价突变留在里面）。
+**四十三补**：`/rewind` 的第二批兜底 —— 服务查找失败、草稿到点作废、回退后原会话怎么藏、空白会话怎么建。测试文件 `scripts/test-rewind-edges2.mjs` **24 条**（两平台各 24/24），生产改动只有**十二个私有函数加 `export`**（公开行为零变化），`lib/rewind.js` 行覆盖 **644/644（100%）**、分支 365/365（100%）。这一批把 `lib/rewind.js` 从「96% 但有十二段小兜底没跑过」推到「一行不剩」，做法是把「拿不到服务时退回去」的每一个 `catch` 都做成可观测输入。
+
+七条只能跑出来的事实：
+
+1. **`service(ctx, name)` 的 `typeof ctx.get !== "function"` 守卫是冗余的** —— 它后面紧跟 `try { return ctx.get(name); } catch { return undefined; }`，把守卫删掉之后 `{}` 只会抛 `ctx.get is not a function` 被同一个 catch 吃掉，返回同样 `undefined`。这是**第五种等价突变**（同一函数里前后两道判据互相兜底），演练里直接删掉这条突变，不为它造用例。
+2. **`isRoundPromptEvent` 对不认识的 `source.kind` 一律 `false`**：`{kind:'system'}`、`{kind:'tool'}`、`{kind:'goal'}` 缺 `round` 都是 false；只有 `user` / 空 kind 才是 true。这条决定了「round 模式撤到哪一句话」——认错了会把系统提示当成用户那句话带进草稿。
+3. **`planRewindStep` 的 `blank` 模式只在「整段最开头」出现**：`step/start` 的 seq 是最小值（没有更早的 seq 可比）且有正文时返回 `{ok:true, mode:'blank', text, fromSeq:0}`；同样位置但没有正文时返回 `{ok:false, error:'Nothing to undo'}`。这两种都跟「fork 出一个子会话」是完全不同的落地路径（一个是新建空白会话、一个是直接拒绝）。
+4. **`readSessionLog` 走 `observeSession` 这条路时，disposer 一定被调用**（`finally { disposeObservation(observed) }`），而且 **disposer 自己抛错会被吞掉、正文照常返回**。实测：`[Symbol.dispose](){ throw }` 时函数仍然返回 `{events:[]}`。这两条一起意味着「宿主的观察句柄漏 dispose」不会表现为报错，只会表现为句柄泄漏 —— 所以必须把「dispose 被调过几次」当断言，不能只看「函数没抛」。
+5. **`resetRequestSeries` 是三个独立 try**：`requestHeaderLogged` / `requestSurfaceGeneration` / `frozenMessages.clear()` 各包一层。实测把第一个的 setter 做成抛错，后两个照常执行（`[['gen',-1],['clear']]`）；`frozenMessages` 的 **getter** 抛错也被吞。写成一句大 try 的话，第一个抛了后面两个就都不执行 —— 而这三个字段各自对应「回退后重发要按新请求开」的一层假设，漏一层会出现「用上一轮的 header series」。
+6. **`resolveMainSession` 的父子指针互指成环时不会死循环**：`seen` 集合挡住重复 id，循环退出后**重读入口会话**返回（实测读取序列 `a → b → a`）。这一条如果用「循环退出就直接返回入参」的写法，会把 `log` 丢掉，`round` 回退就退不动。
+7. **`hideRewoundSource` 的三级优先**：`workspaceRegistry.archiveSession`（有就用它）→ 否则 `workspaces.archiveSession` → 都不行再去 `workspaceRegistry.get(id).detachSession`。三条里 **`detachSession` 与 `archiveSession` 是两件事**：前者把会话从工作区列表里摘掉（`hidden=true`），后者是归档。两者都失败时返回 `false` 而不是抛 —— 因为「旧会话没藏住」不该挡住新会话重发。
+
+**草稿过期怎么测**：`DRAFT_TTL_MS` 是模块常量（10 分钟），硬等不可行。做法是**在单个用例里把 `Date.now` 换成「真实时间 + 11 分钟」并在 `finally` 里还原** —— 这是全局对象的替换，`import * as rw from "../lib/rewind.js"` 的命名空间只读不影响的唯一一条路。两条纪律：
+
+- 只能替换 `Date.now`（模块里所有过期判据都走它），别去 `Object.defineProperty(global, ...)` 别的计时器；
+- **`finally` 必须还原**，否则同文件后续用例全部「时间在未来」，`getDraft` 立刻返回 null。
+
+**两个等价突变的判据**：①「`service` 去掉 `typeof ctx.get` 守卫」等价（见第 1 条）；②「过期时 `lastPending = null;` 换成 `void 0`」在第一版测试里也是等价的 —— 因为 `getPending` 紧接着 `return null`，看上去一样。真正能区分的是**把时钟拨回来之后再问一次**：清空了就是 null，没清空就会把那条过期记录当成新鲜草稿交出去。判据写成 `assert.equal(rw.getPending(), null)`（在 `finally` 还原时钟之后）之后，这条突变才红。
+
+**覆盖率**：`lib/rewind.js` 行 618/644 → **644/644（100%）**、函数 56 → 57/57、分支 312 → **365/365（100%）**；全仓行 **93.88%** / 函数 85.01% / 分支 90.06%。RED 演练 **19 条突变 → 19/19 全红**（一次分片跑，无 ANCHOR）。
+
 
 
 ## 五、前端产物链（client.js）
@@ -1381,6 +1403,12 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
     4. `scorePoints()` 的截图回填（`:1606-1616`）里「一条得分点下多张截图、分属不同命中」的聚合只在 `shotBrief` 的字段表上体现；现有用例只覆盖「一条命中一张图」。
     5. `attackGraph()` 的 `access` 分组（`:3341-3356`）在没有任何已被利用的漏洞时走不到 —— `seedAssets` 一造漏洞就会同时造出 `exploited`，所以「空 access 组」只能靠删表造（而删表会让 `attackGraph` 直接抛，见下一条）。
     6. **删掉两处死代码之后，`#hitTrace` 这个名字在 `lib/redteam/store-core.js` 里已经不存在**，但 `hitTrace` 函数本身在 `lib/redteam/score-report.js` 里仍在用。**检测办法**：`grep -rn "this.#hitTrace" lib/` 必须为空；`grep -rn "hitTrace" lib/redteam/score-report.js` 必须有命中。
+91. **`lib/rewind.js` 已经 100% 行覆盖，但有三件事仍然只能靠源码形状钉。**
+
+    1. **`service` 里 `typeof ctx.get !== "function"` 那道守卫是冗余的**（后面紧跟同样返回 `undefined` 的 catch），所以「删掉守卫」与「留着守卫」在行为上不可区分。**检测办法**：`grep -n "typeof ctx.get" lib/rewind.js` 必须命中一行；如果哪天有人把那条 catch 改成别的值，这条守卫就重新变成必要的了 —— 那时应该补一条「没有 get 的 ctx 返回 undefined」的用例，而不是删守卫。
+    2. **`lib/rewind.js:337` 的 `/* ignore */` 与 `:406` 的 `/* ignore */` 里的注释长度**没有断言（只断言了两侧 try/catch 的数量）。**检测办法**：`grep -c "\} catch { /\* ignore \*/" lib/rewind.js` 的数应与「独立 try 段数」一致。
+    3. **`getPending` / `getDraft` 的过期判定依赖真实时钟**：用例里把 `Date.now` 往后拨 11 分钟来模拟，这意味着**没有覆盖「时钟回拨」**（用户手动改系统时间到过去）这一种情况 —— 那种情况下 `Date.now() - rec.at` 是负数，判据 `> DRAFT_TTL_MS` 为假，草稿会一直被当成新鲜。**检测办法**：`grep -n "Date.now() - rec.at > DRAFT_TTL_MS" lib/rewind.js` 有两处（`getDraft` / `getPending`），两处都只判上限；真要处理回拨得改成绝对差值比较，那属于行为改动，当前按现状锁定。
+
 
 
 ## 维护约定
