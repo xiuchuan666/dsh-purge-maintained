@@ -978,3 +978,20 @@ try { … } finally { process.argv[1] = orig; }
 ```
 
 同类的全局量还有 `TEMP/TMP/TMPDIR`、`DSH_*`、`npm_config_prefix`、`process.platform`（后两个分别会喂给 `path.delimiter` 与模块级常量，见前面两节）。
+### 用 getter 的「第 n 次读取」定位 catch：同一个属性被十几次读取，只有其中几次不在 try 里
+
+`applyHostHooks` 里 `ctx.systemPrompt` 被读了十几次，只有 `registerAnchor` 里那次 `ctx?.systemPrompt?.ctx` 会落进那个 `catch`。做法：给 `systemPrompt` 装一个 **getter**，计数到第 n 次就抛，然后跑一串 n 看行为谱。
+
+判据表（实测）：n = 1 / 3 → apply 直接挂、`specs` 变 0；**n = 6 → 异常被吞、日志出现 `[apply-hooks] name=anchor/subagent`、16 条路由照注册**；n = 9 / 12 → 落在后面那层 `ctx.effect` 的 try 里，什么都不记。选 n 的依据是「哪一档还能把 apply 走完但把目标 catch 打通」，不是「最小的 n」。
+
+### 有 setImmediate / 定时器的分支，用例里要「只跑那一个 effect」，不要 runEffects 全跑
+
+`apply()` 登记的 effect 里，第 3 个是 `clearTimeout(settleTimer)`。要测「定时器醒来发现 ctx 已经没了」，如果按常规 `runEffects` 全跑一遍，第 3 个 effect 会把定时器清掉 —— 于是用例变成「定时器没响」，看上去永远是绿的，却什么都没测。
+
+正确姿势：`apply()` 收齐 `ctx.effects` 后，**只挑出 `String(f).includes("alive")` 那一个**（`watchContextLife` 注册的）调用其 disposer，其余一律不跑，再等 30ms 读日志。要测「正常醒来」那一支就**一个 effect 都不跑**。
+
+### 依赖真机资产的用例，断言写成「最多一行 + 有一行就必须有文件 + 真机 mtime 不变」
+
+`officeSkillAssetSources()` 读的是真实安装树。开发机上它存在 → `[heal-office-skills] healed=true` 会打；CI 的干净机器上不存在 → `reason:"no-source"`、一行都不打。写成「必须恰好一行」在 CI 上必红，写成「必须 0 行」在开发机上必红。
+
+可移植写法：断言 **≤ 1 行**；如果有一行，则必须 `healed=true` 且目标文件真的落盘（`existsSync`）；如果 0 行，则目标文件不许存在。**无论哪种都要加一条「真机那份 `SKILL.md` 的 mtime 前后不变」** —— 那是「测试没摸真机」的唯一证据。

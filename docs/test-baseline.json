@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-14T13:22:13.356Z",
-  "commit": "0998121",
+  "capturedAt": "2026-11-14T14:11:01.127Z",
+  "commit": "5167630",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -9,8 +9,8 @@
       "lf": 132,
       "fnh": 9,
       "fnf": 9,
-      "brh": 50,
-      "brf": 50
+      "brh": 51,
+      "brf": 51
     },
     "lib/apply-progress.js": {
       "lh": 66,
@@ -41,8 +41,8 @@
       "lf": 161,
       "fnh": 7,
       "fnf": 7,
-      "brh": 58,
-      "brf": 61
+      "brh": 60,
+      "brf": 62
     },
     "lib/boot-settle.js": {
       "lh": 246,
@@ -66,7 +66,7 @@
       "fnh": 4,
       "fnf": 4,
       "brh": 90,
-      "brf": 95
+      "brf": 90
     },
     "lib/chat-rules-skills.js": {
       "lh": 224,
@@ -93,20 +93,20 @@
       "brf": 209
     },
     "lib/core.js": {
-      "lh": 4627,
+      "lh": 4631,
       "lf": 5205,
-      "fnh": 318,
+      "fnh": 319,
       "fnf": 341,
-      "brh": 1598,
-      "brf": 1924
+      "brh": 1601,
+      "brf": 1930
     },
     "lib/desktop.js": {
-      "lh": 1813,
+      "lh": 1837,
       "lf": 2272,
-      "fnh": 103,
+      "fnh": 105,
       "fnf": 116,
-      "brh": 487,
-      "brf": 615
+      "brh": 491,
+      "brf": 617
     },
     "lib/drill-grant.js": {
       "lh": 45,
@@ -189,12 +189,12 @@
       "brf": 586
     },
     "lib/index.js": {
-      "lh": 403,
+      "lh": 419,
       "lf": 429,
-      "fnh": 30,
+      "fnh": 31,
       "fnf": 39,
-      "brh": 67,
-      "brf": 110
+      "brh": 74,
+      "brf": 108
     },
     "lib/inject-write.js": {
       "lh": 351,
@@ -298,15 +298,15 @@
       "fnh": 16,
       "fnf": 16,
       "brh": 85,
-      "brf": 101
+      "brf": 104
     },
     "lib/profile-insert.js": {
       "lh": 412,
       "lf": 412,
       "fnh": 20,
       "fnf": 20,
-      "brh": 168,
-      "brf": 188
+      "brh": 172,
+      "brf": 189
     },
     "lib/prompt-source.js": {
       "lh": 324,
@@ -402,7 +402,7 @@
       "fnh": 159,
       "fnf": 166,
       "brh": 584,
-      "brf": 739
+      "brf": 736
     },
     "lib/redteam/score-rules.js": {
       "lh": 933,
@@ -410,7 +410,7 @@
       "fnh": 30,
       "fnf": 31,
       "brh": 239,
-      "brf": 280
+      "brf": 284
     },
     "lib/redteam/settings.js": {
       "lh": 78,
@@ -442,7 +442,7 @@
       "fnh": 251,
       "fnf": 259,
       "brh": 1368,
-      "brf": 1581
+      "brf": 1574
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,

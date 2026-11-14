@@ -263,6 +263,7 @@
 | `apply()` 一共登记 **12** 个 effect 工厂（少一个就等于泄漏一个定时器或闭包；`applyHostHooks` 内部那 8 个各登记一个） | `test-plugin-apply.mjs`（1 条） | 同上 |
 | `watchWebTreeReady` 四条分支的对外读数：没有 connection → `/status` 503（唯一有可观察差异的一条）、服务缺失 → 走 `then` 的**失败回调**也是 mark → 200、非 thenable → 同步 mark → 200、起手必须 `webState.ready = false`（热重载复用旧 ready 会让第二次 inject 之前的 `/status` 说假话） | `test-plugin-apply.mjs`（4 条） | 同上 |
 | 桌面自愈只在 `desktop` 面排程（`if (hostctl.currentSurface() === "desktop")` 守卫、整套启动路径只有一处 `setImmediate`、且必须在守卫之后）+ `/purge` 的 deps 里 `scheduleApplyRestart` 必须是 `bootSettle.scheduleApplyRestart`、rules 带 refresh 而 skills 不带 | `test-plugin-apply.mjs`（2 条源码形状） | 同上 |
+| `apply()` 只在坏宿主上才走到的那几条：`connection` 的 `inject` 抛错也把 `/status` 标成 200（16 条路由照注册）、profile 自愈真写了才记账、settle 定时器两种醒来方式（活着跳过 / 自己睡醒报结论）、桌面面两条自愈分头记账（`[heal-runtime-payload]` 必有、`[heal-office-skills]` 看机器）、anchor/subagent 装配抛错被吞成 `[apply-hooks]` 一行、`/purge` 一次注册四条命令且本体回帮助文本 | `test-plugin-apply-edges.mjs`（15 条） | `lib/index.js` 行 419/429 |
 | override 状态的读写与容错：坏 JSON / `null` / 缺文件都回 `{}`、顶层是数组也原样返回（只判 `typeof === "object"`，不判 `Array.isArray`）、写盘必须是紧凑 JSON 且**不带**结尾换行、`customized` 一律 `Boolean` 化、每次自定义都同时记 `hash` 与 `seedHash` | `test-override-state.mjs`（11 条） | `lib/core.js` 57% |
 | 「这份正文算不算用户稿」的四道判据：只有 `PLUGIN_DEFAULT_MARKS` 三个标记**全中**才算插件血统（`<|im_start|>system:` / `<project_instructions>` / `Little Code Sauce`）、当前加密槽的 hash 不算用户稿、`seedHash` 命中的也不算（我们上次自己写的那份）、空稿一律不算 | `test-override-state.mjs`（9 条） | 同上 |
 | `installOverride` 的两道闸与 force：第一道判用户自改、第二道是纵深防御（源码形状钉）、`force` 必须能强行刷回加密槽、落盘后必须把 state 一起刷新（`customized:false` + 两个 hash）、第二次调用回 `exists` 且不重写文件 | `test-override-state.mjs`（9 条） | 同上 |
@@ -910,6 +911,22 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 **覆盖率**：`lib/hide-console.js` 行 326 → **336/339（99.1%）**、分支 122 → 128/134（95.5%）、函数 100%；全仓行 **93.93% → 93.95%** / 函数 85.21% / 分支 90.06%。
 
+**四十六补**（`apply()` 剩下的十行：注入失败也照样起、装配失败被吞、`/purge` 本体、桌面自愈两条记账）：
+
+`lib/index.js` 批94 之前是 403/429。剩下那 26 行按「能不能造出现场」分成三堆，最后只有 16 行拿到了用例，另外 10 行的结论是「本机造不出来，只能钉源码 + 留检测办法」。
+
+1. **`inject(["connection"])` 抛错时 `catch` 里也 mark**：`/status` 必须回 200 而不是 503。造法是假 ctx 的 `inject` 对 `connection` 抛，但对 `webServer` 照常回调。**不能**用「压根没有 `ctx.inject`」来造 `:139-142` 那三行——`installWebServer` 无条件调 `ctx.inject`，所以经 `apply()` 永远走不到那一支（写进盲区 94）。
+2. **`seedPromptInjectAtBoot` 从不抛**：三种坏现场（`DSH_HOME` 是文件、`DSH_HOME` 不存在、`prompt-inject.md` 是目录）全都只返回 `action:"error"` + `reason`，因为 `syncPromptInjectOnDiskSync` 内部已经把 `atomicWriteSync` 整个包进 try/catch。所以 `:229-230` 那个 `catch` 唯一能兜的是「真异常」，本机造不出来。`DSH_HOME` 里塞 NUL 也没用——`process.env` 会把它吞掉。检测办法：`grep -n "seed prompt-inject failed:" lib/index.js` 必须命中一行。
+3. **profile 自愈「真写了才记账」**：造 `profiles/p1/node_modules/dsh-purge/package.json` + 清单里 `dependencies.dsh-purge` → `ensureAllProfileInstall` 真的补出 `cordis.patch.yml`，日志里恰好一行 `profile heal: <…>/profiles/p1`；干净的 home 一行都不许有。这条钉的是「日志与落盘一致」，不是「日志打得好不好看」。
+4. **settle 定时器两种醒来方式**：先 `apply()` 收齐 effect，**只跑 `String(f).includes('alive')` 那一个**并 dispose（跑全部会把第 3 个「清 timer」也跑掉，变成「定时器没响」），等 30ms → 日志出现 `settle skipped: inactive context`；反过来一个 effect 都不跑 → 0ms 后自己醒来，日志里恰好一行 `settle: boot:host-untouched`（或 `skip:boot-no-host-write`）。
+5. **桌面面两条记账分头走**：`DSH_DESKTOP_INSTALL` 指假安装树 + `DSH_SURFACE=desktop` → `[heal-runtime-payload] ok=false` 必有一行（假树里的 `runtime/` 是空的）；`[heal-office-skills]` 则取决于这台机器上有没有官方 office 资产——有就恰好一行 `healed=true` 且文件真落盘，没有就一行都没有。web 面两条都没有。**这两条用例都核对真机 `resources/runtime/office-skills/office/SKILL.md` 的 mtime 前后不变**，因为 `officeSkillAssetSources()` 读的是真安装树。
+6. **anchor/subagent 装配抛错被吞**：`systemPrompt` 用 getter 计数，**第 6 次读取**抛错正好落进 `:344-346` 的 catch——第 1、3 次抛得更早（`specs` 变 0，说明整条 apply 挂了），第 9、12 次落在后面那层 `ctx.effect` 的 try 里。日志里恰好一行 `[apply-hooks] name=anchor/subagent err=sp_getter_boom`，且 16 条路由仍然注册完。
+7. **`/purge` 一次注册四条命令**（`purge` / `rules` / `skills` / `rewind`，按 name 取而不是取 `cmds[0]`）：无子命令回 `{kind:"success", text:"dsh-purge 命令：…"}`，`/purge status` 走状态渲染且不抛。命令对象的键恰好是 `description` / `handler` / `input` / `name`。
+
+**RED 演练**：13 条突变 → **13/13 全红**（单进程跑完，`restored:true`、无 ANCHOR）。十三条分别是：inject 抛错后不 mark、seed 日志不打、profile 自愈结果不接、profile heal 条件恒假、profile heal 日志不打、settle 不判活着、settle 跳过文案改写、settle 结论不入日志、桌面面整段不跑、office 自愈不记账、runtime 探测恒真、anchor 失败不记账、不取 commands 服务。
+
+**覆盖率**：`lib/index.js` 行 403 → **419/429（97.7%）**、函数 30 → 31/39、分支 67 → 74/108；`lib/desktop.js` 行 1813 → **1837/2272**、函数 103 → 105/116（那两条用例顺带把 `healOfficeSkillsRuntimeOnDisk` 与 `inspectRuntimePayload` 的调用链跑到了）。全仓行 **93.95% → 94.07%** / 函数 85.31% / 分支 90.24%。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1439,6 +1456,12 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 **92. `lib/profile-insert.js` 的 insert 段状态机只剩「关闭」这一半，另外三处判断靠别的测试文件。** 本批删掉了 `profileHasPurgeBodyInsert` 里永远走不到的 reopen 三行（判据见「四十四补」第 1 条），剩下的段状态机只有一个 `insertIndent` 变量、两种转移：进段、关段；**没有「同段内出现第二条 `- insert:`」这种情况的用例**（因为那时已经在段里，先命中的是本体行匹配）。另外 `164-174`（`ensureProfileBundles`）与 `385-409`（`ensureAllProfileInstall` 尾部）不在本批测试的覆盖范围内 —— 单跑 `scripts/test-profile-insert-edges.mjs` 时 lcov 会报这些行未命中，它们是 `test-self-update.mjs` 的地盘。`pnpmMajor` 三个来源里「`.modules.yaml` 读得到但没有 `packageManager` 字段」这一支没有专门用例；`keepSources === false`（pnpm 11）那一侧也仍由 `test-self-update.mjs` 覆盖，本批只用 `dir = "NOPE"`（major 判不出 → null → 保留来源键）跑过保留侧。**检测办法**：`grep -n "keepSources = major === null || major >= 12" lib/profile-insert.js` 必须命中一行，且 `grep -c "inAllow = false;" lib/profile-insert.js` 为 1（多了说明段标记在别处也被清）。
 **93. `lib/hide-console.js` 的 `95-97` 三行（`createRequire` 也失败时返回 `null`）在本机造不出来。** 要走到那三行，得让 `createRequire(import.meta.url)("node:child_process")` 抛错 —— 内置模块在本机永远拿得到，而 `createRequire` 是模块级导入的绑定，换成假的是改源码而不是造现场。`installHideConsole()` 的 `skipped: "builtin_unavailable"` 出口因此只能靠阅读确认。**检测办法**：`grep -n 'skipped: "builtin_unavailable"' lib/hide-console.js` 必须命中一行；如果哪天 Node 出了「禁用内置模块」的开关，这条就该补用例。
+**94. `lib/index.js` 剩下的 10 行在本机造不出来。**
+
+    1. **`140-142`（`watchWebTreeReady` 的 no-inject 早退）经 `apply()` 永远走不到**：`installWebServer` 无条件调用 `ctx.inject`，所以「没有 inject 的宿主」在进 `watchWebTreeReady` 之前就已经 TypeError 了。**检测办法**：`grep -n 'typeof ctx?.inject !== "function"' lib/index.js` 必须命中一行且紧随 `mark();` 与 `return;`；如果哪天 `installWebServer` 改成先探测再 inject，这条就该补用例。
+    2. **`229-230`（seed 的 catch）**：`syncPromptInjectOnDiskSync` 内部已把 `atomicWriteSync` 整段包进 try/catch 并转成 `{action:"error", reason}`，所以 `seedPromptInjectAtBoot` 在三种坏现场（home 是文件、home 不存在、`prompt-inject.md` 是目录）下都只返回 error 而不抛；`DSH_HOME` 里塞 NUL 也会被 `process.env` 吞掉。**检测办法**：`grep -n "seed prompt-inject failed:" lib/index.js` 必须命中一行；真机上把 `$DSH_HOME` 换成只读卷再启动，日志里应出现这一行。
+    3. **`271-275`（settle 的 `isInactiveContextError` catch）**：`settleInstalledPatches` 在沙箱里从不 reject（它自己把每一步都 try 住了），所以「异步阶段才发现 ctx 没了」这一支只能用源码形状确认。**检测办法**：`grep -n "isInactiveContextError(e)" lib/index.js` 必须命中；真机上在 settle 期间发一次 `/revert` 让 ctx 被 dispose，日志里应出现 `settle skipped: inactive context`。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
