@@ -335,6 +335,7 @@
 | 报告正文边角（长备注按句子截断 / 档位校正段 / 截图归属指路 / 步骤去重）与一段重复兜底的删除 | `test-report-edges.mjs`（14 条）+ `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1457 → **1496/1510**（删掉 28 行死代码，分母 -22） |
 | 目标宿主声明与宿主版本门禁：`HOST_TARGETS` / `HOST_TARGET` / `hostCompat` 的 known·ok·host 三态、预发布后缀原样相等、`dshTargets` 含 `dshTarget` 且无重复、每一项都能被 `parseHostVersion` 解析 | `test-host-target-decl.mjs`（9 条）/ `test-package-integrity.mjs`（13 条） | `lib/core.js` 宿主门禁段 100% |
 | 官方 CLI 三件套（`resources/runtime/cli/bin` 下的 `dsh` / `dsh.cmd` / `dsh.ps1`）：首装现场生成、已有就只打回退块、打完留 `.dsh-purge.bak`、`app/runtime` junction 指向 `../runtime` 且目标非空才回 `already` | `test-desktop-cli-repair.mjs` | `lib/desktop.js` 行 71% → **79.8%**（1624 → 1812 / 2273） |
+| 桌面面 shim 三件套的来源：先看桌面树的 `resources/runtime/cli/bin`（只看目录存在、不看里面有没有启动器），没有再回落 PATH 并标 `path`，两处都没有才是 `none`；桌面官方 CLI 的补丁是入口回退块不是 shim 注入，`dsh` / `dsh.cmd` / `dsh.ps1` 各判一次（`patched / missing / patched`）；`runtime_payload` 只在 desktop 面探。链式补丁（`#46←#45`、`#84/#92←#83`、`#88←#87`）前驱没 settled 记 `pending` 不记 `drifted`，`after` 里的字符串 id 先归一化成数字、非数字条目丢掉、不是数组就当没有前驱 | `test-desktop-shim-source.mjs`（21 条） | `lib/core.js` 行 4793/5205 |
 
 **本轮进展**：`rules` / `skills` 两个分发器原来埋在 `lib/index.js` 的 89 + 39 行里，只跑得到「路由注册成功」这一层。现已抽到 `lib/http-routes.js`（243 行，8 个 export），`refreshHungOperator` / `injectSnapshot` 改为依赖注入传入——因为它们依赖 index.js 模块内的读盘状态，硬搬会把整个 index.js 拖进测试。抽取前后做了一次归一化逐字对拍（`PARITY OK identical after normalization; chars 9368`），行为零变化。由 `test-http-routes.mjs` 的 52 条用例钉住，覆盖 99% 行 / 100% 分支。
 
@@ -1119,6 +1120,41 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 6. 换旧调用用的是 `split().join()`（全量），不是 `replace()`（只换第一处）。第二处没换的后果
    同样是「文件里还留着一个调用已删除函数的地方」，所以用例要放两处旧调用。
 
+### 五十四补：桌面面 shim 三件套的来源、链式补丁的漂移分类
+
+`gatherState()` 报的 `shim_scope` / `shim_cmd` / `shim_ps1` / `shim_bin` 在桌面面有两个来源。
+0.2.2-rc.1 起安装包不再下发 `resources/runtime/cli/bin`，桌面端以前因此把三个 shim 全报成
+`missing` —— 那不是「文件不存在」，是「没去看」。这一批 21 条把两条来源、四种状态组合、
+以及链式补丁的漂移分类补齐。七条只能跑出来的：
+
+1. **第一个来源只看目录在不在，不看里面有没有启动器**。`findDesktopShimDir()` 里
+   `if (cliBin && isDir(cliBin)) return path.normalize(cliBin);` —— 目录在就认，于是三件套
+   状态全是 `missing` 而不是「换第二个来源」。要测到这一点，fixture 必须是「cli/bin 目录存在、
+   但里面只有一个 readme」。改成要求 `dirHasDshLauncher` 会让这条用例红。
+2. **第二个来源才有 `path` 标记**。桌面树完全没有（`DSH_DESKTOP_INSTALL` 不存在）时回落到
+   PATH 上那套并写 `shim_scope = "path"`；两处都没有才是 `none`。web 面直接用第二个来源，
+   不看桌面树。
+3. **桌面官方 CLI 的补丁是入口回退块，不是 shim 注入**，所以状态要从 `original` 升级成
+   `patched`，而且 `dsh`、`dsh.cmd`、`dsh.ps1` 三行各判一次（`dsh.ps1` 常常根本没有）。
+   打完入口块之后读数是 `patched / missing / patched`，不是三个都 `patched`。
+4. **`runtime_payload` 只在 desktop 面探**（`adapterFor(detectSurface()) === "desktop"`），
+   web 面这一项是 `null` 而不是「空对象」—— 两者在界面上不一样（「这项不适用」vs「探测了但没内容」）。
+5. **链式补丁的前驱没打上时记 `pending`，不是 `drifted`**（`#46←#45`、`#84/#92←#83`、
+   `#88←#87`）。判据在 `filePatchOutcome` 里：自己的 pattern 一条都不中之后，先逐个问
+   `after` 里的前驱有没有 settled，没 settled 就 `pending`。少了这一步，刚装上的干净宿主会满屏
+   报漂移，用户以为版本不适配。
+6. **`after` 是「软引用」，要先归一化再比对**：允许字符串 id（`["87"]` 必须归一成 `87` 才
+   对得上 `ALL_PATCHES` 里的数字 id），非数字条目直接丢掉，写成单个数字或字符串（不是数组）
+   就当没有前驱。这四种形态各有一条用例，因为归一化漏掉任何一步的结果都是「静默变成 drifted」。
+7. **折叠块重排时段落之间的空行必须原样保留**。`yamlReindentBody` 对空行 `out.push("")`，
+   改成 `out.push(pad)` 就把空行变成一串空格 —— YAML 折叠块里那等于把两段并成一段。
+
+**盲区**：`gatherState()` 里 `runtime_payload` 那个 `catch`（`{ok:false, error, missing:[]}`）
+需要 `lib/desktop.js` 的导出函数抛错才走得到，而 `core.js` 是 `import * as desktop`，命名空间
+只读、无法 monkeypatch；磁盘状态也造不出来（探测的是纯读）。检测办法：
+`grep -n 'runtime_payload = { ok: false, error' lib/core.js` 确认它还在，真机上把
+`resources/runtime` 删掉后刷新状态页，看是不是 `ok:false` 而不是整页报错。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1716,6 +1752,22 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     （`patchApplied` 也跟着判「已打上」，因为那条判据用的是同一个常量）。
     检测办法：`grep -n 'STALE_LEGACY_APPLY_CALL =' lib/core.js`，再在真宿主 settings 文件里
     `grep -c 'legacyApplyPath'`；两者数目不符就说明形态变了。
+
+104. **`gatherState()` 里 `runtime_payload` 的 `catch` 造不出来。**
+    `try { … } catch (e) { runtime_payload = { ok:false, error: String(…), missing: [] } }` 要走到
+    catch，必须让 `desktop.findDesktopAppExecutable()` 或 `desktop.inspectRuntimePayload()` 抛错；
+    而 `lib/core.js` 用的是 `import * as desktop from "./desktop.js"`，命名空间属性只读
+    （`Cannot assign to read only property`），磁盘状态也造不出来（这一段只读不写）。
+    判坏的典型表现：桌面装了一个半截的安装包，状态页整块 500 而不是「runtime 缺件」。
+    检测办法：`grep -n "runtime_payload = { ok: false, error" lib/core.js` 确认兜底还在；
+    真机上把 `resources/runtime` 整个删掉再刷新状态页，应当是 `ok:false` 加 `missing` 名单。
+
+105. **`findWslWindowsDshHome()` 的整段（`lib/core.js:1764-1782`）在本机造不出来。**
+    它第一句就是 `if (process.platform !== "linux") return ""`，而伪造成 linux 之后，`/mnt/c/Users`
+    在 Windows 上是「当前盘符下的 `\mnt\c\Users`」——要造就得往盘根写 `D:\mnt\c\Users`，那是
+    污染整台机器，不做。判坏的典型表现：WSL 里跑 dsh 时找不到 Windows 侧的 `~/.dsh`，配置与
+    会话全丢。检测办法：在真 WSL 里跑 `node -e 'import("./lib/core.js").then(m=>console.log(m.findWslWindowsDshHome()))'`，
+    应当打印 `/mnt/c/Users/<你>/.dsh`。
 
 ## 维护约定
 
