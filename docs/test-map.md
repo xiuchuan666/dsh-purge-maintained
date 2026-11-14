@@ -1244,6 +1244,38 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 `cordis.patch.yml` 做成目录 → 写回时 `rename` 失败 → 返回 `{dir, ok:false, error}`，另一个照常
 写出 `- id: dsh-purge`；三条突变（整段抛出 / 丢掉 `dir` / 丢掉 `error`）都红。
 
+### 五十八补：`configValue` / `configSet` 的四个 catch，与「再排一次就先撤上一份」
+
+停用插件时要把宿主的 `selectedDefault` 从 `redteam` 改回 `standard`。这个值在宿主里可能是
+裸字符串、`{value}` 包装、带 `set()` 的节点、带 `get()` 的节点 —— 四种写法都得改得动，而且
+**任何一种写法抛错都不能把整条停用流程带走**（宿主 resolve() 对未知预设是硬抛，见 #108；
+停用「成功」返回而值没改，下次启动就起不来，控制台里没有任何一行提到本插件）。
+
+这一批 8 条（`scripts/test-preset-default-edges.mjs`）把 `lib/preset-default.js` 推到
+**行 205/205（100%）**，三件只能跑出来的事：
+
+1. **`get()` 抛错之后还要看 `value`。** 两层兜底是有顺序的：先 `node.get()`（可调用），再
+   `node.value`（可读属性）。只保留第一层时，`{ get(){throw}, value:"redteam" }` 这种节点会
+   被判成「没有值」而整条跳过 —— 宿主里正好有这种 getter 抛错的配置代理。用例断言节点真的
+   被改成了 `standard`，不是只看 `report.live`。
+2. **`value` 抛错的节点必须当「没有值」，而不是把异常漏出循环。** `clearLiveSelectedDefault`
+   会依次试多个「袋子」（`agentPresets.config` 与 `settings` 里那行的 `config`），前一家是
+   毒药不能连累后一家。用例造两家袋子：第一家 `value` getter 抛错、第二家能改 —— 漏出异常时
+   第二家改不到，`live` 会是 `false`。这是唯一能区分「catch 住了」和「反正外层还有一层 catch」
+   的输入（外层 catch 会把 `live` 记成 `false`，恰好和「跳过」同形）。
+3. **`set()` 抛错之后要退回属性赋值；属性也写不进去才回 `false`。** 三种节点的处置各一条：
+   `set()` 成功就不再碰属性（免得两种写法互相打架）、`set()` 抛错但属性可写算成功、两边都不行
+   记 `live:false`（此时文件那一半照修，所以 `live` 必须是单独可观测的一个字段）。
+
+另外两条与定时器/目录有关：
+
+- `scheduleClearOwnedSelectedDefault` 连排两次时，**前一份必须被 `clearTimeout` 撤掉**。热重载
+  的形态是「dispose 排队写盘 → 立刻 apply 再排一次」，不撤上一份就会在 apply 之后 800ms 把
+  用户的红队默认冲掉。用例造两棵不同的 home，只断言第二棵被动过、第一棵逐字节没动。
+- `removeStaleAgentPresetDir` 在目录存在但删不掉时回 `false` **而不是抛**（`catch { return false }`）。
+  造法是把 `node:fs` 的 `rmSync` 换掉：`createRequire` 拿 CJS 对象 → 赋值 → `syncBuiltinESMExports()`，
+  这样 `lib/preset-default.js` 的 `import fs from "node:fs"` 才看得到替换；`finally` 里还原再 sync。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1365,11 +1397,12 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 | 卸载先还原再删：`revertAll` 出错就停手、不进入清理 | `test-self-update.mjs` | `lib/uninstall.js` 94.3% |
 | 卸载只删安装树（`node_modules/dsh-purge`），npm link 的源码目录不动 | `test-self-update.mjs` | 同上 |
 | 卸载摘干净四个依赖段 + 顶层与嵌套 `bundles`/`plugins` | `test-self-update.mjs` | 同上 |
-| 预设默认值改回 `standard`：7 种写法（裸值 / 单双引号 / 命名空间前缀 / 大小写 / 无空格 / 块内缩进）都落盘，`standard`/`other`/无键不动 | `test-preset-default.mjs` | `lib/preset-default.js` 94% |
+| 预设默认值改回 `standard`：7 种写法（裸值 / 单双引号 / 命名空间前缀 / 大小写 / 无空格 / 块内缩进）都落盘，`standard`/`other`/无键不动 | `test-preset-default.mjs` | `lib/preset-default.js` 行 205/205 |
 | profile 扫描只认 `cordis.patch.yml` 与 `cordis.yml`，跳过 `node_modules`；空文件不进报告、不重写 | `test-preset-default.mjs` | 同上 |
 | live 侧（`settings.update`）认命名空间前缀 / 大小写 / 两侧空白，吞 Promise 拒绝，fallback 本身是本插件时不写 | `test-preset-default.mjs` | 同上 |
 | live 侧 bag：`{value}` 包装能改、有 `set()` 的优先走 `set()`、裸字符串改不动（现状锁定）、读属性抛错不炸文件侧 | `test-preset-default.mjs` | 同上 |
 | profile 只读（`chmod 0444`）或路径是目录（EISDIR）时跳过，能修的照修，整条不抛 | `test-preset-default.mjs` | 同上 |
+| 停用清理的边角：`get()` 抛错退回读 `value`、`value` 抛错只当「没有值」而不连累下一家袋子、`set()` 抛错退回属性赋值、两边都失败记 `live:false`、连排两次只留最后一份（第一棵 home 逐字节不动）、`removeStaleAgentPresetDir` 删不掉回 `false` 不抛 | `test-preset-default-edges.mjs`（8 条） | `lib/preset-default.js` 行 205/205 |
 | `removeStaleAgentPresetDir` 删遗留目录 / 已不存在回 false / 空 id 不删整个 `.agent-presets` | `test-preset-default.mjs` | 同上 |
 | 热重载延迟清理：取消后**等过 800ms 窗口**仍不写盘；到点则改文件 + 清遗留目录；定时器 `unref` 过 | `test-preset-default.mjs` | 同上 |
 | 8 条反向替换各自命中并逐字写回官方写法；已官方形态命中为空且一字不改；同一形态出现多次全部还原、`hits` 只记一次 id；跑第二遍幂等 | `test-hooks-deny.mjs`（13 条） | `lib/hooks-deny.js` 100% |
@@ -1869,6 +1902,15 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     检测办法：`grep -n "REDTEAM_NO_FTS5" lib/redteam/schema.js` 确认 env 早退仍在 `try` 之前；
     再 `node -e 'new (require("node:sqlite").DatabaseSync)(":memory:").exec("CREATE VIRTUAL TABLE t USING fts5(x)")'`
     在本机应当成功（说明本机走的是能力探测成功那一支）。
+
+107. **`configSet` 的「两种写法都失败」只能靠只读访问器造，跨平台行为一致但错误码不同。**
+    `set()` 抛错且 `set value()` 抛错的节点是纯 JS 对象，本机能造；但真实宿主里更常见的是
+    `Object.freeze()` 过的配置节点 —— 那种情况下 `node.value = v` 在**严格模式**（ESM 默认）抛
+    `TypeError: Cannot assign to read only property`，非严格模式下静默失败并让 `configSet` 误报
+    `true`。本仓库是 ESM，所以永远走严格模式，这条差异在本机无法验证；如果以后有人把
+    `lib/preset-default.js` 改成 CJS 或包一层非严格函数，这条用例就失去意义。
+    检测办法：`grep -n '"type"' package.json` 确认仍是 `module`；`grep -n 'node.value = value' lib/preset-default.js`
+    确认赋值仍在 `try` 里。
 
 ## 维护约定
 

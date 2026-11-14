@@ -1279,3 +1279,42 @@ if (patch?.id === 42) {
 
 第三条才是关键：写成 `EVICT + 100` 才能同时验证两个方向（多淘汰了、少淘汰了）。只断言
 `size === cap - evict + 1` 会漏掉「淘汰了错的那些」。
+
+## 「两层兜底」的第二个兜底，要有一条「第一层抛错」的用例，而且两种失败要能分开观测
+
+`configValue` 先试 `node.get()`（可调用）、再试 `node.value`（可读属性）。只测「get 存在且正常」
+和「get 不存在」两种输入时，把第一层接上第二层的那段代码删掉也不会红 —— 因为剩下那条路恰好
+也能给出答案。必须有一条「`get()` 抛错 + `value` 可用」的输入，断言最终值真的被改了。
+
+同理，第二层抛错时是「吞掉」还是「漏出去」，光看外层 `report.live` 分不开：外层还有一层
+`try/catch`，漏出去的异常也被记成 `live:false`，和「安静跳过」同形。能分开的输入是
+**多袋子**：第一个袋子是毒药、第二个能修。吞掉了 → 第二个袋子被改；漏出去了 → 循环断在第一个。
+
+这两条合起来的判据是：**每一层兜底都要有一个「只让它失败」的输入，而且失败后果要能被一个
+独立字段观测到**（这里是「第二个袋子是否被改」与 `report.files`）。
+
+## 定时器的「再排一次先撤上一份」，用例要造两套互不相干的现场
+
+`scheduleClearOwnedSelectedDefault` 的语义是「热重载时后一次排队必须作废前一次」。写成
+`if (pendingClear) { clearTimeout(...) }` 这一句删掉，用同一个 home 测是测不出来的：
+两次排队的写入目标一样，先写后写都是同一份结果。
+
+必须造**两棵不同的 home**，只断言第二棵被动过、第一棵**逐字节**没动（不是「文件已改」，
+而是 `readFileSync === 原文`）。这类「撤前一份」的守卫，唯一可观测的差异就是「另一份现场
+有没有被顺带改掉」。
+
+## 换掉 `node:fs` 的方法要给 ESM 侧看得见：`createRequire` + `syncBuiltinESMExports`
+
+`lib/preset-default.js` 是 `import fs from "node:fs"`。直接 `await import("node:fs")` 拿到的命名
+空间是只读的（`Cannot assign to read only property`），改不动。正确姿势：
+
+```js
+const require = createRequire(import.meta.url);
+const CJS_FS = require("node:fs");
+const realRm = CJS_FS.rmSync;
+CJS_FS.rmSync = () => { throw new Error("rm boom"); };
+syncBuiltinESMExports();          // 让 ESM 侧的 `fs` 看到替换
+try { /* 断言 */ } finally { CJS_FS.rmSync = realRm; syncBuiltinESMExports(); }
+```
+
+`finally` 里必须**先还原再 sync 一次**，否则后面的用例会带着坏实现跑，而症状是莫名其妙的全红。
