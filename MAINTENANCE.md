@@ -952,3 +952,29 @@ assert.equal(P.validateAllowBuildRewrite("allowBuilds:\n    a: true\n  b: true\n
 ```
 
 推广：**`try {…} finally`、`continue`、`return` 这些「跳过后半段」的语句，会让它前面的状态清理变成不可观测**；造 fixture 时要往后多看一步，找那条「清理没做 → 状态泄漏到下一次循环」的输入。
+
+### 要观测「走了哪条通道」，就数调用次数；只看返回值分不清
+
+`lib/hide-console.js` 的 `builtinChildProcess()` 有两条通道：`process.getBuiltinModule("child_process")` 与 `createRequire(import.meta.url)("node:child_process")`。第一层抛错会静默退到第二层，而**两层都能拿到同一个对象** —— 于是「第一层炸了」和「第一层根本没被摸」在返回值上完全一样（都装上，都返回 `{ ok: true }`）。
+
+解法是把第一层换成一个**会抛错且计数**的函数：
+
+```js
+process.getBuiltinModule = () => { touched += 1; throw new Error("sandbox"); };
+// …调用之后：
+assert.equal(touched, 1, "内置模块通道被摸过一次才走 catch");
+```
+
+同理，凡是「首选实现 + 兜底实现」结构（读两处配置、试两个解析器、先 native 再 polyfill），用例都应该至少在一次断言里**数首选实现被调用了几次**，否则兜底写得再对也证明不了首选还在跑。配套的突变也简单：把首选那一行改成 `if (false)`，计数变 0，立刻红。
+
+### 把 `process.argv[1]` 当输入的函数，用例里必须临时改它并 `finally` 还原
+
+`resolveDshBinRoot(undefined, …)` 会读 `process.argv[1]`：匹配 `/[\\/]bin\.js$/i` 就把上两级目录塞进候选链。这是**进程级全局状态**，改完不还原，同文件后面所有用例都会看到一条假路径（而且症状很怪：某条「什么都没有时返回 null」的用例突然返回了值）。写法固定成：
+
+```js
+const orig = process.argv[1];
+process.argv[1] = binJs;
+try { … } finally { process.argv[1] = orig; }
+```
+
+同类的全局量还有 `TEMP/TMP/TMPDIR`、`DSH_*`、`npm_config_prefix`、`process.platform`（后两个分别会喂给 `path.delimiter` 与模块级常量，见前面两节）。

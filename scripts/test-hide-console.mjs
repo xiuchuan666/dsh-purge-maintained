@@ -674,3 +674,66 @@ testWin("注入 → 还原 是逐字节可逆的", () => {
   assert.equal(revertHideConsoleFromBin(root, { fs, path }), "reverted");
   assert.equal(map.get(norm(binJs)), original, "还原之后必须与原文逐字相同");
 });
+
+// ---------------------------------------------------------------- 批93 补进来的四处
+
+test("wrapFork：fork(p, options) 这种「第二参就是 options」的重载也要加 windowsHide", () => {
+  const calls = [];
+  const fork = wrapFork((...args) => {
+    calls.push(args);
+    return "r";
+  });
+  fork("m.js", { cwd: "/m" });
+  assert.deepEqual(calls[0], ["m.js", { cwd: "/m", windowsHide: true }], "args 是对象时不能再补空数组");
+});
+
+test("installHideConsole：getBuiltinModule 抛错时退回 createRequire（Electron 沙箱那条路）", () => {
+  // 这一条会真的去装一次包装，所以先记下 builtin 上的六个入口，跑完逐个放回。
+  const origGet = process.getBuiltinModule;
+  let touched = 0;
+  const restoreCp = () => {
+    cp.spawn = ORIG.spawn;
+    cp.spawnSync = ORIG.spawnSync;
+    cp.exec = ORIG.exec;
+    cp.execSync = ORIG.execSync;
+    cp.execFile = ORIG.execFile;
+    cp.execFileSync = ORIG.execFileSync;
+    cp.fork = ORIG.fork;
+  };
+  process.getBuiltinModule = () => {
+    touched += 1;
+    throw new Error("sandbox: getBuiltinModule unavailable");
+  };
+  try {
+    const r = asWin32(() => installHideConsole());
+    assert.equal(touched, 1, "内置模块通道被摸过一次才走 catch");
+    assert.equal(r.ok, true, "退回 createRequire 之后照常装上（或已经是 already）");
+  } finally {
+    process.getBuiltinModule = origGet;
+    restoreCp();
+  }
+});
+
+test("resolveDshBinRoot：没有 hint 时用 process.argv[1] 的上两级当候选（node …/lib/bin.js 起的进程）", () => {
+  const root = path.join("/fake-argv", "pkg");
+  const binJs = path.join(root, "lib", "bin.js");
+  const only = fakeFs({ [binJs]: "// bin\n" });
+  const origArgv1 = process.argv[1];
+  process.argv[1] = binJs;
+  try {
+    assert.equal(norm(resolveDshBinRoot(undefined, { fs: only.fs, path })), norm(root));
+  } finally {
+    process.argv[1] = origArgv1;
+  }
+});
+
+test("revertHideConsoleFromBin：sidecar 删不掉就当没改过，异常不外抛", () => {
+  const root = path.join("/retry-del", "pkg");
+  const binJs = path.join(root, "lib", "bin.js");
+  const side = path.join(root, "lib", "dsh-purge-hide-console.js");
+  const box = fakeFs({ [binJs]: "// head\n", [side]: "// side\n" });
+  box.fs.unlinkSync = () => {
+    throw Object.assign(new Error("EBUSY: resource busy"), { code: "EBUSY" });
+  };
+  assert.equal(revertHideConsoleFromBin(root, { fs: box.fs, path }), "absent", "删不掉不能算 reverted");
+});

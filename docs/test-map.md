@@ -62,9 +62,10 @@
 | 桌面端升级标记：只认四个官方可执行名、marker 落在 `<exe 目录>/resources/dsh-purge-reapply-asar`、清除幂等 | `test-official-update.mjs`（15 条） | `lib/official-update.js` 100% |
 | 清理旧解包目录：**`resources/app` 不存在时一个 `app.dshpurge-prev*` 都不删**（那是唯一救命副本）、junction 绝不碰、先摘 `runtime` 再删整树 | 同上 | 同上 |
 | WSH 字面量转义：纯 ASCII 原样、非 ASCII 一律 `\uXXXX`（`isWshAscii` 必须为真，否则 .js 文件按 ANSI 读会乱码） | 同上 | 同上 |
-| 宿主 `bin.js` 注入 hide-console 的 import：sidecar 与 facade 先落盘、再改 bin.js，重复注入只返回 `already_injected` | `test-hide-console.mjs`（13 条） | `lib/hide-console.js` 96% |
+| 宿主 `bin.js` 注入 hide-console 的 import：sidecar 与 facade 先落盘、再改 bin.js，重复注入只返回 `already_injected` | `test-hide-console.mjs`（13 条） | `lib/hide-console.js` 行 99.1% |
 | 还原：双引号 import 行全清（`/gm`）、源码树的 bin.js 一个字节都不碰、bin.js 读失败时宁可多留一轮 sidecar 也不改它 | `test-hide-console.mjs`（6 条） | 同上 |
 | 六个入口的 `windowsHide` 补位：`spawn`/`fork` 的 args-即-options 重载、`execFile` 四种参数形态、非对象 options 原样透传 | `test-hide-console.mjs`（5 条） | 同上 |
+| hide-console 的三条兜底：`getBuiltinModule` 抛错退回 `createRequire` / 没有 hint 时用 `process.argv[1]` 的上两级 / sidecar 删不掉算「没改过」 | `test-hide-console.mjs`（批93 +4 条） | `lib/hide-console.js` 行 336/339（99.1%） |
 | 配置文件原地改写要换 inode：写临时文件 + fsync + rename，失败时原文件与目录都不留垃圾 | `test-small-helpers.mjs`（6 条） | `lib/redteam/atomic-write.js` 100% |
 | 宿主 phase-1 白名单要放宽到 `dsh-purge*` 与 `dshpg-*`（漏一个就有注入段在最后一步被丢） | `test-small-helpers.mjs`（6 条） | `lib/phase1-keep.js` 100% |
 | 加密槽的封与解：mask 16 字节 / IV 12 字节 / tag 16 字节、每次新随机、TAG 被篡改必抛、解不开返回空串 | `test-small-helpers.mjs`（9 条） | `lib/table-key.js` 100% / `lib/table-read.js` 89% |
@@ -899,6 +900,16 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 **覆盖率**：`lib/profile-insert.js` 行 392 → **412/412（100%）**、分支 149 → 168/188（89.4%）；全仓行 **93.88% → 93.93%** / 函数 84.95% / 分支 90.06%。行总数 413 → 412 是删掉那三行的结果。
 
+**四十五补**（`lib/hide-console.js` 还剩下的三条兜底：退回 `createRequire`、没有 hint 时的 `process.argv[1]`、sidecar 删不掉）：
+
+1. **`builtinChildProcess()` 是两层通道，第一层炸了会静默退到第二层。** `process.getBuiltinModule` 在 Electron 沙箱里可能直接抛，catch 之后走 `createRequire(import.meta.url)("node:child_process")`；两层都拿不到才返回 `null`（`installHideConsole` 于是报 `skipped: "builtin_unavailable"`）。测第一层炸的方式是**把 `process.getBuiltinModule` 换成抛错函数**，并且断言它「被摸过一次」——只看 `installHideConsole()` 的返回值区分不了「走了第一层」还是「直接走了第二层」，因为两条路都能装上。
+2. **`resolveDshBinRoot(undefined, …)` 会用 `process.argv[1]`**：只要它匹配 `/[\\/]bin\.js$/i`，就把它的上两级目录塞进候选链（`node <pkg>/lib/bin.js` 起的进程就是这种形态）。这条用例必须临时改 `process.argv[1]` 并在 `finally` 还原 —— 它是全局状态，漏还原会让同文件后面的用例看到一条假路径。
+3. **`revertHideConsoleFromBin` 删 sidecar 的 `catch` 是「重启后再删」，不是「算改过」。** 删不掉时 `changed` 保持 `false`，函数返回 `"absent"` 而不是 `"reverted"` —— 外部（安装/卸载流程）靠这个返回值决定要不要再排一次重启，谎报成 `"reverted"` 就等于把一次失败吞掉。造法是把假 fs 的 `unlinkSync` 换成抛 `EBUSY`。
+
+**RED 演练**：4 条突变 → **4/4 全红**（单进程跑，`restored:true`、无 ANCHOR）。四条分别是：`fork` 的 args-即-options 分支去掉、内置模块通道改成不走（`getBuiltinModule` 一次都不被摸）、不认 `argv[1]` 是 `lib/bin.js`、删 sidecar 失败也置 `changed = true`。
+
+**覆盖率**：`lib/hide-console.js` 行 326 → **336/339（99.1%）**、分支 122 → 128/134（95.5%）、函数 100%；全仓行 **93.93% → 93.95%** / 函数 85.21% / 分支 90.06%。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1427,6 +1438,7 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 
 **92. `lib/profile-insert.js` 的 insert 段状态机只剩「关闭」这一半，另外三处判断靠别的测试文件。** 本批删掉了 `profileHasPurgeBodyInsert` 里永远走不到的 reopen 三行（判据见「四十四补」第 1 条），剩下的段状态机只有一个 `insertIndent` 变量、两种转移：进段、关段；**没有「同段内出现第二条 `- insert:`」这种情况的用例**（因为那时已经在段里，先命中的是本体行匹配）。另外 `164-174`（`ensureProfileBundles`）与 `385-409`（`ensureAllProfileInstall` 尾部）不在本批测试的覆盖范围内 —— 单跑 `scripts/test-profile-insert-edges.mjs` 时 lcov 会报这些行未命中，它们是 `test-self-update.mjs` 的地盘。`pnpmMajor` 三个来源里「`.modules.yaml` 读得到但没有 `packageManager` 字段」这一支没有专门用例；`keepSources === false`（pnpm 11）那一侧也仍由 `test-self-update.mjs` 覆盖，本批只用 `dir = "NOPE"`（major 判不出 → null → 保留来源键）跑过保留侧。**检测办法**：`grep -n "keepSources = major === null || major >= 12" lib/profile-insert.js` 必须命中一行，且 `grep -c "inAllow = false;" lib/profile-insert.js` 为 1（多了说明段标记在别处也被清）。
+**93. `lib/hide-console.js` 的 `95-97` 三行（`createRequire` 也失败时返回 `null`）在本机造不出来。** 要走到那三行，得让 `createRequire(import.meta.url)("node:child_process")` 抛错 —— 内置模块在本机永远拿得到，而 `createRequire` 是模块级导入的绑定，换成假的是改源码而不是造现场。`installHideConsole()` 的 `skipped: "builtin_unavailable"` 出口因此只能靠阅读确认。**检测办法**：`grep -n 'skipped: "builtin_unavailable"' lib/hide-console.js` 必须命中一行；如果哪天 Node 出了「禁用内置模块」的开关，这条就该补用例。
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
