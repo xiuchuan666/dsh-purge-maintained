@@ -817,6 +817,30 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 
 `lib/uninstall.js` 行命中 258/310 → **298/316**（分母 +6 是新增的两个 helper）、函数 19/23 → 22/24、分支 71/103 → 123/135；全仓行 **93.23% → 93.51%**（函数 83.80% → 84.00%、分支 89.55% → 89.85%）。全量 **3408 tests / 3406 pass / 0 fail / 2 skipped**。两平台各 33/33。
 
+**四十一补：证据账本的十四条失败出口、两个计数的口径，以及一条「从来没成功过」的撤回**（`test-evidence-ledger-edges.mjs`，30 条）
+
+这一批只加了一个测试文件、改了 3 处生产代码（少一处校验表、两处广告词），把 `lib/redteam/evidence-ledger.mjs` 从行 467/507 推到 **516/516（函数 20/20、分支 92.2%）**。十四条 catch 里有九条此前一行没跑过 —— 它们全都「不崩、只静默」，所以每一条都对应一种「看起来记上了、其实丢了」的现场。
+
+七条只能跑出来的事实：
+
+1. **三个方法的失败返回值形状各不相同。** `record` 抛 `{ ok:false, error }`；`get` 返回 `undefined`（与「库里没有这条」**完全无法区分**）；`list` 返回的是 **`{ error: 'prepare boom' }` 这个对象，不是数组** —— 调用方写 `list().map(...)` 会直接 TypeError，写 `list().length` 得到 `undefined`。`countUnverified` / `countUnresolvedClaims` / `unknown.list` 的失败一律回 `0` / `0` / `{ error }`，也就是「读不出来」被压成「真的没有」。这些都是现状，钉住不改：改返回值形状等于改公开 API。
+
+2. **`countUnverified` 在全仓没有任何调用方。** 它是 `EvidenceLedger` 的公开方法（注释写着「审计与调试用」），只有 `countUnresolvedClaims` 被 `tool-specs-evidence.js:161` 用着。所以本批不是「补一条已有路径」，而是给一个只有外部调用者才会碰的方法钉口径：数的是 `claimed`+`inferred` 的**裸条数**，升级成 observed 之后**不降**（审计纪律要求 claimed 永久保留），要「还有几条没核实」得用 `countUnresolvedClaims`（按 `supporting_ev_ids` 反查闭环）。实测：两条 claimed/inferred + 一条 observed 引用掉其中一条 → 裸数仍是 2，未闭环数从 2 降到 1。
+
+3. **库里 JSON 列坏了不抛，四列各自回落。** `parameters` → `{}`、`result` → `null`、`limitations` / `supporting_ev_ids` → `[]`，非 JSON 的列（`operation` 等）照原样给出；`list()` 走同一条解析路径。这是 `safeJsonParse` 的 catch 唯一能被触发的地方：**只有直接改库（或老数据）才造得出来**，走正常 `record` 永远写的是合法 JSON。
+
+4. **「撤回」这条路从来没有成功过一次。** `resolve()` 原来认三个值 `resolved|contradicted|withdrawn`，而建表语句的 `status CHECK` 只允许 `open|investigating|blocked|contradicted|resolved` —— 传 `withdrawn` 会一路走到 SQLite，返回 `CHECK constraint failed: status IN (...)`。工具说明书也照着宣传 `resolved | contradicted | withdrawn`，于是模型照着说明选一项，拿到一句 SQL 报错。**修法选的是「把广告词收回」而不是「改表」**：加 `withdrawn` 要改 DDL，而 `CREATE TABLE IF NOT EXISTS` 对用户已有的库不生效，得再补一次重建表的迁移 —— 那是另一个风险等级的动作，不该混在一批测试里做。现在抽了 `export const RESOLVE_DISPOSITIONS = ['resolved','contradicted']`，`resolve()` 的校验与提示、`tool-specs-evidence.js` 的描述、`test-redteam-tool-branches.mjs` 里那句旧文案一起改齐，并加了一条**源码形状**守卫：从 `EVIDENCE_LEDGER_DDL` 里解析出 `status CHECK` 的取值集合，断言「`RESOLVE_DISPOSITIONS` 是它的子集」且两边都不含 `withdrawn`。以后再想加回 `withdrawn`，这条守卫会先拦住 —— 那时必须先改 DDL、再想迁移，不能只改那个数组。
+
+5. **去重键折叠空白，存进去的是原文。** `unk_id` 用 `question.replace(/\s+/gu,' ').trim()` 算（所以「只差多个空格」的两条合成一条），但入库的是 `question.trim()`（内部双空格保留）。留下的是**先写进去的那份版式**。现状锁定：改它会让同一句话在库里出现第二种写法。
+
+6. **`list()` 不传 `status` 时列出全部，含已解决的。** 工具层默认传 `open`，类本身没有默认过滤 —— 直接调类的人会看到 resolved 的行。另外 `ORDER BY recorded_at DESC` 的精度是**毫秒**：同一毫秒内写的多条之间没有稳定次序，任何「取最新一条」的写法都不能靠它（本批为这条专门写了一个只断言集合、不断言顺序的用例，因为在慢机器上「三条同一毫秒」本身就不成立，断言它会变成假红）。
+
+7. **`residual_unknown` 的 `investigating` / `blocked` 两个状态没有任何入口。** `status CHECK` 允许它们，`resolve()` 只写 `resolved` / `contradicted`，也没有别的更新方法 —— 想改状态只能直连库。已写进盲区。
+
+**RED 演练**：`.tmp89-drill.mjs` **23 条突变 → 23/23 全红**（`restored: true`，分两片 `0 12` / `12 23`）：四道校验各拿掉 / `result` 放过 null / `canonicalize` 不排序键 / `record` 的错误文本改用 `String(err)`（带 `Error: ` 前缀）/ `get` 读失败回 `null` / `upgrade` 的拒绝文案改写 / `list` 失败回空数组 / `countUnverified` 只数 claimed 或恒回 0 或 catch 回 -1 / 闭环不看 observed 引用 / `countUnresolvedClaims` 的 catch 回 -1 / question 与 severity 的校验文案与判据 / 去重键不折叠空白 / `unknown.record` 与 `resolve` 与 `unknown.list` 三个出口 / `safeJsonParse` 回 undefined / `RESOLVE_DISPOSITIONS` 加回 withdrawn / `status CHECK` 也加 withdrawn。**没有等价突变，也没有 ANCHOR** —— 行号取自改完之后的文件（这次改动插了 8 行常量注释，行号整体下移，写死在脚本里之前先 `grep -n` 对了六处）。
+
+**为什么这十四条值得一测**：丢的是一条证据，不是一条日志。`record` 失败但调用方没看 `ok`，账面就少了「谁在什么时候用什么工具拿到了什么」；`get` 与 `countUnverified` 的失败被压成 `undefined` / `0`，指挥智能体看到的是「没有待核实项」，然后就派下一轮活去了。判错形态是**安静地少一条**，不会报错、不会崩、面板也照常显示。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -882,6 +906,7 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
 | 知识库迁移：补出五个新列与两个索引、老条目按关键词推归类（具体压过泛化）、已有归类不被改写、`POC_CATEGORIES` 的 code 唯一且以 `other` 收尾 | `test-schema-migrate.mjs`（7 条） | 同上 |
 | `dispatch` 的 op 表：71 个 op 各自调哪个方法、第几个实参、别名怎么退（`req.poc` / `req.id ?? req.code` / `req.id ?? req.shot_id` / 十二个 `xxx || req`）、`limit` 夹取、写操作闸门、未知 op 与异常的错误信封；无靶标时九个读 op 共用一个信封、`openEngagement` 不受闸门管；`pngSize` 的五种容器宽高（经 `addShot` 间接测） | `test-redteam-dispatch.mjs`（25 条） | `lib/redteam/store-core.js` 96.2% |
 | IP / 网段 / slug 的十个纯函数：`cidrOf` 的 IPv4 取前三段与 IPv6 取前四组（带端口的 IP、IPv4-mapped 都原样返回）、`scopeOfIp` 的 172.16–31 与 100.64–127 边界 + fe80::/10 + IPv4-mapped 剥壳、`ipToInt` 的 32 位无符号与「只看位数不看范围」、`isIpv6` 的字符表与段数上限、`expandIpv6` 的 `::` 补齐、`slugTarget` / `slugPoc` / `defaultPocFilename` / `slugify` 的六处现状怪癖 | `test-ip-utils.mjs`（53 条） | `lib/redteam/ip-utils.js` 行 116 → **140/140**（分支 73/74） |
+| 证据账本的十四条失败出口与两个计数：`record` 四道前置校验（`operation` 必填、`result` 不可为 null 但可为 `""`/`0`/`false`、`confidence` 四档、`authority` 六种）、`record` / `get` / `list` 三个 catch 的返回值各不相同（`{ok:false}` / `undefined` / **`{error}` 对象而不是数组**）、`countUnverified` 数裸条数而 `countUnresolvedClaims` 按 `supporting_ev_ids` 反查闭环（升级后前者不降、后者降）、坏 JSON 的四列各自回落到默认值、`upgrade` 四分支（未找到 / `derived` 拒绝 / 已 observed 原样 / claimed→observed 写新记录并用 `supporting_ev_ids` 链回原件、`subagent-report` 换成 `tool-output`、`recorded_by` 默认 `coordinator`）、`residual_unknown` 的 question/severity 校验、去重键折叠空白而存的是原文、`resolve` 只认 `resolved\|contradicted`（`withdrawn` 给干净校验错，不再走到 SQLite 的 CHECK） | `test-evidence-ledger-edges.mjs`（30 条） | `lib/redteam/evidence-ledger.mjs` 行 **516/516**、函数 20/20、分支 92.2% |
 
 ---
 
@@ -1315,6 +1340,16 @@ RED 演练 **30 条注入 → 30/30 全红**（按行号单行替换，`MUTS` �
    - `unregisterProfiles` 的 catch（`lib/uninstall.js:199-200`）在「读完能写、写到一半抛」的现场才触发；`fs.renameSync` 抛错那条已经覆盖同一条早退，但**这条 catch 本身**（`readJson` 抛而不是 `writeJson` 抛）没有独立用例。
    - `collectCleanupDirs` 里 `fs.realpathSync` 的两个 catch（`:160`、`:175`）在 Windows 上要造「路径存在但 realpath 失败」的现场（通常是权限位导致的拒绝访问）。沙箱里造不出，所以「链接解析失败时退回 `path.resolve`」这条只有源码可读。
    - **检测办法**：做一次真实卸载（`/uninstall`），看它报告的 `cleanup` 里有没有出现你自己的源码目录；出现在那就是 `OWN_TREE` 又被放宽了。另外看一眼 `%TEMP%\dsh-purge-cleanup.log`（重启助手的日志），里面每一条被跳过的路径都会写 `skip cleanup <path>` —— 这个文件里出现源码路径说明它被正确拦下了，什么都不写说明闸门在更早的地方就把它挡了。
+
+89. **证据账本（`lib/redteam/evidence-ledger.mjs`）的五处口径缝隙。** 行已 100%（516/516），但下面这些「不报错、只少东西」的地方只能在真机上认：
+    **①** `residual_unknown` 的 `status` 允许五个值（`open` / `investigating` / `blocked` / `contradicted` / `resolved`），而写状态的入口只有 `resolve()`，它只写 `resolved` / `contradicted`。`investigating` 与 `blocked` **没有任何 API 能设**，想改只能直连 SQLite —— 也就是说「这个问题正在查」这个状态在工具层不可达，模型只能靠再记一条 question 来表达进度。
+    **②** 失败返回值把「读不出来」压成「真的没有」：`get()` 读盘失败回 `undefined`（与「库里没这条」同一个值）、`countUnverified` / `countUnresolvedClaims` 回 `0`、`list()` 回 `{ error }` 对象而不是数组。测试只能钉住现状形状，钉不住调用方有没有看返回值。
+    **③** `record()` 的 `parameters` 走 `JSON.stringify(parameters)` 原样入库，而参与哈希的那份先过了 `sanitizeForHash`（BigInt → 字符串、function/symbol → 占位）。所以 `parameters` 里塞一个 BigInt，`JSON.stringify` 会抛，`record` 回 `{ok:false, error:'Do not know how to serialize a BigInt'}` —— 哈希算得出来、库写不进去。这条没有被专门钉（本批的 catch 用例覆盖的是「prepare 抛」这一条路）。
+    **④** `recorded_at` 是 `new Date().toISOString()`，**毫秒精度**。同一毫秒内写的多条之间 `ORDER BY recorded_at DESC` 没有稳定次序，任何「取最新一条」的写法（包括 `list({limit:1})`）都不能当成「最后写入的那条」。
+    **⑤** 两处 `unknown` 的兜底只在「库句柄整个坏掉」时被覆盖：`prepare` 必抛的假句柄能把三条 catch 全打红，但「prepare 成功、`run` 因为约束/磁盘满失败」是另一条路（`resolve` 那条走到过：`withdrawn` 当年就是撞的 CHECK），没有专门的用例。
+    **检测办法**：`node --test scripts/test-evidence-ledger-edges.mjs`（30 条）应全绿；要看真库里的缝隙，对一个真实靶标库跑
+    `SELECT status, COUNT(*) FROM residual_unknown GROUP BY status` —— 只有 `open` / `resolved` / `contradicted` 说明 ① 成立（没有 investigating/blocked 的行）；
+    `SELECT COUNT(*) FROM evidence WHERE json_valid(parameters)=0 OR json_valid(result)=0` —— 非 0 说明库里有老数据或直连写过坏 JSON，`get()` 那边会静默回落成 `{}` / `null`。
 
 ## 维护约定
 

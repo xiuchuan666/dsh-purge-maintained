@@ -864,7 +864,7 @@ test('unknown_record/list/resolve 走完一轮，disposition 只认三个值', a
 
     const bad = await call('redteam_unknown_resolve', { unk_id: rec.unk_id, disposition: 'done' })
     assert.equal(bad.ok, false)
-    assert.equal(bad.error, 'disposition must be resolved|contradicted|withdrawn')
+    assert.equal(bad.error, 'disposition must be resolved|contradicted')
 
     const ok = await call('redteam_unknown_resolve', { unk_id: rec.unk_id, disposition: 'resolved', resolution: '经 socks5 可达' })
     assert.equal(ok.ok, true)

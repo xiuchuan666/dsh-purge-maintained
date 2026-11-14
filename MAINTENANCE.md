@@ -736,6 +736,26 @@ fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? LIE :
 2. **逐字节比较**，不要比 `JSON.parse` 之后的对象。上一版 meta 的缩进、键顺序、结尾换行都算「用户的东西」；用对象比较会把「重新序列化覆盖了原格式」判成通过。
 3. **持续性失败造不出「第一次成功、回滚失败」**。monkeypatch 让磁盘拒绝是持续性的，它会同时打断第一次写入。所以「回滚本身也失败」那两层内层 `catch` 只能靠源码形状断言（「回滚段在 `throw e` 之前」），要写进盲区，别硬凑 fixture。
 
+### 一个函数认的值比表约束多一个，那个值就从来没成功过
+
+`lib/redteam/evidence-ledger.mjs` 的 `resolve()` 原话是「认 `resolved` / `contradicted` / `withdrawn`」，而同一文件里的建表语句写的是
+`status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','investigating','blocked','contradicted','resolved'))` —— 没有 `withdrawn`。
+传 `withdrawn` 时校验放行，一路走到 SQLite，拿回一句 `CHECK constraint failed: status IN (...)`。工具说明书也照着宣传这三个值，
+于是模型选了一项、收到一句数据库内部错误。**这条路一次都没成功过，而且没人报过 bug**：它长得像一个合法的功能。
+
+两条判据，任何一条成立就该去比对「代码认的集合」与「schema 认的集合」：
+
+1. **同一个语义在两处各写了一遍字面量**：一处是入口校验（`Array.includes` / `Set.has` / 正则），一处是 DDL 的 `CHECK`、枚举表、或宿主层的 `enum`。`grep` 一下那个值的名字，出现两次以上就要问「这两处是同一个集合吗」。
+2. **错误文本里带着用户可见的选项清单**：`disposition must be resolved|contradicted|withdrawn` 这种把可选值拼进提示的写法，等于把集合又抄了第三份。
+
+修哪一头，看**改完之后用户机器上会发生什么**：
+
+- **收回广告词（本项目的选择）**：把 `resolve()` 的取值表抽成 `export const RESOLVE_DISPOSITIONS = [...]`，同步工具说明书的 `description` 与参数说明，并把旧断言一起改。零 schema 改动、零迁移、零数据风险，代价是少一个从来没有工作过的选项。
+- **补 schema**：要改 `EVIDENCE_LEDGER_DDL` —— 但 `CREATE TABLE IF NOT EXISTS` 对**已经建过表的用户库不生效**，必须再写一次「建新表 → 拷数据 → 删旧表 → 改名」的迁移，事务里做，还得考虑迁移中途断电。这是另一个风险等级的动作，别混在一批「补测试」里顺手做。
+
+配套的守卫：**从 DDL 里把 `CHECK(... IN (...))` 的取值解析出来，断言入口校验的集合是它的子集**。这样下一回有人只改数组，测试先红，不用等到用户点下去才发现。
+（`docs/test-map.md` 的「四十一补」第 4 条与盲区 89 记着这次的完整经过。）
+
 ### 一行里有十几处同样的 `sendJson(response, 500, …)`：演练按行号改，不按子串改
 
 `lib/routes.js` 里 `sendJson(response, 500, { ok: false, error: String(e) });` 这种行出现十几次，`response.writeHead(405, { allow: "GET" });` 也有两处一字不差。做 RED 演练时用子串当锚点必然撞，`nth` 又会在下次插行后失效。
