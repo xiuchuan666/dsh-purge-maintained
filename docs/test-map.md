@@ -122,6 +122,7 @@
 | 激活规则时把原内容备份成 `.dsh-purge-rule.bak`（内容已是规则正文时不备份、已有备份不覆盖、目标不存在不抛） | `test-rules-store.mjs`（5 条，其中一条钉住「备份里绝不能是规则正文」） | `lib/rules.js` 94% |
 | 恢复出厂三分支（有备份→写回并删备份 / 无备份且内容等于规则→删文件 / 用户改过→保留计入 skipped） | `test-rules-store.mjs`（4 条） | `lib/rules.js` 94% |
 | 保存当前激活的规则会立刻同步到目标文件；保存未激活的规则不碰目标文件 | `test-rules-store.mjs`（2 条） | `lib/rules.js` 94% |
+| `saveRule` 的三条回滚分支（新规则删文件 / 旧正文退回原字节 / meta 有就写回、没有就删掉），以及激活时读不出来的规则只跳过不拖垮备份 | `test-rules-rollback.mjs`（16 条） | `lib/rules.js` 行 99.8% |
 | 激活标记指向已删规则时由 `ensureInitialState` 清掉 | `test-rules-store.mjs`（1 条） | `lib/rules.js` 94% |
 | cwd 候选文件的向上扫描（`.git`/`.hg`/`.svn` 停住、cwd/ancestor/root 三层、预览 160 字符、目录同名不算文件） | `test-rules-store.mjs`（4 条） | `lib/rules.js` 94% |
 | 工作区策略与 cwd 勾选的持久化（含跨目录穿越防护） | `test-prompt-inject.mjs`（8 条：默认 fallback / 非法值拒绝 / 损坏文件回落 / 跨目录不注入 / `cwd-rule` 头 / lastCwd 空值不覆盖） | `lib/rules.js` 94% |
@@ -751,6 +752,31 @@ fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? BOM +
 
 **覆盖率**：`lib/bom-guard.js` 行 **100%**、函数 7/7、分支 **58/61（95.1%）**；全仓行 **93.23%**。RED 演练 **20 条突变 → 20/20 全红**（唯一一条 ANCHOR 是我把 `if (!home) return out;` 的缩进写成 4 格，真行是 2 格 —— 锚点必须从源码印刷行抄）。没有等价突变：那 20 条每一条都能说清「用户会看到什么不同」（该修没修 / 不该修却修了 / 失败报成功 / 告警少一半）。
 
+**三十八补**：`lib/rules.js` 的 `saveRule` 回滚段（原 `186-201`，一行都没跑过）。这一批没有新增能力，只补**已经写在代码里、却从没被验证过的失败路径**。
+
+`saveRule` 要同时改两个位置：规则正文 `rules/<id>.md` 与元数据 `rules/<id>.json`，改完还可能顺手把规则同步到目标文件（`AGENTS.md` / `CLAUDE.md`）。三者只要有一处失败，前面写下的就必须退回去 —— 否则用户看到的是「规则列表里有它、`AGENTS.md` 里却是半截」，或者更糟：**上一次的规则正文被新内容覆盖后回不去**。回滚段的三条分支对应三种不同的残留：
+
+1. 原来是新规则 → 把刚写的 `.md` 删掉（`unlink`，不是写空串）；
+2. 原来有旧正文 → 把上一版**原样**写回（不是写 `""`、也不是写新内容）；
+3. 元数据已经写成功 → 有旧 meta 就写回，原来没有就删掉那个新 meta。
+
+这三条以前是「凭代码看起来正确」，现在三条各有独立用例。老 `test-rules-store.mjs`（30 条）管的是正常路径（256KB 上限、id 合法性、备份三分支、激活同步），这一份 `test-rules-rollback` 管失败路径，两份不重叠。
+
+造失败一律用**让磁盘真实拒绝**，不 mock 模块内部函数（否则测的是 mock）：
+
+- 把 `rules/<id>.json` 做成**目录** → 写 meta 时 `atomicWriteFile` 的 rename 失败（Windows `EPERM`、POSIX `EISDIR`）；
+- 把 `$DSH_HOME/AGENTS.md` 做成**目录** → 激活时写目标失败，正好落在 `wroteRule && wroteMeta` 都已为真的时刻；
+- `fs.promises.stat = async () => { throw }` → `listRules` 的 `size` 兜底（该条仍然列出、`size` 记 0）；
+- `fs.readFileSync = (fp) => { if (fp === <某条规则>) throw }` → `collectRuleContents` 跳过读不出来的那一条，**不拖垮备份**（这一条最容易写错：抛出去会让整个激活失败，而正确的行为是「这条内容算不进集合，于是目标文件照常备份」）。
+
+另外补上 `rulesStatus` 的三态（active 有、目标文件不在 → `agents_exists` / `agents_synced` 都是 false 且不抛；内容一致 → synced true；多一个换行 → false）与 `ensureOperatorBody`（无 `prompt-inject.md` 时返回内置默认正文并 `hangOperatorPrompt` 挂全局，两次一致；有磁盘稿时用磁盘稿）。
+
+一条**实现细节**值得记：`ensureOperatorBody` 返回的内置默认正文实测 **20994 字符**（不是 `defaultOverrideText()` 的原始长度 —— 中间过了 `normalizeOverride`）。用例只断言「> 1000 且两次相同」，不钉具体长度：那是提示词正文，会被上游改写。
+
+**覆盖率**：`lib/rules.js` 行 **535/560 → 559/560（99.82%）**、函数 45/48 → 46/48、分支 179/208 → 201/228（88.2%）；全仓行 **93.30%**。唯一剩下的那条是 `resolveInjectText` 的 `return { text: "", source: "none", ruleId: null }` —— 它要求 `normalizeOverride(defaultOverrideText())` 为空，而内置默认正文恒非空，**走不到**（写进盲区 86）。
+
+RED 演练 **18 条突变 → 18/18 全红**（`restored: true`，无等价突变、无锚点 MISS）。每条都能说清「用户会看到什么不同」：规则文件该删没删 / 该退回旧版却留了新版 / meta 残留 / 用户原件被规则正文覆盖 / 规则列表里混进 `_bad.md` 与目录 / 读不出来的规则把整次激活搞死。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1226,6 +1252,16 @@ fs.readFileSync = (target, ...rest) => (written && String(target) === fp ? BOM +
     **④** `candidateFiles` 里 `statSync` 抛错与非目录两种 `continue` 无法区分：两者都只是「不产生候选」，`checked` 与三个数组全都不变。要区分只能把 `fs.statSync` 换成抛错版本，但那与「`profiles/` 不存在」的路径完全重合。
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-bom-guard.mjs scripts/test-bom-guard-edges.mjs`（5 + 19 条应全绿）；再在真机上手工验一次救砖主路 —— 拿一个 `profiles/<name>/package.json` 用记事本存成「UTF-8 with BOM」，跑 `dsh-purge --status` 应出现 `清单告警 / manifest: 1 个清单带 BOM（宿主 0.2.2 会起不来） —— 运行 dsh-purge --fix-bom 修复`，跑 `--fix-bom` 后该行消失、桌面端能正常启动。
+
+86. **`lib/rules.js` 的 `resolveInjectText` 有最后一条兜底返回永远走不到；另有两条语义差异无法从外部区分。**
+
+    **①** `resolveInjectText` 的末行 `return { text: "", source: "none", ruleId: null };` 需要「框内提交、磁盘稿、内置默认正文」三者都归一成空串。内置默认来自 `defaultOverrideText()`（一整篇提示词，实测 `normalizeOverride` 之后仍有 20994 字符），它永远非空 —— 所以 `source: "none"` 这个取值在正常安装里不可达。反过来，如果哪天内置正文真的被清空，这一支会变成「注入为空但 UI 显示 none」，届时才有意义。
+
+    **②** `ensureOperatorBody` 的最后一句 `return resolved.text || normalizeOverride(hungOperatorPrompt()) || "";` 里，`|| normalizeOverride(hungOperatorPrompt())` 只在 `resolved.text` 为空时生效 —— 同上，这条路也不可达。三条 `||` 的实际可观察行为只有第一条。
+
+    **③** `saveRule` 回滚段里的两个内层 `try { … } catch { /* 回滚失败,原错继续抛 */ }`：要触发「回滚本身也失败」，需要在回滚写入的那一刻再让磁盘拒绝一次，而 monkeypatch 出来的失败是**持续性**的（会同时打断第一次写入），所以造不出「第一次写成功、回滚写失败」。这两层 catch 只有源码形状断言（「回滚在 `throw e` 之前」），没有行为用例。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-rules-rollback.mjs scripts/test-rules-store.mjs`（16 + 30 条应全绿）；再在真机上手工走一次回滚 —— 停掉桌面端、`chmod 0o444`（或把目录设只读）让 `$DSH_HOME/AGENTS.md` 写不进去，然后在面板里保存并激活一条规则：应看到保存失败，并且 `rules/<id>.md` 与 `rules/<id>.json` 都还是**动手之前**的内容。
 
 ## 维护约定
 
