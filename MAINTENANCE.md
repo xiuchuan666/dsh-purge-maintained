@@ -628,3 +628,20 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 - `node_modules` 有三个落点：`join(root, needle)` → `join(root, "node_modules", "@deepseek-ai")` → pnpm `firstAiBase(pnpmHoistAiBases(root))`。第二条会兜住「埋得很深的扁平布局」，**因此 needle 参数写错也照样命中**——所以 needle 那句只能靠源码形状断言钉，不要试图用行为用例区分。
 - `readdirSync(p, { withFileTypes: true })` 对 junction 报 `isSymbolicLink() === true` 且 `isDirectory() === false`，`if (!e.isDirectory()) continue;` 会把它整个跳过。好处是不会绕圈，代价是**只经链接才够得着的树永远找不到**。
 - 跨设备跳过（`childDev !== rootDev`）只在 `process.platform !== "win32"` 或条目本身是符号链接时判；Windows 普通目录一律下钻，这是 `#91` 用 6 万目录 7.2 秒换来的取舍，别「顺手统一」。
+
+### `path.join()` 会把 `..` 折掉：路径类断言不能假设原串还留着上一级
+
+候选表里那些「退一级」的写法是 `join(dirname(p), '..', 'lib', 'node_modules', ...)`。`join` 会先归一化，所以 `dirname('/r/app') + '..'` 得到的是 `/r`，而不是 `/r/app/..`。两个后果：
+
+1. **断言要照 `join` 的结果写**，别照自己的心算写（`execPath` 在 `/r/app` 时落点是 `/r/lib/node_modules/...` 与 `/r/node_modules/...`）。第一次写这批用例时按「应该退到 `/r/app/lib`」写的两条全红，改的不是实现，是断言。
+2. **这种写法在根附近会塌成同一层**。这是刻意的取舍：多试一条只多一次 `existsSync`（微秒级），少猜一种布局就是整份预设消失（要用户手动改配置才发现）。凡是「宁可多试几次也别漏」的探测，都按这个方向写，并把取舍写进注释，免得下一个人当 bug 修掉。
+
+### 断言一组东西时，`filter` + `deepEqual` 不覆盖跨组顺序
+
+`defineToolCandidates` 的候选表分成 argv / execPath / 两个主目录 / 桌面根 / cwd / 历史遗留几组。先按前缀 `filter` 再 `deepEqual`，只钉住「每组内部顺序对」，把两组对调照样绿 —— RED 演练就是这么抓到一条 GREEN 的。补法是再加一条跨组断言（`list.indexOf(A[0]) < list.indexOf(B[0])`）。
+
+顺序在这里是行为：`loadDefineTool` 是逐条 `createRequire`、第一条能解析的就赢了。所以「哪组在前」等于「哪个包被当成宿主的那份」。凡是「首个命中即返回」的列表，都要有一条跨组顺序断言。
+
+### 等价突变的一种常见形态：早退读的是不可能存在的键
+
+`if (rootId === undefined) return` 这种守卫，删掉后行为不变 —— 因为紧接着的 `reservations.get(undefined)` 本来就返回 `undefined`，而 `addReservation` 只会收到解析出来的根会话 id，表里不可能存在 `undefined` 这个键。判据是「能不能举出一条让它与不删它表现不同的路径」：举不出来就删掉这条突变，并在用例里写一行说明「这是防御性早退、不是可测行为」。早退守卫多半属于这一类，别为它们硬造 fixture。

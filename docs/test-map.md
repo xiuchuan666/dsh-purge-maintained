@@ -28,6 +28,7 @@
 | 「到底该打哪一棵树」的选择链（`findAiBaseDesktop` / `findAiBaseWeb` / `pathIsUnder` / `enumeratePatchAiBases` 的 realpath 去重） | `test-host-tree-chain.mjs`（27 条：判据 4 / 安装树 3 / 选树 9 / 去重 4 / 坏候选 3 / 源码形状 1） | `lib/core.js` 85.7% |
 | 「一键应用到所有宿主 / 全部回退」真的每棵树都走到（`applyPatchesAllHosts` / `revertAllHosts` / `allPatchHostsWritten`） | `test-all-hosts.mjs`（23 条：全部成功判定 4 / 应用 9 / hooks 还原 2 / 回退 4 / 去重与安全 2 / 源码形状 2） | `lib/core.js` 87.6% |
 | 所有便宜探测落空后的「深度兜底扫描」不会把错的东西当宿主树（`findAiBaseRecursive` / `scanHomeRootsForAiBase`） | `test-deep-scan.mjs`（18 条：三种 node_modules 落点 3 / 深度边界 2 / 链接与只读 3 / 跨设备 1 / 去重与去环 3 / 根清单 4 / 源码形状 2） | `lib/core.js` 88.8% |
+| 红队预设能找到宿主那份 `@deepseek-ai/dsh-tools`（四条候选规则 / 29 条候选表 / 主目录优先级 / 槽位自动释放） | `test-tools-resolve.mjs`（22 条：`addCandidate` 4 / `considerBin` 5 / 候选表 6 / 解析 2 / 槽位释放 4 / 源码形状 1） | `lib/redteam/tools.js` 93.7% |
 | 判错时不报错：打到 Electron 外壳那份树（全场 `no-file`）、或把 `~/.dsh` 当成桌面版在用的 `dsh-home` | 同上（候选表逐项顺序 + `portableHomeFromLauncher` 顺序 + `desktopDshHomeGuesses` 三平台） | 同上 |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
@@ -639,6 +640,22 @@ RED 演练 **22 条突变 → 22/22 全红**（`{"total":22,"red":22,"green":[],
 **两条用例的写法值得记**：①「跨设备跳过」的 `statSync` 假实现**不能**用 `{ ...st, dev: 999999 }` —— 展开会丢掉 `Stats` 原型上的 `isDirectory()`，`isAiBase` 一律 false，于是原实现和「判定反了」的突变都回 null，用例永远绿。正确做法是 `const stub = Object.create(st); stub.dev = 999999;`。②`readdir` 计数要先把两侧都过一遍 `realpathSync.native`，否则 `os.tmpdir()` 给的 8.3 短名（`ADMINI~1`）与长名不是同一个字符串，计数恒 0。
 
 
+**三十二补**：`lib/redteam/tools.js` 的**宿主包解析链**与**子智能体槽位自动释放**。前三十一补都在补丁链 / 定位链上，这一补第一次动红队子系统里「不报错但会整块消失」的两处：解析链错 → 整份红队预设被下拉过滤掉（日志只有一行 `cannot resolve`）；释放错 → 并发名额只增不减，第三次派活直接被「并发已满」拒。两处都零命中，且都从 1.1.94 起没变过形态。
+
+**解析链的四条规则**（`considerBin`，输入一个 `bin` 路径，输出若干「可能是 `@deepseek-ai/dsh/package.json` 的路径」）：
+① 命中 `/node_modules/@deepseek-ai/dsh/` 就截到那里；② 从最后一个 `/node_modules/` 往上拼；③ `dirname/../lib/node_modules/...`（npm 全局前缀布局）；④ `dirname/../node_modules/...`（包自己装了嵌套依赖）。①②对同一个包根会给出同一条路径，靠 `addCandidate` 的分隔符归一去重。
+**`addCandidate` 的去重只归一 `\` → `/`，不归一大小写** —— `C:/x` 与 `c:/x` 会各留一条。Windows 上那是同一个目录，代价只是多一次 `existsSync`；反过来若加 `toLowerCase()`，POSIX 上大小写敏感的两个不同路径就会被误合并。这是刻意的，已用「大小写不同算两条」的用例锁定。
+
+**候选表 29 条的固定顺序**（`defineToolCandidates`，第一条能被 `createRequire` 解析的就赢了）：argv 三条 → `execPath` 退一级两条 → `DSH_HOME` 七条 → `<home>/.dsh` 七条 → 桌面根八条 → `cwd/package.json` → 本机历史遗留的 `D:/DeepSeek Harness/npm-global/...` 一条。每个主目录七条 = 顶层 1 + `profiles/{web,desktop,default}` 各 2。
+顺序有意义，不只是列表内容：`DSH_HOME` 必须排在那条「猜出来的 `<home>/.dsh`」前面，否则旧主目录会把当前主目录的包压掉。**RED 演练抓到过这个盲点** —— 只断言两组各自七条时，把两组顺序对调是绿的；补了 `indexOf('/r/dshhome/package.json') < indexOf('/r/home/.dsh/package.json')` 才红。
+
+**`join()` 会把 `..` 折掉，所以「退一级」在根附近会塌**：`execPath = /r/app/x.js` 时两条「退一级」候选落到 `/r/lib/node_modules/...` 与 `/r/node_modules/...`，而不是 `/r/app/...`。现状刻意保留：多试一条只多一次 `existsSync`，少猜一种布局就整份预设消失。写用例时不能假设候选串里还留着 `..`。
+
+**槽位自动释放**（`apply()` 里的 `ctx.effect`）：`subagent/end` 到达时先 `bindingKeyOf` 沿 `parentSession` 找到根会话，再 `dropReservation(rootId, childId)` 按 id 精确释放；**对不上就按时间兜底释放最早一条**。预留键是 `<label>#<Date.now()>`，宿主的 runId 永远不可能等于它，所以**线上恒走兜底那条**——精确释放是给未来的（如果哪天真把 runId 塞进 key）。用 `ctx.effect` 包住是为了 dispose 时解绑，否则热重载会让同一个事件挂两遍、释放速度翻倍。
+
+**RED 演练**：22 条突变 → **22/22 全红**。首轮 23 条里 1 条等价（删掉 `if (rootId === undefined) return` 这个早退 —— `reservations.get(undefined)` 本来就是 undefined，`addReservation` 也只会收到解析出来的根 id，所以表里不可能存在 `undefined` 键），已删并在用例里写明理由；另 1 条（主目录顺序）靠补断言才转红。
+**用例分布**（22 条）：`addCandidate` 4 / `considerBin` 5 / `defineToolCandidates` 6 / `loadDefineTool` 2 / 槽位自动释放 4 / 源码形状 1。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1052,6 +1069,15 @@ RED 演练 **22 条突变 → 22/22 全红**（`{"total":22,"red":22,"green":[],
     - **桌面安装树排除依赖真安装**：`scanHomeRootsForAiBase` 命中的根若在 `desktop.listDesktopInstallRoots()` 里就被丢掉、继续下一个根。沙箱靠 `DSH_DESKTOP_INSTALL` 指假安装树验通了，但「真机上 `~/.dsh` 里那条软链指向哪」还是得跑一次 `npm run host:status` 比对 `ai_base` 与 `node scripts/verify-target.mjs` 的 `would-apply`。
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-deep-scan.mjs`，再假装容器布局跑一次 `DSH_SURFACE=web DSH_HOME=<空目录> node -e "import('./lib/core.js').then(m=>console.log(m.findAiBase()))"`，确认它没有把桌面安装树报上来。
+79. **红队预设的解析链与槽位释放，在真宿主上仍有射程外。**
+    `test-tools-resolve.mjs`（22 条）把「四条候选规则 → 29 条候选表 → 第一条能解析的就赢」与「`subagent/end` 到达时精确释放、对不上按时间兜底」都钉住了，但四类情形只能真机验：
+    **①** `loadDefineTool` 的 `throw new Error('dsh-purge/redteam/tools: cannot resolve @deepseek-ai/dsh-tools from host')` 这条分支在本机走不到 —— 本仓库的 `node_modules/@deepseek-ai/` 里就能解析成功。所以它只由源码形状断言钉住（`createRequire(import.meta.url)` 必须排在 `defineToolCandidates()` 之前、错误文案要能被 `grep` 到、循环里必须 `existsSync(pkg)`）。
+    **②** 「解析失败 → 整份红队预设被下拉过滤」的真实表现验不到：沙箱里 `createRequire` 一定成功，看到的是「返回 function」。真机上要验这一层，只能把 `node_modules/@deepseek-ai/dsh-tools` 临时改名后重启宿主，看工具下拉里 `redteam_*` 是否整组消失、插件日志是否只有一行 `cannot resolve`。
+    **③** 候选表里 `execPath` 那两条「退一级」在真桌面壳上的实际落点没验过：本机 `process.execPath` 是 `resources/app/.../DeepSeek Harness.exe`，`join(dirname,'..',...)` 折完会落到 `resources/`，而真能用的那条是列表后段的 `resources/app/dsh/node_modules/...`。也就是说这两条在真机上大概率是空跑 —— 但「空跑」和「落错地方把别人的包当成宿主的」在沙箱里长得一样，只能靠 `npm run host:status` 的 `ai_base` 与工具是否可用间接判断。
+    **④** 槽位释放只挂在 `subagent/end` 上：宿主不发这个事件、或 handler 抛错被 `try` 吞掉时，名额只增不减。沙箱用假 `ctx.on` 验了注册与解绑，真机上要确认「派三次子智能体后 `redteam_agent_slot status` 的 `used` 回到 0」——这一步没有自动化，属于每次升级后手点一次的项目。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-tools-resolve.mjs`；再在真机上打开演练台派一个子智能体、等它结束后调 `redteam_agent_slot`（`action: "status"`），确认 `used` 掉回 0 且 `reservations` 为空数组；若工具整组不在下拉里，先看插件日志有没有 `cannot resolve @deepseek-ai/dsh-tools`。
+
 
 ## 维护约定
 
