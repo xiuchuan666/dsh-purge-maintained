@@ -1109,3 +1109,19 @@ try {
 3. **`delete` 之后不可恢复，永远存引用。** 置坏一个内置函数再 `delete CJS.xxx`，ESM 绑定还指着坏实现、CJS 对象又没了 own property，两边都对不上（`prompt-source` 那批踩过：`delete` 完 `defaultOverrideText()` 仍是 0）。存 `const REAL = CJS.xxx`、最后 `CJS.xxx = REAL` 才是唯一可靠写法。
 
 **判断依据**：只要打算 monkeypatch 的东西是**从内置模块具名导入**的（`import { spawn }`、`import { rename }`、`import { createDecipheriv }`），就一定要 `syncBuiltinESMExports()`；如果是模块自己导出的对象属性（`agent.cancel`、`ctx.effect`）或者 `process.env` 这类全局，就不需要。
+
+
+## 「本机造不出 fixture」这句话，先算一遍判定要什么，再说造不出来
+
+盲区 74 那条写着「`findDshHome` 的桌面分支要扫真安装树、要读 `process.resourcesPath`，写进用例就是在测环境」，挂了十几批。真正动手时发现它只要三件东西：一棵**过判据**的假安装树（目录里有 `DeepSeek Harness.exe`）、一个把 `USERPROFILE` 指进沙箱的 `process.env`、以及每次改现场后的一次 `resetPathMemo()`。三件都做到，28 + 10 行一次全绿。
+
+所以写「造不出来」之前，按这三步过一遍：
+
+1. **把判定链抄出来，逐项问「这一项读的是磁盘、环境变量、还是进程状态」。** 磁盘能造、环境变量能改、`process.*` 能临时替换；只有「另一台机器上才有的东西」（`/mnt/c/Users`、`process.resourcesPath`）才是真的造不出来。这条链里 `process.resourcesPath` 只有 Electron 进程里有值（Node 下是 `undefined`），于是那一项确实落进盲区；其余全在射程内。
+2. **「结果依赖这台机器装了什么」通常是 fixture 没造对。** 候选列表为空、`~/.dsh` 拿走、`found[0]` 是空数组 —— 三种症状都会表现成「走了兜底」，看上去像环境依赖。先验证 fixture 本身：把候选表打印出来，看 `found` 到底有没有进东西。
+3. **兜底分支必须靠改 `process.env` 才能沙箱化。** `findDshHome` 的 `const unix = path.join(os.homedir(), ".dsh")` 读的是 `USERPROFILE` / `HOME`，**不是** `options.env`；只把沙箱塞进 `options.env` 会返回真机主目录。同类还有 `os.tmpdir()`（读 `TEMP`）、`os.homedir()` 在 macOS 上读 `HOME`。
+
+配套两条 fixture 纪律：
+
+- **`put(dir, {})` 这种「只建目录」的调用不能省 mkdir。** 把 mkdir 写在 `Object.entries(files)` 循环体里，空对象就一次都不建，后面所有 `isDir` 判断全 false，症状是「我明明造了目录」。
+- **回退阶梯要逐级断言，不只断言「最后拿到了对的那个」。** 桌面主目录定位有六级（`DSH_HOME` → 候选里有数据 → `~/.dsh` 有数据 → 候选里没数据就回第一个 → 什么都没有仍回 `~/.dsh` 路径 → web 面先看启动器旁），少一级也只会在特定机器上表现成「写进去的提示词不生效」。

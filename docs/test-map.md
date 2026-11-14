@@ -30,6 +30,7 @@
 | 所有便宜探测落空后的「深度兜底扫描」不会把错的东西当宿主树（`findAiBaseRecursive` / `scanHomeRootsForAiBase`） | `test-deep-scan.mjs`（18 条：三种 node_modules 落点 3 / 深度边界 2 / 链接与只读 3 / 跨设备 1 / 去重与去环 3 / 根清单 4 / 源码形状 2） | `lib/core.js` 88.8% |
 | 红队预设能找到宿主那份 `@deepseek-ai/dsh-tools`（四条候选规则 / 29 条候选表 / 主目录优先级 / 槽位自动释放） | `test-tools-resolve.mjs`（24 条：`addCandidate` 4 / `considerBin` 5 / 候选表 6 / 解析 5 / 槽位释放 3 / 源码形状 1） | `lib/redteam/tools.js` 93.7% |
 | 判错时不报错：打到 Electron 外壳那份树（全场 `no-file`）、或把 `~/.dsh` 当成桌面版在用的 `dsh-home` | 同上（候选表逐项顺序 + `portableHomeFromLauncher` 顺序 + `desktopDshHomeGuesses` 三平台） | 同上 |
+| 桌面主目录定位的六级回退（`DSH_HOME` trim → 候选里有 harness 数据 → `~/.dsh` 有数据 → 候选全空数据时回 `found[0]` → 什么都没有仍返回 `~/.dsh` 路径 → web 面先看启动器旁 portable） | `test-dsh-home-desktop.mjs`（15 条：`homeHasHarnessData` 1 / `isDshHomeDir` 1 / `desktopDshHomeGuesses` 2 / 桌面回退 6 / `DSH_HOME` 1 / web portable 1 / `portableHomeFromLauncher` 1 / `findWslWindowsDshHome` 1 / 源码形状 1） | `lib/core.js` 行 4671/5205 |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
 | 状态戳说「已应用」但宿主树上没有注入标记 → 必须 `broken`，不许报「补丁仍站得住」 | `test-host-baseline.mjs`（`auditStampVsTree` 9 条） | `scripts/` 不计覆盖率 |
@@ -1041,6 +1042,20 @@ RED 演练 `.tmp97-drill.mjs` **12 条突变 → 12/12 全红**（首轮 11 红 
 
 RED 演练 **17 条突变 → 17/17 全红**（`detached`/`stdio`/`windowsHide`/`shell` 逐个改、删 `unref()`、`exitAfter` 默认值 250→300、`??`→`||`、`!== false`→`!== true`、去掉 `console.log` 的 try/catch、`kind` 改成别的字符串、`argv` 不给 `restartArgv()`、清理重启丢掉 `helper`、丢掉 `cleanup`、`}, 400)`→`250`、`copyFileSync` 换成写空文件、`openBrowser` 恒 `true`、不认调用方给的 `argv`）。
 
+**2026-11-15 五十一补**：盲区 74 的第 ① 项（「`findDshHome` 的桌面分支本机可以跑通，但结果依赖这台机器装了哪些桌面版本，写进用例就是在测环境」）在这批被推翻了 —— 只要把**桌面安装树造成一棵真的能过判据的假树**，那条分支完全可以在沙箱里跑：`scripts/test-dsh-home-desktop.mjs`，**15 条**，`lib/core.js` 行 4633 → 4671/5205（+38 行，正好是 `desktopHomeCandidates` 28 行与 `findDshHome` 桌面分支 10 行）。
+
+关键是三个 fixture 事实：
+
+1. **候选根必须像桌面安装**。`desktopHomeCandidates()` 里 `desktop.listDesktopInstallRoots()` 只收「看起来是桌面安装」的目录，而它的判据要求目录里真有 `DeepSeek Harness.exe`。只造一个空目录 + `.dsh` 子目录，`found` 会一直是空数组，然后一路掉到 `~/.dsh` —— 那看起来像「桌面分支没生效」，实际是 fixture 没造对（第一版五条用例全红在这个点上，报错信息里只有路径，没有一个字提 exe）。
+2. **`put(dir, {})` 不会建目录**。我那个 `put` 辅助是把 mkdir 写在 `Object.entries(files)` 的循环体里的，空对象 ⇒ 循环体一次都不跑 ⇒ 目录根本没建出来 ⇒ `isDshHomeDir` 全 false。凡是「我造了一个空目录」的 fixture，必须显式 `mkdirSync`。
+3. **`os.homedir()` 读的是 `USERPROFILE` / `HOME` 环境变量，不是 `options.env`**。桌面分支的兜底 `const unix = path.join(os.homedir(), ".dsh")` 因此必须靠改 `process.env` 才能沙箱化 —— 只把沙箱塞进 `findDshHome({ env })` 会让兜底返回真机的 `C:\Users\Administrator\.dsh`，这正是盲区 74 那句「写进用例就是在测环境」的真实原因（测的其实是 `USERPROFILE`）。
+
+15 条用例把**回退阶梯**逐级钉住（这比「有数据就返回它」重要得多）：`DSH_HOME`（trim 后直接用，只有空白算没设）→ 桌面候选里**有 harness 数据**的那个（`prompt-inject.md` / `profiles` / `cordis.patch.yml` 任一）→ `~/.dsh` 有数据就用它 → 有候选但都没数据就回 `found[0]` → 什么都没有仍返回 `~/.dsh` 路径（**允许不存在**，但不许返回空）。另外 `~/.dsh` 存在却是空目录时，**必须让位给安装树旁的候选**（这条专治「用一个空目录冒充主目录」），三平台的 `desktopDshHomeGuesses`（darwin 的 Library 那条、win32 的 APPDATA+LOCALAPPDATA 两条且顺序固定、linux 恒空）也各有用例。
+
+RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认 `dsh-home`、三个 harness 标记各删一个、候选只推 `.dsh2` 或 `.dsh-home`、不推 exe 目录、darwin 分支关掉、win32 读错环境变量、两条猜测顺序颠倒、linux 也给一条、`DSH_HOME` 不 trim、桌面判据写反、候选不筛 `isDshHomeDir`、`~/.dsh` 有目录就认、不回退 `found[0]`、portable 不看命中、portable 结果不用）。
+
+**仍然测不到的**：`findWslWindowsDshHome` 的命中分支（`/mnt/c/Users` 在 Windows 上不存在，只能在真 WSL 里跑）与 `desktopHomeCandidates` 里 `process.resourcesPath` 那一项（只有 Electron 进程里有值），见盲区 74。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1428,8 +1443,8 @@ RED 演练 **17 条突变 → 17/17 全红**（`detached`/`stdio`/`windowsHide`/
 
 
 74. **宿主树 / 主目录定位里「真的要去看一眼外部世界」的那几段还是空的。**
-    `test-host-locate.mjs` 把判据与候选表钉死了（34 条，`lib/core.js` 81.7%），但那十四条判定之外仍有四处必须真的碰系统：
-    **①`findDshHome` 的桌面分支**（`lib/core.js:1738-1747`）：`desktopHomeCandidates()` 要调 `desktop.findDesktopAppExecutable()` / `desktop.listDesktopInstallRoots()` 去扫真安装树，还要读 `process.resourcesPath`（只有 Electron 里有）。本机可以跑通，但结果依赖「这台机器装了哪些桌面版本」，写进用例就是在测环境，所以只钉了 web 面与 `desktopDshHomeGuesses` 这两段纯的部分。
+    `test-host-locate.mjs` 把判据与候选表钉死了（34 条，`lib/core.js` 当时 81.7%），之后的 `test-dsh-home-desktop.mjs` 又把桌面主目录那一段补齐（现有 4671/5205 = 89.7%）；但十四条判定之外仍有四处必须真的碰系统：
+    **①`findDshHome` 的桌面分支里 `process.resourcesPath` 那一项**：`desktopHomeCandidates()` 现在已被 `test-dsh-home-desktop.mjs`（15 条）整段钉住 —— 造一棵过判据的假安装树（目录里真有 `DeepSeek Harness.exe`）+ 把 `USERPROFILE` 指进沙箱，六级回退全可测，`lib/core.js` 行 4633 → 4671。**剩下唯一空着的是 `if (process.resourcesPath) push(path.dirname(...))`**：这个属性只有 Electron 进程里有值，Node 下恒 `undefined`，用例里给它赋值也只会测到自己。
     **②`findWslWindowsDshHome` 的命中分支**：本机没有 WSL，`/mnt/c/Users` 不存在，所以「扫到一个带 `.dsh` 的 Windows 用户目录并返回」那一段一次都没跑过 —— 只钉了「非 linux 恒空」与「linux 下没有 `/mnt/c/Users` 也空」。
     **③`findAiBaseFromDshHome` 的第四条路**（`findAiBaseFromRequire` 走 `createRequire` 解析 `@deepseek-ai/dsh/package.json`）：要一份能被 Node 解析器认的 `node_modules` 布局（含 `package.json` 的 `exports`），本机 fixture 造得出来但成本远高于收益，目前只有前三条路有用例。
     **④`requireFrom` / `findAiBaseFromRequire` 本身**：它们靠 `createRequire` 的解析顺序，改坏的表现是「装了但找不到」，而不是抛错。
