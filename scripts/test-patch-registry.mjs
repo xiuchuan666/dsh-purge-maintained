@@ -89,6 +89,10 @@ const EXPORT_EXTRA = new Set([
   'healCopiedLauncher',
   'resolveShimWriteTarget',
   'shimKindOf',
+  'legacyApplyPathStarts',
+  'endOfBalancedBlock',
+  'rewriteStaleLegacyApplyCall',
+  'patchApplied',
 ])
 
 test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {

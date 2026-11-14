@@ -1162,3 +1162,26 @@ try {
 `desktopAsarStillSealed()` 在沙箱假树里回 `false`。**判据是「这条 catch 的触发条件能不能由
 磁盘状态造成」**：能（`pluginVersion` 自己的 `fs.readFileSync`）就写用例；不能就写进
 `docs/test-map.md` 的盲区，附一句怎么在真机上验。
+
+## 「只对某一条补丁生效的前置改写」，要连「一条 replacement 都不命中」一起测
+
+`applyReplacementsToText` 里有这么一段：
+
+```js
+if (patch?.id === 42) {
+  const collapsed = collapseDuplicateLegacyApplyPath(source);
+  if (collapsed !== source) { source = collapsed; preChanged = true; }
+  const rewritten = rewriteStaleLegacyApplyCall(source);
+  if (rewritten !== source) { source = rewritten; preChanged = true; }
+}
+```
+
+它跟 replacements 完全无关，`preChanged` 会独立把 `changed` 顶成 `true`。所以测它必须分两路：
+**replacements 为空数组时 `changed` 仍为 `true`**、以及 **别的补丁 id 面对同一段重复定义时
+`changed` 为 `false` 且正文一字节未改**。只测「有 replacement、最后也命中了」那一半，会把
+「折叠了没算改动」和「没折叠却算了改动」两种错一起放过。
+
+配套的规矩：全量替换用 `split().join()` 而不是 `replace()`，用例就得放**两处**旧调用；
+收口空行的地方要用「三连空行」的正文去钉；早退守卫（`if (starts.length < 2) return text;`）
+要用「有花括号但没有目标函数」的正文去钉 —— 删掉早退之后 `indexOf("{")` 会从任意花括号起算，
+把后面的内容切走，这种错在正常 fixture 上完全看不出来。

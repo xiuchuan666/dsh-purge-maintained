@@ -320,6 +320,7 @@
 | 四步证据各自的定级：apply 只看 blocking、outcome 里 `pending/drifted/unknown` 必须为 0、behaviour 里 `broken/unexpected` 是红而 `inert` 只是黄、gate 的跨版降级；**不认识的枚举值按最坏算**，新状态默认成绿等于默认为安全 | `test-rehearse-lib.mjs`（6 条） | 同上 |
 | `verify-target` 的判定层：每条补丁在这棵树上只有一个答案（na / no-file / would-apply / settled / drifted），`hitMismatch`、改完仍不完整、软键搬家、`deleteOnly` 的 self-marked 各走哪一支 | `test-verify-target-lib.mjs`（25 条） | 仅 `scripts/`，不进覆盖率基线 |
 | 判定只能有一份：`scripts/verify-target.mjs` 里不许再出现 `patchApplied` / `remainingWork` / `matchesPattern` / `keysOfPatch` 这类平行实现（它们已经因为 #42 的 legacy 守卫而与 core 分叉） | 同上（源码形状） | 同上 |
+| #42 的两步前置改写：`legacyApplyPath` 定义叠了多份要折叠成一份（留第一份正文、末尾收成两个换行、CRLF 原样还原、第二份没闭合则切到文件末尾）、残留的 `=> legacyApplyPath(section, op)` 全部换成 `=> applyPathOp(...)`、没有这个函数时一个字节不动；`patchApplied` 的 #42 两条额外判据排在 markers 之前 | `test-legacy-apply-collapse.mjs`（25 条） | `lib/core.js` 行 4747/5205 |
 | `officialRestartScript` 生成的 WSH 脚本文本：头部三行逐字（`var exe` / `var asar` / `var home`）、`taskkill.exe /F /PID` 两次且**没有** `/IM`（按 PID 杀而不是按镜像名）、`n < 80` 换名重试上限、`WScript.Sleep(45000)` 末尾等待（原来是 180s，让面板三分钟无响应） | `test-desktop-relaunch.mjs` | `lib/desktop.js` 71% |
 | 现状锁定：脚本自带的中文注释让 `isWshAscii` 恒为 false → `planOfficialRestart` 永远选 `powershell`，`wscript` 那条分支在真机上**走不到**；反过来 `scriptAscii:true` 时必须选 `wscript` | `test-desktop-relaunch.mjs` | 同上 |
 | `dshHomeForRelaunch` 六态：`""` / `"   "`（不 trim）/ 尾部分隔符被吃掉 / 已是 `.dsh` 原样 / 下一层有 `.dsh/profiles` 才加一层 / 只有 `.dsh` 没有 `profiles` 也原样 | `test-desktop-relaunch.mjs` | 同上 |
@@ -1091,6 +1092,33 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
    `EXPORT_EXTRA` 名单是「只许放开、不许新增」的白名单，本轮加八个名字漏同步，单文件跑绿、
    全量跑红一条。加 `export` 之后先跑一遍 `npm run check` 再写文档。
 
+### 五十三补：#42 的两步前置改写
+
+`applyReplacementsToText` 里有一段只对 `patch.id === 42` 生效的前置改写：
+先把重复的 `function legacyApplyPath(section, op) {` 折叠成一份，再把残留的
+`=> legacyApplyPath(section, op)` 换成 `=> applyPathOp(section, op)`。
+1.1.17 之前的 #42 会叠多份定义，settings 整文件语法错、提供商目录起不来。
+
+这一段原来只跑到过「没有重复、也没有旧调用」那条路径：`legacyApplyPathStarts` 的 `count += 1`
+一次都没执行、`collapseDuplicateLegacyApplyPath` 的折叠循环一次都没进、`rewriteStaleLegacyApplyCall`
+的替换一次都没发生。这一批 25 条把它补满，六条只能跑出来的：
+
+1. **`preChanged` 与 replacements 无关**。折叠或换调用任一发生，`changed` 就是 `true`，
+   哪怕 `replacements` 是空数组。反之没有 #42 身份时，同一段重复定义一个字都不动、
+   `changed` 为 `false`。两条要分开钉，否则「折叠了但没算改动」和「没折叠却算了改动」都测不出来。
+2. 折叠的算法是「先找第一份的闭合位置，再逐份把中间的空隙拼上去」，末尾用 `\n{3,}` → `\n\n`
+   收口，最后按原文行尾还原 CRLF。所以**三份折叠完留下的是第一份正文加一个空行**，不是零空行。
+3. **第二份没闭合时，从它到文件末尾整段被删**（`endOfBalancedBlock` 找不到闭合就回 `text.length`）。
+   现状锁定：那份本来就是语法错的产物，留着 dsh 更起不来；但如果遇到的是「文件被截断」，
+   这一段会连带丢掉后面的内容。这条写进了盲区。
+4. **没有 `legacyApplyPath` 的文件一个字节都不动**，连空行都不收口 —— 唯一防线就是
+   `if (starts.length < 2) return text;`。要守住它，用例里得放一份「有花括号、有三连空行、
+   但没有这个函数」的正文：删掉早退之后 `indexOf("{")` 会从任意花括号起算，把后面的内容切走。
+5. `patchApplied` 对 #42 的两条额外判据排在 markers **之前**：定义叠了两份、或还留着旧调用，
+   一律判「没打上」，哪怕 markers 全中。这正是 #42 静默失效的根因，顺序反了就永远报已完成。
+6. 换旧调用用的是 `split().join()`（全量），不是 `replace()`（只换第一处）。第二处没换的后果
+   同样是「文件里还留着一个调用已删除函数的地方」，所以用例要放两处旧调用。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1670,6 +1698,24 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     检测办法：`grep -n 'catch' lib/reapply.js | head -20` 与
     `grep -n 'findAiBaseWeb\\|npmQuery' lib/core.js`；真机上若要验，把插件仓库临时移到
     不含 `node_modules/@deepseek-ai` 的目录再跑 `npm run host:status`。
+
+102. **`collapseDuplicateLegacyApplyPath` 在「第二份定义没有闭合」时会把从它到文件末尾整段删掉。**
+    `endOfBalancedBlock` 扫不到配对的 `}` 就回 `text.length`，调用方据此把 `cursor` 推到末尾、
+    再拼上 `src.slice(cursor)`（空串）。所以一个被截断的 settings 文件（第二份 `legacyApplyPath`
+    只写了一半、后面还有别的代码）会被切成「第一份定义 + 一个空行」。
+    现状锁定：这种文件本来就是 #42 累积产物造成的语法错，留着 dsh 起不来；真实场景里也不会出现
+    「重复定义只写了半份而后面还有重要内容」。要改的话判据是「找不到闭合就别动」（把
+    `endOfBalancedBlock` 的返回值与 `text.length` 比较后整段放弃），但那要先有实证说有人在
+    settings 被截断时丢过内容。检测办法：
+    `grep -n 'return text.length;' lib/core.js`（在 `endOfBalancedBlock` 里）。
+
+103. **`rewriteStaleLegacyApplyCall` 只认字面 `=> legacyApplyPath(section, op)`。**
+    参数名不同、箭头前后空格不同（`=>legacyApplyPath(...)`）、或者写法是
+    `function f() { return legacyApplyPath(section, op); }` 都换不到。1.1.17 之前 #42 写进去的
+    就是这一种形态，所以线上够用；但如果哪天上游改了生成器的排版，这条守卫会静默失效
+    （`patchApplied` 也跟着判「已打上」，因为那条判据用的是同一个常量）。
+    检测办法：`grep -n 'STALE_LEGACY_APPLY_CALL =' lib/core.js`，再在真宿主 settings 文件里
+    `grep -c 'legacyApplyPath'`；两者数目不符就说明形态变了。
 
 ## 维护约定
 
