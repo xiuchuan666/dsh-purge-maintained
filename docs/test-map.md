@@ -184,6 +184,7 @@
 | 扫目录认工具：深度夹在 1–6（`maxDepth:0` 是 falsy → 走默认 4，现状锁定）、文件数夹在 100–20000、跳过点开头/`node_modules`/`.git`、同名多份按 `names` 排名先高后低、顺手认 `nuclei-templates` 目录 | `test-platform-config.mjs`（7 条） | 同上 |
 | 环境适配状态：`kali` → `skipped` → 已存路径（`toolkitDir` 或 `binDirs` 或任一 `tools[id]`）→ `found >= 2` → `need-config` 的优先级，以及 `assignToolkitFolder` 把新目录 `unshift` 到最前 | `test-platform-config.mjs`（10 条） | 同上 |
 | 宿主面分派：`hostAdapter` 按面挑适配器（桌面端拿到含 `ASAR_SWAP_PS1` 的那份，web/gui/tui 拿同一份），`adapterFor` 只吐 `web`/`desktop` 两个值 | `test-host-restart.mjs`（4 条） | `lib/host.js` 86% |
+| 宿主面判定：`pathLooksDesktop` 光有 harness 名字不算（还要带 `/resources` 或 exe）、`resourcesLookLikeDesktopInstall` 三条真判据（`app.asar` 必须是文件 / `app/dsh` / `app.asar.unpacked/dsh`）、`isCommunityElectronHost` 要求 `versions.electron` 才看 `resourcesPath`、`detectSurface` 优先级「社区壳 > `DSH_SURFACE` > 面判据 > web」（社区壳压得住 `DSH_SURFACE=web`，`DSH_SURFACE` 压得住 exe 名）、`gui`/`tui` 原样透出只由 `adapterFor` 折成 web | `test-surface-detect.mjs`（29 条） | `lib/surface.js` 行 139/139 |
 | 重启参数怎么算：有 bin.js 时改写成 `[binJs, ...rest]` 并补 `web --port`、`.cmd`/`.bat` 换成 node_modules 里的 bin.js、永远补 `--no-open` 且不重复 | `test-host-restart.mjs`（9 条） | `lib/web.js` 行 117/117 |
 | 后台重启的两条路：`spawn` 用当前 node 跑助手、`detached`+`stdio:ignore`+`windowsHide`+`shell:false` 四个选项、`unref` 一次、250ms/400ms 两个延时、payload 八键（`openBrowser` 用 `??` 不用 `||`）、提示语抛错不影响重启、子进程 env 不带 `DSH_PERMISSION_MODE`、清理重启把 `uninstall-restart.js` 逐字节复制到 `os.tmpdir()` 再跑副本 | `test-web-restart.mjs`（13 条） | `lib/web.js` 行 117/117（分支 34/35） |
 | 子代理审批接管：两个钩子都必须 `global`（`approval/request` 还要 `prepend`）、只在子会话把 `never` 改回 `ask` 且每会话最多 4 次、子会话审批一律 `allowed-once`、释放时摘钩子 | `test-host-restart.mjs`（13 条） | `lib/subagent-control.js` 100% |
@@ -1154,6 +1155,39 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 只读、无法 monkeypatch；磁盘状态也造不出来（探测的是纯读）。检测办法：
 `grep -n 'runtime_payload = { ok: false, error' lib/core.js` 确认它还在，真机上把
 `resources/runtime` 删掉后刷新状态页，看是不是 `ok:false` 而不是整页报错。
+
+### 五十五补：宿主面判定（`lib/surface.js` 从 94% 到 100%）
+
+`detectSurface()` 决定后面所有分派（`adapterFor`、`gatherState` 探不探桌面树、
+`listLiangshenBootstrapFiles` 收哪一份）。判错的形态是「桌面端按 web 跑」，界面上少了一整块，
+不报错。这一批 29 条把它从「碰巧对」变成「钉住」，六条只能跑出来的：
+
+1. **光有 harness 名字不算桌面安装**。`pathLooksDesktop` 里 `harnessDir` 单独为真不行，还得配
+   `/resources/`、`/contents/resources/`、`/resources` 结尾、或 `.exe`。源码仓库常叫
+   `deepseek-harness`，不这么写就会把开发机判成桌面端。`/home/u/code/deepseek-harness` → false。
+2. **`resourcesLookLikeDesktopInstall` 有三条真判据**：`app.asar` **必须是文件**、
+   `app/dsh` 目录、`app.asar.unpacked/dsh` 目录。写成「`app.asar` 存在就算」会把空目录当安装产物
+   （Electron 解包后常留一个空目录）；少一级（只看 `app/`、只看 `app.asar.unpacked/`）会在
+   半截安装包里误判。四条用例各一条。
+3. **`isCommunityElectronHost` 要求 `versions.electron` 为真才看 `resourcesPath`** ——
+   宿主里 `process.versions.electron` 是 Electron 的版本号，普通 Node 下没有这个键。去掉这个守卫，
+   任何在 `/xxx/resources` 下跑的 Node 进程都会被判成社区桌面壳。
+4. **`detectSurface` 的优先级是「社区壳 > DSH_SURFACE > 面判据 > web」**。社区壳压得住
+   `DSH_SURFACE=web`（DS Bot 的 profile 常被封成 web）；`DSH_SURFACE` 又压得住 exe 名字白名单
+   （显式指定错了就该按指定跑）。两条都要用例，因为反过来写「看起来也对」。
+5. **`DSH_SURFACE= gui / tui` 原样透出 `gui` / `tui`**，不会被 `detectSurface` 改写成 web；
+   只有 `adapterFor` 才把两者折成 web（gui/tui 还没适配）。这是两件事，合并起来测会漏掉
+   「`detectSurface` 把未知值也当合法值透出去」这种错。
+6. **`parentPort` 与 `ELECTRON_RUN_AS_NODE` 那两条兜底永远为假**：走到第 116 / 118 行时，
+   `pathLooksDesktop(execPath)` 与 `resourcesLookLikeDesktopInstall(resourcesPath)` 已经被
+   第 107 / 110 行问过并返回了。留着是纵深防御（将来有人把上面那次早退挪走），按源码形状钉住
+   顺序即可，不要为它们硬造 fixture。
+
+**两处等价突变（记录在案，删掉不加用例）**：
+- `if (!resourcesPath) return false;` 与下一句 `/resources` 结尾判定合起来等价 —— 空值经
+  `slash()` 变空串，一样过不了。留着只是省一次字符串拼接。
+- `p.endsWith("/ds-bot")` 永远走不到：能让它成立的路径末段就是 `ds-bot`，那时 basename 已被
+  `/^ds[\s._-]*bot(\.exe)?$/` 认掉。两者都用源码形状断言钉住，防止有人当成可达分支去「修」。
 
 ## 五、前端产物链（client.js）
 
