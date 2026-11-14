@@ -610,6 +610,17 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 `installTree()` 一开始没造 `resources/runtime/cli/bin/dsh.cmd`，`lib/desktop.js` 的行覆盖立刻从 1818 掉到 1813 —— 基线判定直接 FAIL。这不是「覆盖率噪声」，是这份 fixture 比真宿主少一样东西，于是真宿主会走的分支没被走到。正确处置是把 fixture 补齐（让 `findDesktopShimDir` / `listDesktopCommandRuntimeDirs` 真的能看到那个 sealed 目录），**不是**用 `check-coverage-baseline.mjs --update` 把下降抹平成新基线。判据：下降 5 行以上且集中在某个 fixture 涉及的文件，先怀疑 fixture，再怀疑代码。
 
+### 基线取「本机实测的低值」，不是「某一次跑出来的高值」
+
+补完 fixture 之后，`lib/desktop.js` 的行命中仍然会抖：同一个 commit、连着四次 `npm run test:full`，三次 1813、一次 1818。逐份 lcov 比出来的差集只有四行 —— `857-860`（`listDesktopPackageRoots()` 里「argv 里带 `desktop-cli.js` / `host-process-entry.js` 就走这几步」那一段）。把 `test-all-hosts` / `test-host-tree-chain` / `test-desktop-locate` / `test-desktop-scripts` / `test-desktop-cli-repair` / `test-status-render` 等所有沾到这棵候选表的文件**单独跑一遍，没有一个覆盖到那四行**；不存在任何测试改写 `process.argv`。也就是说触发者还没定位到，只知道它在整套并行跑的时候时有时无。
+
+处置有两条，选后者：
+
+- **不许**用「再跑一次直到它变高」把门禁凑绿 —— 那就等于把门禁交给运气，下一次真倒退 5 行时会被当成噪声忽略。
+- **允许**把基线按**观测到的最低值**记（把低值那份 lcov 放回 `.tmp-coverage/lcov.info`，再 `--update`）。这样抖动向上不报红、向下仍然会红（比基线再低 1 行就 FAIL），棘轮方向没变。
+
+判据：先按上一节怀疑 fixture；确认 fixture 已经补齐、且差集是「几行成组、每次都是同一组」之后，才走「按低值记基线」，并在 `docs/test-map.md` 的盲区里留下这一组的行号与观测次数。**别把这条当成通用豁免**：上一节那条「补 fixture，不要 `--update`」仍然是默认规则。
+
 ### `DSH_DESKTOP_INSTALL` 的多目录分隔符是 `path.delimiter`，不是写死的 `;`
 
 `lib/desktop.js` 的 `extraInstallsFromEnv()` 用 `String(env.DSH_DESKTOP_INSTALL).split(path.delimiter)` 拆：Windows 是 `;`，POSIX 是 `:`。写死 `;` 在 Linux 上会把两个安装目录拼成一条不存在的路径 —— 桌面树整棵从候选表里消失，而失败信息只是「宿主数比预期少一个」，看起来像去重过度。
@@ -669,3 +680,18 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 **另一条：破坏性操作的判据列要单独造反例。** 「这条得分点是不是内置的」在注释里写得很清楚（必须用 `builtin` 列），但代码长得像「code 在不在默认名单里」。用例造一个 `code='web-account-mine'`、`builtin=0`、`legacy=0` 的自建点 —— 它与旧点**只有列值不同、长相一模一样**。不造这个反例，两种实现都会绿；造了之后，「拿名单判」的突变立刻红，而且这条红正好对应注释里写的那个真实事故（用户自建点被静默删掉，界面还弹「已保存」）。
 
+
+### 一份「重复的兜底分支」要先证明它走得到，否则删掉
+
+`lib/redteam/score-report.js` 里曾有同一件事的两份实现：`else if (confirm !== null && confirm.script)` 填模板，以及下面 `if (replayCmd === null && confirm && confirm.script)` 再填一次。看起来是「第二道保险」，实际是**死代码**。判据只要两条：
+
+1. **条件是否一字不差**。两处的真值条件完全一样（`confirm && confirm.script`）。字面不同（一个写 `!== null`、一个写裸真值）会让人误以为「兜底能接住某些情况」，但这两种写法对同一批输入的真假完全相同。
+2. **唯一能把变量留成 null 的那条路径，在现实输入下是否可能**。这里唯一的候选是 ①（有真抓包 → 合成 curl）：`buildCurlCommand` 只在 `parseTarget(url) === null` 时返回 `null`，而传进去的 `url` 一定是 `scheme + '://' + host + path` 形态，`parseTarget` 的最后一段兜底（`report-replay.js:60-63`）连「带路径的裸主机」都会取第一段当主机返回对象 —— 所以那里不会返回 `null`。把 `parseTarget` 的畸形输入挨个试过（空串、缺 Host、`[::1` 未闭合、全角冒号），**没有一种能让它返回 null**。
+
+两条都成立就可以删。删除的同时做三件事，缺一不可：
+
+- **原地留注释**写清「为什么它曾是这里的一部分、为什么走不到」，否则下一个人看到「少了一道保险」会想加回来；
+- **跑满该模块的全部测试文件**（这里 43 + 14 + 25 条），确认行为零变化；
+- **在 `docs/test-map.md` 的盲区里写一条**：删除本身没有守卫，只有记录 —— 因为「某段代码不存在」这件事写成测试只会变成源码形状断言，而形状断言在重排代码时会假红。
+
+反过来说：**如果一条兜底走得到，就必须有能区分两条实现的用例**。上一批（`test-store-evidence-rules.mjs`）的「存档失败不许删」就是这种：把 `runs` 做成文件让 `mkdir` 抛错，突变「存档失败也删」立刻红。判据永远是同一个 —— 改完之后说不出「用户会看到什么不同」，这条突变就是等价突变，删掉它、别为它硬凑用例。

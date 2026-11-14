@@ -320,6 +320,7 @@
 | 九个原本私有的帮手（`officialRestartScript` / `systemPromptFiles` / `dshHomeForRelaunch` / `officialExeFromProcess` / `helperEnv` / `helperNodePath` / `unpackedHostIsClean` / `officialRestartLogState` / `probeWshJsEngine`）加 `export` 才能被单独验；公开行为零变化 | `test-plugin-surface.mjs` 之外的导出面 | 同上 |
 | `patchReplacements` / `matchesPattern` 只在 `lib/patch-outcome.mjs` 里定义一次：`scripts/verify-target-lib.mjs` 只做 `import` + 转出，源码形状断言钉住「这里不许再长出同名函数」（两份实现已经能从单数 `pattern` / `null` patch / 空串 pattern 三处分叉） | `test-verify-target-lib.mjs` | 仅 `scripts/` 与 `lib/patch-outcome.mjs`，后者 100% |
 | 演练台报告链路（`hitTrace` / `scoreReport` / `scoreChain` / `representativeShots`）用真 `RedteamStore` + 临时目录播种，钉 `tunnelIsLegit` 与 `buildCurlCommand` 的 headers 两个真 bug；同时锁定五条读源码看不出来的现状（items 与 chain_no 顺序可不同 / scoreChain.stages 五段定长 / representativeShots 分层不影响先后 / 不挂资产不挂凭据 / 纯英文用户名不认领） | `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1192 → **1457/1532**、`report-replay.js` 行 173 → **222/224** |
+| 报告正文边角（长备注按句子截断 / 档位校正段 / 截图归属指路 / 步骤去重）与一段重复兜底的删除 | `test-report-edges.mjs`（14 条）+ `test-score-report.mjs` | `lib/redteam/score-report.js` 行 1457 → **1496/1510**（删掉 28 行死代码，分母 -22） |
 | 目标宿主声明与宿主版本门禁：`HOST_TARGETS` / `HOST_TARGET` / `hostCompat` 的 known·ok·host 三态、预发布后缀原样相等、`dshTargets` 含 `dshTarget` 且无重复、每一项都能被 `parseHostVersion` 解析 | `test-host-target-decl.mjs`（9 条）/ `test-package-integrity.mjs`（13 条） | `lib/core.js` 宿主门禁段 100% |
 | 官方 CLI 三件套（`resources/runtime/cli/bin` 下的 `dsh` / `dsh.cmd` / `dsh.ps1`）：首装现场生成、已有就只打回退块、打完留 `.dsh-purge.bak`、`app/runtime` junction 指向 `../runtime` 且目标非空才回 `already` | `test-desktop-cli-repair.mjs` | `lib/desktop.js` 行 71% → **79.8%**（1624 → 1812 / 2273） |
 
@@ -674,6 +675,15 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 
 **用例分布**（21 条）：多值筛选 6 / 旧得分项清理 8 / 连带记分 7。`lib/redteam/store-core.js` 行覆盖 3687 → **3740/3831（97.6%）**、函数 246 → 250、分支 1254 → 1290。
 
+
+**三十四补**：`lib/redteam/score-report.js` 的**报告正文边角** —— 长备注怎么截（`:878-887`）、档位校正段（`:924-941`）、截图归属指路（`:1148-1160`）、步骤去重（`:45-49`）。这一批 14 条（`scripts/test-report-edges.mjs`）只断言 markdown 文本与条目字段，顺带**删掉了一段 28 行的死代码**。
+
+1. **长备注按句子边界截断**：隧道备注上限 320、WebShell 备注上限 200，切点必须在后半段（`i > n * 0.5`）的 `。；）)，` 之一，找不到就整段截到上限。三条用例分别钉住「句号在 200 → 切在 208 字符」「一个分隔符都没有 → 原样 327 字符」「句号在 100（不到一半）不算切点、继续找 300 处的逗号 → 308 字符」。**为什么值钱**：直接 `slice` 会切出「…后端是 3 台 LB 轮询(」这种半截句子，验收人读不懂；而改成「永远用找到的第一个分隔符」的突变，在只看长度的断言下照样绿 —— 必须钉住「前半段的分隔符不许用」。
+2. **档位校正段**：命中备注里出现「校正」就单起一段（`> **档位校正**：以下 N 条…` + 逐条目标与**校正后**分值），没有就完全不出现。两条用例一正一反：正面钉「列出的是 50 分而不是原始 60 分」、「备注原文带上」；反面钉「没有校正字样时 md 里不许出现『档位校正』」。**为什么值钱**：报告的分与面板的分对不上时，这段是唯一的解释；漏掉它不会报错，只会让验收人以为正文数字是抄错的。
+3. **截图归属**：同一得分点的图只做「代表图」展示，没分到图的那条要写明「本条的证据截图已在该得分点的代表图中展示（该得分点共 N 张）」。三件事一起钉：`shots.length` 0/1 的分布、`shot_total` 仍然是全量、指路文案里的总数。反面对照是「本得分点一张图都没有时不许出现指路」—— 突变把条件从 `> 0` 放宽到 `>= 0` 就会红。
+4. **步骤去重**：同一步骤被多条归因路径捡到时只出现一次，且**显式关联的那条不标推断**、兄弟步骤才标 `inferred: true`。归因顺序是 `linked → vuln → point(推断) → asset(推断)`，所以「先压进来的永远是实锤」。
+5. **删掉的死代码**：`:451-478` 那段「`replayCmd` 仍是 null 就用 `confirm.script` 填模板」的兜底与上面 ③ 分支逐字重复，且**永远走不到**——③ 的条件（`confirm && confirm.script`）与它一字不差，唯一可能把 `replayCmd` 留成 null 的路径是 ①（合成 curl 失败），而 ① 的 `url` 一定是 `scheme://host+path`，`parseTarget` 认不出也会退到「取第一段当主机」（`report-replay.js:60-63`），所以 `buildCurlCommand` 在那里不会返回 `null`。演练时试图为它造用例：把 `parseTarget` 的各种畸形输入都试了一遍，`url` 始终可解析 → 判定为死代码后删除，原地留 6 行注释说明理由。
+6. **覆盖率**：`lib/redteam/score-report.js` 行 1457 → **1496/1510**（分母少了 22 行，是删死代码的结果）、函数 157 → 159、分支 560 → 584；全仓行 **93.01%**。RED 演练 **13 条突变 → 13/13 全红**（另有一条 `existing.inferred` 覆盖突变判为等价并删掉，理由见下一节盲区 81）。
 
 ## 五、前端产物链（client.js）
 
@@ -1107,6 +1117,20 @@ RED 演练 `.tmp80-drill.mjs` 复跑：**24 条突变 → 24/24 全红**（新�
 
     **检测办法**：改完这一簇，跑 `node --test scripts/test-store-evidence-rules.mjs`；再在真机上打开演练台读一次得分面板，确认面板里没有 `web-account-*` / `webshell` / `rce` 这类旧 code（有就说明清理一直没生效，去看 `<靶标>/runs` 是否可写、有没有 `legacy-score-*.json` 落下）。
 
+
+81. **报告正文的四条边角只能锁文本，锁不到「真机上读起来对不对」；另有一段重复兜底已删。**
+    `test-report-edges.mjs`（14 条）钉住的是 **markdown 文本与条目字段**，不是渲染结果：
+    **①** 长备注的切点在「后半段的句号/逗号」上，但**中文标点之外的边界**（英文句号后跟空格、代码块内的换行）没有覆盖：`oneLine` 先把换行压成空格，正文里就没有换行可切了。真机上如果备注是粘贴进来的多行命令，读到的会是压平后的长串 —— 这条行为是刻意的（表格里不能有换行），但「压平后还能不能读」没人判。
+    **②** 档位校正段只认备注里的「校正」两个字。真实复核时若有人写成「下调」「复核后取 50」，这段就不出现，而分照样是下调后的 —— 于是报告里出现一个**没有解释的差值**。这是文案约定，不是代码能判的。
+    **③** 截图归属：`shot_total` 精确等于「该得分点的全部截图」，指路文案写死「最多展示 3 张」。代表图的挑选规则（`representativeShots`）改了以后，这段文案不会自动跟着改 —— 只有 `test-score-report.mjs` 的 limit 用例会红。
+    **④** `pushStep` 里「已有的是推断、这次来的是实锤 → 撤掉推断标记」那半句**在现有归因顺序下永远不触发**：顺序固定 `linked → vuln → point(推断) → asset(推断)`，推断项总在实锤之后进来。演练时把这一整句删掉，测试全绿（等价突变），于是把它降级成源码注释里的说明，不为它硬凑用例；保留它是为了将来若有人调换查询顺序时不静默把实锤降级成推断。
+    **⑤** 已删除的 `:451-478` 那段重复兜底：删除前后 `test-score-report.mjs`（43 条）+ `test-report-edges.mjs`（14 条）+ `test-score-consistency.mjs`（25 条）全绿，行为零变化。**它的「删除」没有守卫**——只能靠这条盲区记录与源码注释，任何回归（有人把 ③ 的条件改窄、让兜底重新变得可达）都不会红。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-report-edges.mjs scripts/test-score-report.mjs`；再在真机上跑 `node scripts/export-engagement-report.mjs <靶标 id>` 导一份真报告，肉眼确认三处：长备注末尾是不是完整句子、下调过的条目下面有没有「档位校正」段、同得分点多图时第二条有没有一句「去看代表图」。
+
+82. **`lib/desktop.js` 的行命中会在 1813/1818 之间抖，抖动是同一组四行。**
+    差集固定是 `lib/desktop.js:857-860`（`listDesktopPackageRoots()` 里 argv 带 `desktop-cli.js` / `host-process-entry.js` 的那个分支）。观测：同一 commit 连跑四次 `npm run test:full`，三次 1813、一次 1818；把沾到候选表的所有测试文件逐个单跑，没有一个覆盖到那四行；没有任何测试改写 `process.argv`。**触发者未定位**。
+    后果被门禁兜住了：基线按低值（1813）记，向上 +5 不报红、向下仍会红（`MAINTENANCE.md` 的「基线取本机实测的低值」一节）。真机上这一支的价值只有「桌面壳以 `desktop-cli.js` 形态启进程时能不能定位到包根」，本机进程是 `resources/app/lib/main.js` 形态，走不到那里 —— 所以它属于「测得到但用不上」的分支。
 
 ## 维护约定
 
