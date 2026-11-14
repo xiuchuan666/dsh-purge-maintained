@@ -73,6 +73,11 @@ const EXPORT_EXTRA = new Set([
   'pathIsUnder',
   'findAiBaseWeb',
   'findAiBaseDesktop',
+  // 批79：深度兜底扫描（容器 / 非标准布局的最后一手）。它跑起来是每次启动最大的一次
+  // fs 突发，判据又都是「多扫几遍但不报错」的形态，所以递归体与三个根的调度器都要能
+  // 单独调：前者钉防环与去重，后者钉根去重与「落在桌面安装树里不算」。
+  'findAiBaseRecursive',
+  'scanHomeRootsForAiBase',
 ])
 
 test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {

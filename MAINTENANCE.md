@@ -608,10 +608,23 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 ### fixture 少造一个文件导致覆盖率下降，补 fixture，不要 `--update`
 
+`installTree()` 一开始没造 `resources/runtime/cli/bin/dsh.cmd`，`lib/desktop.js` 的行覆盖立刻从 1818 掉到 1813 —— 基线判定直接 FAIL。这不是「覆盖率噪声」，是这份 fixture 比真宿主少一样东西，于是真宿主会走的分支没被走到。正确处置是把 fixture 补齐（让 `findDesktopShimDir` / `listDesktopCommandRuntimeDirs` 真的能看到那个 sealed 目录），**不是**用 `check-coverage-baseline.mjs --update` 把下降抹平成新基线。判据：下降 5 行以上且集中在某个 fixture 涉及的文件，先怀疑 fixture，再怀疑代码。
+
 ### `DSH_DESKTOP_INSTALL` 的多目录分隔符是 `path.delimiter`，不是写死的 `;`
 
 `lib/desktop.js` 的 `extraInstallsFromEnv()` 用 `String(env.DSH_DESKTOP_INSTALL).split(path.delimiter)` 拆：Windows 是 `;`，POSIX 是 `:`。写死 `;` 在 Linux 上会把两个安装目录拼成一条不存在的路径 —— 桌面树整棵从候选表里消失，而失败信息只是「宿主数比预期少一个」，看起来像去重过度。
 
 写这条纪律的原因是 `test-all-hosts.mjs` 的 junction 去重用例就这么红过一次：本地 Windows 与 `.tmp-linux-preload.mjs` 都绿（preload 只改 `process.platform`，`path.delimiter` 在进程启动时就定了，仍是 `;`），CI 的 ubuntu 才是真 POSIX。所以**凡是「本地怎么跑都不红、CI 红」的环境差异，先怀疑三样**：`path.delimiter`、`path.sep`、`path.basename` 对反斜杠的处理（批24 踩过）、`os.homedir()` 读的是真 `process.env`（批75 踩过）。这三样 preload 都模拟不出来。
 
-`installTree()` 一开始没造 `resources/runtime/cli/bin/dsh.cmd`，`lib/desktop.js` 的行覆盖立刻从 1818 掉到 1813 —— 基线判定直接 FAIL。这不是「覆盖率噪声」，是这份 fixture 比真宿主少一样东西，于是真宿主会走的分支没被走到。正确处置是把 fixture 补齐（让 `findDesktopShimDir` / `listDesktopCommandRuntimeDirs` 真的能看到那个 sealed 目录），**不是**用 `check-coverage-baseline.mjs --update` 把下降抹平成新基线。判据：下降 5 行以上且集中在某个 fixture 涉及的文件，先怀疑 fixture，再怀疑代码。
+### 假实现 `Stats`、`--test-name-pattern`、短名长名：三条会给你假绿的坑
+
+1. **`{ ...st, dev: 999999 }` 会连 `isDirectory()` 一起丢掉**。`fs.Stats` 的方法在原型上，展开只拿到自有可枚举属性。任何「伪造 `Stats` 的一个字段」的假实现都必须写成 `const stub = Object.create(st); stub.dev = 999999;`——否则被测代码里 `statSync(...).isDirectory()` 抛 TypeError 被 catch 吞掉，原实现和它的突变**双双返回同一个值**，用例永远绿。这一坑在批79 造「跨设备跳过」时踩到：整条用例看起来钉得很细，实际上对「比较反了」的突变毫无区分力。
+2. **`node --test --test-name-pattern=<没匹配上的串>` 不报错，它把整个文件算成 1 条 pass**。拿它单独验证一条用例时，会得到漂亮的 `pass 1 / fail 0`，而你那条用例根本没跑（批79 的 probe5 第一版就是这么被骗过一轮）。要验证单条，用**能匹配上的中文标题片段**，或者干脆跑整个文件。
+3. **`os.tmpdir()` 常给 8.3 短名，`realpathSync.native` 给长名**。`C:\Users\ADMINI~1\...` 与 `C:\Users\Administrator\...` 不是同一个字符串。凡是用路径当键做计数、去重、缓存，两侧都要先过一遍 `realpathSync.native` 再比，否则计数恒 0、缓存永不命中。项目里已经因为这个坑修过两处：`enumeratePatchAiBases` 的 M37 去重（批77）与 `findAiBaseRecursive` 的 `visited`（批79）。
+
+### 深度扫描（`findAiBaseRecursive`）的四条事实，别凭直觉改
+
+- 入口判 `if (depth > 6) return null`，顶层 `depth=0` → **最多下钻 6 层**，差一层就是完全不同的结果。
+- `node_modules` 有三个落点：`join(root, needle)` → `join(root, "node_modules", "@deepseek-ai")` → pnpm `firstAiBase(pnpmHoistAiBases(root))`。第二条会兜住「埋得很深的扁平布局」，**因此 needle 参数写错也照样命中**——所以 needle 那句只能靠源码形状断言钉，不要试图用行为用例区分。
+- `readdirSync(p, { withFileTypes: true })` 对 junction 报 `isSymbolicLink() === true` 且 `isDirectory() === false`，`if (!e.isDirectory()) continue;` 会把它整个跳过。好处是不会绕圈，代价是**只经链接才够得着的树永远找不到**。
+- 跨设备跳过（`childDev !== rootDev`）只在 `process.platform !== "win32"` 或条目本身是符号链接时判；Windows 普通目录一律下钻，这是 `#91` 用 6 万目录 7.2 秒换来的取舍，别「顺手统一」。

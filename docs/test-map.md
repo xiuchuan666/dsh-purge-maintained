@@ -27,6 +27,7 @@
 | 宿主树与本机主目录的定位链（`isAiBase` 判据、10 项候选表、pnpm 布局、profiles、`DSH_HOME` 优先级） | `test-host-locate.mjs`（34 条：判据 6 / pnpm 9 / 候选表 4 / walk 2 / `findAiBaseFromDshHome` 5 / 主目录 4 / 平台 4） | `lib/core.js` 81.7% |
 | 「到底该打哪一棵树」的选择链（`findAiBaseDesktop` / `findAiBaseWeb` / `pathIsUnder` / `enumeratePatchAiBases` 的 realpath 去重） | `test-host-tree-chain.mjs`（27 条：判据 4 / 安装树 3 / 选树 9 / 去重 4 / 坏候选 3 / 源码形状 1） | `lib/core.js` 85.7% |
 | 「一键应用到所有宿主 / 全部回退」真的每棵树都走到（`applyPatchesAllHosts` / `revertAllHosts` / `allPatchHostsWritten`） | `test-all-hosts.mjs`（23 条：全部成功判定 4 / 应用 9 / hooks 还原 2 / 回退 4 / 去重与安全 2 / 源码形状 2） | `lib/core.js` 87.6% |
+| 所有便宜探测落空后的「深度兜底扫描」不会把错的东西当宿主树（`findAiBaseRecursive` / `scanHomeRootsForAiBase`） | `test-deep-scan.mjs`（18 条：三种 node_modules 落点 3 / 深度边界 2 / 链接与只读 3 / 跨设备 1 / 去重与去环 3 / 根清单 4 / 源码形状 2） | `lib/core.js` 88.8% |
 | 判错时不报错：打到 Electron 外壳那份树（全场 `no-file`）、或把 `~/.dsh` 当成桌面版在用的 `dsh-home` | 同上（候选表逐项顺序 + `portableHomeFromLauncher` 顺序 + `desktopDshHomeGuesses` 三平台） | 同上 |
 | `.dshpurge.bak` 是官方原文、不是我们的补丁 | `test-host-contract.mjs`（`readHostSource` 优先读 bak） | — |
 | 契约缺项时 `host:status` 的 verdict 必须是 `broken` | `test-host-contract.mjs`（`mergeVerdicts` 六种组合） | — |
@@ -621,6 +622,22 @@ RED 演练 **15 条突变 → 15/15 全红**（`{"total":15,"red":15,"green":[],
 RED 演练 **22 条突变 → 22/22 全红**（`{"total":22,"red":22,"green":[],"anchor":[]}`）。牺牲掉一条突变：`discover` 表达式的花式改写会**改变行为**（真去做发现式扫描，命中本机安装树），没法安全演练，只能靠源码形状断言钉住 `options.forApply === true || options.discover === true` 与 `options.discover !== false` 这两句。
 
 顺带一条 fixture 纪律：`installTree()` 少造 `resources/runtime/cli/bin/dsh.cmd` 时，`lib/desktop.js` 的行覆盖会掉 5 行、基线直接判 FAIL。**这种情况要补造 fixture，不许 `--update` 把下降抹平**。
+**三十一补**：`lib/core.js` 的「深度兜底扫描」—— `findAiBaseRecursive` / `scanHomeRootsForAiBase`。三十补钉到「用户点应用/回退时每一棵树都走到」，这一补钉的是**所有便宜探测都落空之后的那一手**：容器里没有 npm 全局前缀、主目录布局非标准、pnpm 把包装在虚拟存储里。它每启动跑一次，是整条定位链里唯一一次真正的全盘 `readdir`，判错时的表现既不是报错也不是空表，而是「多扫几遍 / 卡几秒」，所以只能靠计数与深度边界钉。
+
+七条只能跑出来的事实：
+
+1. **深度语义是「最多下钻 6 层」**：`if (depth > 6) return null` 在函数入口判，顶层调用 `depth=0`，所以第 7 层就放弃。测法是把 `@deepseek-ai` 逐层埋深，depth=6 命中、depth=7 回 null —— 这条不是「读一眼代码就知道」，因为入口判 > 而不是 >=，差一层。
+2. **`node_modules` 有三个落点，顺序固定**：`path.join(root, needle)` → `path.join(root, "node_modules", "@deepseek-ai")` → pnpm `firstAiBase(pnpmHoistAiBases(root))`。第二条是为「扁平布局但藏得很深」准备的：正因为有它，`@deepseek-ai` 埋在任意深度都能被撞到，**所以 needle 参数写错也照样命中**（见下）。
+3. **junction 与符号链接永不下钻**：`readdirSync(p, { withFileTypes: true })` 对 junction 返回 `isSymbolicLink() === true` 而 `isDirectory() === false`，第 2376 行的 `if (!e.isDirectory()) continue;` 把它挡在门外。正面后果是不会绕圈，反面后果是**只经链接才够得着的树，深度扫描永远找不到**（写进盲区，接 `findDesktopPackageRoots` 那条便宜路径兜着）。
+4. **跨设备跳过只在非 Windows 分支生效**：`if (rootDev !== null && (process.platform !== "win32" || e.isSymbolicLink()))`。Windows 上只有 reparse point 才 stat，普通目录一律下钻 —— 因为 `#91` 注释写明了 6 万个目录 7.2 秒的实测。这条只能靠伪装 linux + 伪造 `dev` 才测得到。
+5. **同一个根写成两条字符串路径只扫一遍**：`scannedRoots` 去重在 `scanHomeRootsForAiBase` 里，`[findDshHome(), path.join(findDshHome(), ".."), os.homedir()]` 常常互相覆盖。用例用**空目录**造（第一个根不命中才会走到后两个），`readdir` 计数恰好 2。
+6. **命中落在桌面安装树里要丢掉、继续下一个根**：否则容器里的 `~/.dsh` 一旦把桌面版目录软链进来，就会把「桌面安装树」当成「web 的宿主树」报上去，接着一整轮补丁全打在错的地方。
+7. **`realpathSync.native` 那个坑这里也有一份**（第三处）：`fs.realpathSync.native` 在 `hostFs` 上恒 `undefined`，原写法每次都抛 TypeError 被 catch → 去重键退化成路径字符串。修法与批77 的 `enumeratePatchAiBases` 一致：先 `nodeFs.realpathSync.native`，失败再退 `fs.realpathSync`，最后才保持原路径。
+
+**RED 演练**：18 条突变 → 18/18 全红（nest/扁平/pnpm 三种落点各一条、深度 +1、readdir 抛错改返回值、文件当目录、junction 判定反、visited 不查、跨设备比较反、跨设备判定恒真删、键不归一、`roots` 去重去掉、null 根不跳过、桌面树不排除、realpath 兜底退化成单层、needle 写死 "nope"、`scanHomeRootsForAiBase` 不接 roots 参数、闸门挪进扫描体）。
+**一条等价突变删掉**：把 `path.join("node_modules", nestedAiPath())` 换成 `"node_modules"` —— 因为事实 2 的第二落点会在更深处撞到同一个目录，行为完全一致。它只由源码形状断言钉住，不为它硬凑 fixture。
+**两条用例的写法值得记**：①「跨设备跳过」的 `statSync` 假实现**不能**用 `{ ...st, dev: 999999 }` —— 展开会丢掉 `Stats` 原型上的 `isDirectory()`，`isAiBase` 一律 false，于是原实现和「判定反了」的突变都回 null，用例永远绿。正确做法是 `const stub = Object.create(st); stub.dev = 999999;`。②`readdir` 计数要先把两侧都过一遍 `realpathSync.native`，否则 `os.tmpdir()` 给的 8.3 短名（`ADMINI~1`）与长名不是同一个字符串，计数恒 0。
+
 
 ## 五、前端产物链（client.js）
 
@@ -1028,6 +1045,13 @@ RED 演练 **22 条突变 → 22/22 全红**（`{"total":22,"red":22,"green":[],
     **③** 「零宿主」造不出来：`enumeratePatchAiBases()` 至少会返回仓库自己的 `node_modules/@deepseek-ai`。用例锁的是现状（宿主表不得含仓库树那条安全断言），没有断言「零宿主时的返回形状」。
     **④** 真机多宿主下 `res.report` 一条补丁只有一行、`path` 只留第一棵树（`mergeApplyReports` 按 `patch_id` 归并）。沙箱里两棵树的路径都在临时目录，看不出「路径被丢掉」这件事的信息损失；真机上第二棵树在另一个盘符时才有感知。
     **检测办法**：改完这一簇，除了 `node --test scripts/test-all-hosts.mjs`，还要在真机上跑一次 `npm run apply`（看状态页报的宿主数与 `host:status` 的 `ai_base` 是否一致），再 `npm run revert` 后 `cmp` 每棵树的宿主文件与 `.dshpurge.bak`；开发机额外跑 `cd node_modules/@deepseek-ai/dsh-agent-instructions/lib && grep -c "ACTIVE and MANDATORY" index.js`，确认那条不该被改动过的路径仍是原文。
+
+78. **改 `findAiBaseRecursive` / 深度扫描时验不到的三件事**：
+    - **只经 junction 或符号链接才够得着的树扫不到**：`lib/core.js` 第 2376 行的 `if (!e.isDirectory()) continue;` 把 `Dirent` 报 `isSymbolicLink()` 的条目全挡在门外（junction 在 Windows 上就是这种）。沙箱里造得出来、也钉了用例，但「真机上因此漏掉哪些布局」验不到——真机的 `resources/app/...` 与 pnpm 链接树是不是走过这条兜底，只能看 `npm run host:status` 的 `ai_base` 是不是那条便宜路径给的。
+    - **跨设备跳过在 Windows 上不生效**：条件里 `process.platform !== "win32" || e.isSymbolicLink()`，Windows 普通目录永远下钻。用例只能伪装 linux + 伪造 `dev` 覆盖；Windows 真机行为（`#91` 记录的 6 万目录 7.2 秒）无法在沙箱复现。
+    - **桌面安装树排除依赖真安装**：`scanHomeRootsForAiBase` 命中的根若在 `desktop.listDesktopInstallRoots()` 里就被丢掉、继续下一个根。沙箱靠 `DSH_DESKTOP_INSTALL` 指假安装树验通了，但「真机上 `~/.dsh` 里那条软链指向哪」还是得跑一次 `npm run host:status` 比对 `ai_base` 与 `node scripts/verify-target.mjs` 的 `would-apply`。
+
+    **检测办法**：改完这一簇，跑 `node --test scripts/test-deep-scan.mjs`，再假装容器布局跑一次 `DSH_SURFACE=web DSH_HOME=<空目录> node -e "import('./lib/core.js').then(m=>console.log(m.findAiBase()))"`，确认它没有把桌面安装树报上来。
 
 ## 维护约定
 
