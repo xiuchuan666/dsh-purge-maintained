@@ -1214,6 +1214,36 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 `readFileSync` 抛 `EISDIR`/`EPERM`）；外层的 `catch` 用「`context.agent` 装一个抛错的 getter」造
 （`resolveSubagentRoleText` 第一句就是读 `context?.agent`）。
 
+### 五十七补：三列老字段一次全删，以及「读不到表结构」该回哪个值
+
+`migrate()` 尾部有一段「把 1.1.94 之前留下的三列老字段删掉」：`stage.attck`、`stage.blue_team`、
+`score_point.stage_code`。这三列留着不会立刻坏事，但会让 `SELECT *` 的列数对不上、让
+「按列位置读行」的老代码读到隔壁字段。删列本身只在启动时跑一次，一行没跑过的风险是
+「老库升上来之后一直带着三列」，用户看到的是导出报告里多出两列空值。
+
+这一批 9 条（`scripts/test-schema-legacy-drops.mjs`）把 `lib/redteam/schema.js` 推到 **632/634**，
+四件只能跑出来的事：
+
+1. **三列是一次性全删，不是「删到某一列为止」**。只带一列的老库也要把那一列删掉，三列齐全的
+   老库要三列都不在。断言按 `PRAGMA table_info` 逐列查，不能只看「跑完不抛」。
+2. **删列失败必须保留且不抛**。`ALTER TABLE ... DROP COLUMN` 在 SQLite 上会失败（列被视图或
+   索引引用），失败时保留老列是正确取舍：启动不能被一列拦住。把 `catch` 去掉，一条老库直接
+   起不来。
+3. **`has(table, column)` 读不到表结构时必须回 `false`。** 这个方向不是「保守不保守」的问题，
+   而是故障点会漂到哪里：回 `false` 的后果是「多跑一次 `ALTER TABLE ADD COLUMN`」，SQLite 报
+   `duplicate column name` 并被外层吞掉，功能照常；回 `true` 的后果是「迁移静默跳过」，之后
+   每一次读都会在「列不存在」上炸，而且炸在业务路径里、离根因很远。用例用「只对
+   `table_info(asset)` 抛、其余表正常」造缺口：正确实现会把 `asset.test_notes` 补回来，把
+   `return false` 改成 `return true` 就补不回来。
+4. **表不存在也不抛、跑两遍结果全等**。空库（还没建表）与重复执行都要能过，否则「第一次装」
+   与「升级」两条路只有一条能走通。
+
+顺带补掉一处覆盖率回落：`ensureAllProfileBodyInserts` 的「单条 profile 写失败只记一笔」出口
+（`lib/profile-insert.js:403-409`）。它的存在意义是「一个 profile 的
+`cordis.patch.yml` 被占着，不能连带其它 profile 都不打补丁」。用例造两个 profile，其中一个把
+`cordis.patch.yml` 做成目录 → 写回时 `rename` 失败 → 返回 `{dir, ok:false, error}`，另一个照常
+写出 `- id: dsh-purge`；三条突变（整段抛出 / 丢掉 `dir` / 丢掉 `error`）都红。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -1255,7 +1285,7 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 | 报告导出：只收「已证实/已利用 + 中危以上」、`all:true` 全收且不写脚注、按严重级排序、四章节标题固定、复现请求去 CR、修复建议序号连续、脚注只写一次 | `test-redteam-report.mjs` | 同上 |
 | bundle 导入：逐类计数、扫描记录字段完整、域名自动连资产、端口增量补 banner 且不插重复行、中途失败整体回滚不留孤儿 `scan_run` | `test-redteam-report.mjs` | 同上 |
 | 连通性探测：真起 HTTP/TCP 服务验 online/active 并回写库、连不上标 offline/down 且留 `check_note`、空 `listen` 与坏端口如实报错 | `test-redteam-report.mjs` | 同上 |
-| FTS5 缺席时的降级：两张虚拟表不建但普通表一张不少、资产六种检索面与 POC 三种检索面都还能命中 | `test-fts-fallback.mjs` | `lib/redteam/schema.js` 93% / `store-core.js` 76% |
+| FTS5 缺席时的降级：两张虚拟表不建但普通表一张不少、资产六种检索面与 POC 三种检索面都还能命中 | `test-fts-fallback.mjs` | `lib/redteam/schema.js` 行 632/634 / `store-core.js` 76% |
 | 降级与原生两种模式的差异边界：中间子串 LIKE 能搜到而 FTS 前缀匹配搜不到（现状锁定），其余检索面对齐 | `test-fts-fallback.mjs` | 同上 |
 | 64 个 `redteam_*` 工具的参数面：宿主能编译成 JSON Schema、缺必填/类型错/枚举外被拒、数组与对象按元素判 | `test-redteam-tools.mjs` | `lib/redteam/tools.js` 79% |
 | 靶标绑定解析：单靶标自动绑定、显式优先、多靶标未绑定报错、全局当前靶标被别的会话占用时挡住 | `test-redteam-tools.mjs` | 同上 |
@@ -1276,7 +1306,8 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
 | `unknown_resolve` 的 `disposition` 与 `unk_id` 都是宿主层必填；`evidence_*` 四件套在 `store.db` 缺失时抛「红队资产库不可用」而不是静默返回空账本 | `test-redteam-tools.mjs` | `lib/redteam/tool-specs-evidence.js` 100% |
 | 计分块的实现位置与转发：`scoreReport` / `scoreChain` / `#hitTrace` / `#representativeShots` 的实现在 `score-report.js`，类里只留一行转发；四个函数的函数体与拆分前逐行一致（152/1048/178/44 行 diff 0） | `test-score-consistency.mjs` / `test-redteam-report.mjs`（转发出错则三处总分不再相等） | `lib/redteam/score-report.js` 78% |
 | 靶标元数据的落盘与阶段口径：`readMeta` / `writeMeta` 的容错、`SCOPE_SQL` 的内外网判定、`POINT_SHORT_NAME` / `scoreStageOf` / `LEGACY_STAGE_MAP` 的取值 | `test-schema-migrate.mjs`（末条）+ `test-score-consistency.mjs` | `lib/redteam/engagement-meta.js` 99% |
-| 事实库迁移的两处回填真的生效：`asset.scope` 按 IP 归属判内外网（含 172.16–31 与 100.64–127 的边界）、`attack_step.stage_code` 按 `LEGACY_STAGE_MAP` 映射七个老阶段、已有值一律不覆盖、跑两遍结果全等 | `test-schema-migrate.mjs`（23 条） | `lib/redteam/schema.js` 98% |
+| 事实库迁移的两处回填真的生效：`asset.scope` 按 IP 归属判内外网（含 172.16–31 与 100.64–127 的边界）、`attack_step.stage_code` 按 `LEGACY_STAGE_MAP` 映射七个老阶段、已有值一律不覆盖、跑两遍结果全等 | `test-schema-migrate.mjs`（23 条） | `lib/redteam/schema.js` 行 632/634 |
+| 三列老字段（`stage.attck` / `stage.blue_team` / `score_point.stage_code`）一次全删、删列失败保留且不抛、`has()` 读不到表结构回 `false`（复跑一次由 `ALTER TABLE ADD COLUMN` 兜回）、表不存在也不抛、跑两遍全等 | `test-schema-legacy-drops.mjs`（9 条） | `lib/redteam/schema.js` 行 632/634 |
 | 知识库迁移：补出五个新列与两个索引、老条目按关键词推归类（具体压过泛化）、已有归类不被改写、`POC_CATEGORIES` 的 code 唯一且以 `other` 收尾 | `test-schema-migrate.mjs`（7 条） | 同上 |
 | `dispatch` 的 op 表：71 个 op 各自调哪个方法、第几个实参、别名怎么退（`req.poc` / `req.id ?? req.code` / `req.id ?? req.shot_id` / 十二个 `xxx || req`）、`limit` 夹取、写操作闸门、未知 op 与异常的错误信封；无靶标时九个读 op 共用一个信封、`openEngagement` 不受闸门管；`pngSize` 的五种容器宽高（经 `addShot` 间接测） | `test-redteam-dispatch.mjs`（25 条） | `lib/redteam/store-core.js` 96.2% |
 | IP / 网段 / slug 的十个纯函数：`cidrOf` 的 IPv4 取前三段与 IPv6 取前四组（带端口的 IP、IPv4-mapped 都原样返回）、`scopeOfIp` 的 172.16–31 与 100.64–127 边界 + fe80::/10 + IPv4-mapped 剥壳、`ipToInt` 的 32 位无符号与「只看位数不看范围」、`isIpv6` 的字符表与段数上限、`expandIpv6` 的 `::` 补齐、`slugTarget` / `slugPoc` / `defaultPocFilename` / `slugify` 的六处现状怪癖 | `test-ip-utils.mjs`（53 条） | `lib/redteam/ip-utils.js` 行 116 → **140/140**（分支 73/74） |
@@ -1828,6 +1859,16 @@ RED 演练 **20 条突变 → 20/20 全红**（`isDshHomeDir` 不判空 / 不认
     污染整台机器，不做。判坏的典型表现：WSL 里跑 dsh 时找不到 Windows 侧的 `~/.dsh`，配置与
     会话全丢。检测办法：在真 WSL 里跑 `node -e 'import("./lib/core.js").then(m=>console.log(m.findWslWindowsDshHome()))'`，
     应当打印 `/mnt/c/Users/<你>/.dsh`。
+
+106. **`HAS_FTS5` 的探测 `catch`（`lib/redteam/schema.js:46-47`）在本机走不到。**
+    它是模块顶层常量，`try { new DatabaseSync(":memory:").exec("CREATE VIRTUAL TABLE … USING fts5") }
+    catch { HAS_FTS5 = false }`。本机的 Node 24 内置 SQLite 带 FTS5，构造永远成功；而 `REDTEAM_NO_FTS5=1`
+    在更前面的 `:36` 就早退成 `false` 了，走的是另一条路。要真走到这个 `catch`，得换一个不带
+    FTS5 的 Node 构建（发行版编译开关），这台机器上造不出来。判坏的典型表现：降级判定靠 env 而
+    不靠能力探测时，用户没设 `REDTEAM_NO_FTS5` 但引擎不支持 FTS5，建表直接抛、整个演练台起不来。
+    检测办法：`grep -n "REDTEAM_NO_FTS5" lib/redteam/schema.js` 确认 env 早退仍在 `try` 之前；
+    再 `node -e 'new (require("node:sqlite").DatabaseSync)(":memory:").exec("CREATE VIRTUAL TABLE t USING fts5(x)")'`
+    在本机应当成功（说明本机走的是能力探测成功那一支）。
 
 ## 维护约定
 

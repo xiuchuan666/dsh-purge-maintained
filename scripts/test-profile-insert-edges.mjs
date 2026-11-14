@@ -218,6 +218,36 @@ test("ensureProfileBodyInsert：已经有本体行就一个字都不改", () => 
 
 // ── profileOwnsPurge 的 existsSync 兜底 ─────────────────────────────
 
+test("ensureAllProfileBodyInserts：单条 profile 写盘失败只记一笔，不打断其它 profile", () => {
+  const home = box("all");
+  const owned = (name) => {
+    const dir = path.join(home, "profiles", name);
+    put(path.join(dir, "package.json"), JSON.stringify({ name, dependencies: { "dsh-purge": "file:../../x" } }));
+    put(path.join(dir, "node_modules", "dsh-purge", "package.json"), '{"name":"dsh-purge"}');
+    return dir;
+  };
+  const good = owned("a-good");
+  const broken = owned("b-broken");
+  // cordis.patch.yml 做成目录 → 写回时 rename 必失败（Windows EPERM / POSIX EISDIR）
+  fs.mkdirSync(path.join(broken, "cordis.patch.yml"), { recursive: true });
+
+  let results = null;
+  assert.doesNotThrow(() => {
+    results = P.ensureAllProfileBodyInserts(home);
+  });
+  assert.equal(results.length, 2);
+
+  const byDir = new Map(results.map((it) => [it.dir, it]));
+  assert.equal(byDir.get(good).ok, true);
+  const bad = byDir.get(broken);
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /EPERM|EISDIR|ENOTDIR|operation not permitted|illegal operation/i);
+  assert.equal(typeof bad.error, "string");
+  // 好的那份真的写出来了（坏的那条没有把它一起拖下水）
+  const yml = fs.readFileSync(path.join(good, "cordis.patch.yml"), "utf8");
+  assert.match(yml, /- id: dsh-purge/);
+});
+
 test("profileOwnsPurge：探测 node_modules 时 fs.existsSync 抛错就当「没有」，整个 profile 被跳过", () => {
   const home = path.join(ROOT, "home-boom");
   const dir = path.join(home, "profiles", "p1");
