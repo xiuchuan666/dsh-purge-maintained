@@ -608,4 +608,10 @@ CI 里**不跑** `host:status` 与 `host-contract`：runner 上没有宿主安�
 
 ### fixture 少造一个文件导致覆盖率下降，补 fixture，不要 `--update`
 
+### `DSH_DESKTOP_INSTALL` 的多目录分隔符是 `path.delimiter`，不是写死的 `;`
+
+`lib/desktop.js` 的 `extraInstallsFromEnv()` 用 `String(env.DSH_DESKTOP_INSTALL).split(path.delimiter)` 拆：Windows 是 `;`，POSIX 是 `:`。写死 `;` 在 Linux 上会把两个安装目录拼成一条不存在的路径 —— 桌面树整棵从候选表里消失，而失败信息只是「宿主数比预期少一个」，看起来像去重过度。
+
+写这条纪律的原因是 `test-all-hosts.mjs` 的 junction 去重用例就这么红过一次：本地 Windows 与 `.tmp-linux-preload.mjs` 都绿（preload 只改 `process.platform`，`path.delimiter` 在进程启动时就定了，仍是 `;`），CI 的 ubuntu 才是真 POSIX。所以**凡是「本地怎么跑都不红、CI 红」的环境差异，先怀疑三样**：`path.delimiter`、`path.sep`、`path.basename` 对反斜杠的处理（批24 踩过）、`os.homedir()` 读的是真 `process.env`（批75 踩过）。这三样 preload 都模拟不出来。
+
 `installTree()` 一开始没造 `resources/runtime/cli/bin/dsh.cmd`，`lib/desktop.js` 的行覆盖立刻从 1818 掉到 1813 —— 基线判定直接 FAIL。这不是「覆盖率噪声」，是这份 fixture 比真宿主少一样东西，于是真宿主会走的分支没被走到。正确处置是把 fixture 补齐（让 `findDesktopShimDir` / `listDesktopCommandRuntimeDirs` 真的能看到那个 sealed 目录），**不是**用 `check-coverage-baseline.mjs --update` 把下降抹平成新基线。判据：下降 5 行以上且集中在某个 fixture 涉及的文件，先怀疑 fixture，再怀疑代码。

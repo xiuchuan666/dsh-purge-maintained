@@ -257,7 +257,9 @@ test("applyPatchesAllHosts：同一棵桌面树写两遍（junction 别名）只
   const alias = path.join(ROOT, "alias-link");
   fs.symlinkSync(inst, alias, "junction");
   process.env.DSH_BASE = web;
-  process.env.DSH_DESKTOP_INSTALL = `${inst};${alias}`;
+  // 分隔符是 path.delimiter（Windows ';'、POSIX ':'）—— 写死 ';' 在 Linux 上
+  // 会把两个安装目录拼成一个不存在的路径，桌面树整棵消失（CI 红过一条）。
+  process.env.DSH_DESKTOP_INSTALL = [inst, alias].join(path.delimiter);
   process.env.DSH_SURFACE = "web";
   core.resetPathMemo();
   const bases = core.enumeratePatchAiBases({ discover: false });
