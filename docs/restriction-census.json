@@ -1,0 +1,1177 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-11-15T03:42:01.085Z",
+  "aiBase": "D:/dsh-purge-maintained/.tmp-rehearse/asar-pristine/dsh/node_modules/@deepseek-ai",
+  "window": 15,
+  "spans": {
+    "patches": 86,
+    "withFile": 72,
+    "needles": 406,
+    "located": 154,
+    "outside": 4,
+    "unreadable": 0
+  },
+  "summary": {
+    "total": 134,
+    "uncovered": 116,
+    "uncoveredStrict": 87,
+    "uncoveredSignal": 29,
+    "byPattern": [
+      {
+        "pattern": "deny-copy-en",
+        "total": 95,
+        "uncovered": 89
+      },
+      {
+        "pattern": "deny-error-class",
+        "total": 18,
+        "uncovered": 12
+      },
+      {
+        "pattern": "escalate-entry",
+        "total": 11,
+        "uncovered": 6
+      },
+      {
+        "pattern": "confine-call",
+        "total": 5,
+        "uncovered": 5
+      },
+      {
+        "pattern": "policy-enum",
+        "total": 4,
+        "uncovered": 3
+      },
+      {
+        "pattern": "deny-copy-zh",
+        "total": 1,
+        "uncovered": 1
+      }
+    ],
+    "byPkg": [
+      {
+        "pkg": "dsh-experimental-inspector",
+        "total": 42,
+        "uncovered": 42
+      },
+      {
+        "pkg": "dsh-ptc-runtime-node",
+        "total": 21,
+        "uncovered": 21
+      },
+      {
+        "pkg": "dsh-sandbox",
+        "total": 16,
+        "uncovered": 5
+      },
+      {
+        "pkg": "dsh-api-gateway",
+        "total": 5,
+        "uncovered": 5
+      },
+      {
+        "pkg": "dsh-sandbox-local",
+        "total": 5,
+        "uncovered": 5
+      },
+      {
+        "pkg": "dsh-client-connection",
+        "total": 4,
+        "uncovered": 4
+      },
+      {
+        "pkg": "dsh-tool-pwsh",
+        "total": 4,
+        "uncovered": 2
+      },
+      {
+        "pkg": "dsh-bash-sandbox",
+        "total": 3,
+        "uncovered": 3
+      },
+      {
+        "pkg": "dsh-pwsh-sandbox",
+        "total": 3,
+        "uncovered": 3
+      },
+      {
+        "pkg": "dsh-tool-bash",
+        "total": 3,
+        "uncovered": 2
+      },
+      {
+        "pkg": "dsh-tool-subagent",
+        "total": 3,
+        "uncovered": 3
+      },
+      {
+        "pkg": "dsh-api-workspace-files",
+        "total": 2,
+        "uncovered": 2
+      },
+      {
+        "pkg": "dsh-fs-sandbox",
+        "total": 2,
+        "uncovered": 0
+      },
+      {
+        "pkg": "dsh-sandbox-policy",
+        "total": 2,
+        "uncovered": 2
+      },
+      {
+        "pkg": "dsh-tool-executor-ptc",
+        "total": 2,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-tool-fs",
+        "total": 2,
+        "uncovered": 2
+      },
+      {
+        "pkg": "dsh-client-ui-sidebar-documentpreview",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-experimental-auto-review",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-experimental-client-ui-forge",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-experimental-forge-github",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-experimental-liveshare",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-experimental-worktree",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-fs",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-fs-local",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-plugin-manager",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-sandbox-windows-acl",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-session-telemetry-otel",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-tool-cordis",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-tool-str-replace-editor",
+        "total": 1,
+        "uncovered": 1
+      },
+      {
+        "pkg": "dsh-user-approval",
+        "total": 1,
+        "uncovered": 0
+      },
+      {
+        "pkg": "dsh-web-fetch-http",
+        "total": 1,
+        "uncovered": 1
+      }
+    ],
+    "byScope": [
+      {
+        "scope": "agent",
+        "total": 80,
+        "uncovered": 62,
+        "candidates": 33
+      },
+      {
+        "scope": "vendor",
+        "total": 42,
+        "uncovered": 42,
+        "candidates": 42
+      },
+      {
+        "scope": "protocol",
+        "total": 11,
+        "uncovered": 11,
+        "candidates": 11
+      },
+      {
+        "scope": "renderer",
+        "total": 1,
+        "uncovered": 1,
+        "candidates": 1
+      }
+    ],
+    "candidates": 33,
+    "shortCircuited": 29
+  },
+  "sites": [
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-gateway/lib/index.js",
+      "line": 697,
+      "text": "const reason = status === 401 ? \"Unauthorized\" : status === 403 ? \"Forbidden\" : \"Conflict\";",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-gateway/lib/index.js",
+      "line": 1000,
+      "text": "if (client.peer !== peer) throw new TypertGatewayError(\"gateway/interactions-forbidden\", endpoint, \"Remote event result belongs to another Peer\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-gateway/lib/index.js",
+      "line": 1217,
+      "text": "if (decision.kind === \"deny\") throw new RemoteError(\"remote-access/denied\", `remote access: ${endpoint}: access denied (${decision.reason})`, {",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-gateway/lib/index.js",
+      "line": 1258,
+      "text": "if (this.ctx.typert.local.hasSeen(endpoint)) throw new TypertGatewayError(\"gateway/definition-unavailable\", endpoint, \"its strict definition was withdrawn and SRC fallback is forbidden\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-gateway/lib/index.js",
+      "line": 1485,
+      "text": "if (peer.interactions !== \"answer\") throw new TypertGatewayError(\"gateway/interactions-forbidden\", endpoint, \"forwarded Remote events require interactions=answer\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-workspace-files/lib/index.js",
+      "line": 70,
+      "text": "if (info?.type === \"directory\" && !this.ctx.fs.contains(root, target)) throw new RemoteError(\"workspace-file/outside-workspace\", \"Directory is outside the workspace\", { path });",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-api-workspace-files/lib/index.js",
+      "line": 741,
+      "text": "if (!this.ctx.fs.contains(root, target)) throw new RemoteError(\"workspace-file/outside-workspace\", `\"${path}\" is outside the workspace`, { path });",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-bash-sandbox/lib/index.js",
+      "line": 105,
+      "text": "if (runnerFailure !== void 0) throw new SandboxUnavailableError(mode, runnerFailure.detail);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-bash-sandbox/lib/index.js",
+      "line": 116,
+      "text": "if (confined !== void 0 && isRunnerSpawnFailure(error, confined.argv[0], spec.workdir)) throw new SandboxUnavailableError(mode, String(error));",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-client-connection/lib/index.js",
+      "line": 800,
+      "text": "response.end(this.disposed ? \"unauthorized\" : \"forbidden\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-client-connection/lib/index.js",
+      "line": 830,
+      "text": "if (peer.principal.kind !== \"owner\") return Promise.resolve(new Response(\"forbidden\", { status: 403 }));",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-client-connection/lib/index.js",
+      "line": 865,
+      "text": "res.end(admission.rejection === 401 ? \"unauthorized\" : \"forbidden\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-client-connection/lib/index.js",
+      "line": 1052,
+      "text": "res.end(admission.rejection === 401 ? \"unauthorized\" : \"forbidden\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-client-ui-sidebar-documentpreview/lib/client.frontmatter-fields.js",
+      "line": 45,
+      "text": "`+keyProps.comment;else map.comment=keyProps.comment;continue}if(keyProps.newlineAfterProp||containsNewline(key))onError(key??start[start.length-1],`MULTILINE_IMPLICIT_KEY`,`Implicit keys need to be o",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-zh",
+      "rel": "dsh-experimental-auto-review/lib/index.js",
+      "line": 14,
+      "text": "denied: \"Auto review 拒绝了此调用。\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-forge-github/lib/index.js",
+      "line": 263,
+      "text": "\"FORBIDDEN\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 1315,
+      "text": "e.trailingComma > -1 && this.raiseRecoverable(e.trailingComma, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 1780,
+      "text": "this.parseBindingListItem(o), i.push(o), this.type === y.comma && this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\"), this.expect(e);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 2096,
+      "text": "this.eat(y.comma) && this.eat(y.parenR) ? this.raiseRecoverable(t, \"Trailing comma is not allowed in import()\") : this.unexpected(t);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 2123,
+      "text": "m = this.start, c.push(this.parseParenItem(this.parseRestBinding())), this.type === y.comma && this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 2185,
+      "text": "if (this.options.ecmaVersion >= 9 && this.eat(y.ellipsis)) return e ? (n.argument = this.parseIdent(!1), this.type === y.comma && this.raiseRecoverable(this.start, \"Comma is not permitted after the re",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 3078,
+      "text": "i && this.raiseRecoverable(this.pos, \"Numeric separator is not allowed in legacy octal numeric literals\"), s === 95 && this.raiseRecoverable(this.pos, \"Numeric separator must be exactly one underscore",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/acorn-yx0Qbj0X.js",
+      "line": 3084,
+      "text": "return r && s === 95 && this.raiseRecoverable(this.pos - 1, \"Numeric separator is not allowed at the last of digits\"), this.pos === a || t != null && this.pos - a !== t ? null : o;",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/application-BsKkBn5Z.js",
+      "line": 5053,
+      "text": "prerenderFinalStatusMojoBinderPolicy: \"The prerendered page used a forbidden JavaScript API that is currently not supported. (Internal Mojo interface: {PH1})\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/application-BsKkBn5Z.js",
+      "line": 11325,
+      "text": "federatedNotAuthorizedByProvider: \"Federated session not authorized by provider .well-known\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/application-BsKkBn5Z.js",
+      "line": 11326,
+      "text": "federatedNotAuthorizedByRelyingParty: \"Federated session not authorized by relying party .well-known\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/application-BsKkBn5Z.js",
+      "line": 11336,
+      "text": "invalidCredentialsCookieUnpermittedAttribute: \"Invalid credentials - cookie attribute not permitted\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/application-BsKkBn5Z.js",
+      "line": 11356,
+      "text": "cantSetBoundCookie: \"Not allowed to set bound cookie\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/codemirror-CENmPHF2.js",
+      "line": 6865,
+      "text": "if (this.updateState != 0) throw Error(\"Calls to EditorView.update are not allowed while an update is in progress\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/codemirror-CENmPHF2.js",
+      "line": 6901,
+      "text": "if (this.updateState != 0) throw Error(\"Calls to EditorView.setState are not allowed while an update is in progress\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 2093,
+      "text": "if (t !== \"<selection cancelled>\" && t !== \"<permission denied>\" && ne.instance().error(Wo(Ho.unableToAddFilesystemS, { PH1: t })), !this.fileSystemRequestResolve) return;",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14507,
+      "text": "if (this.recorderViewPortMap.get(e.id) !== t) return this.status.E_FAILED(\"Permission denied\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14578,
+      "text": "if (!r || r.hostsPolicy.runtimeBlockedHosts.length > 0) return this.status.E_FAILED(\"Permission denied\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14719,
+      "text": "return !n && !this.extensionAllowedOnURL(e, t) ? { error: this.status.E_FAILED(\"Permission denied\") } : n ? this.extensionAllowedOnContentProvider(n, t) ? { uiSourceCode: n } : { error: this.status.E_",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14731,
+      "text": "return this.extensionAllowedOnTarget(i, t) ? (pn.instance().setUserAgentOverride(typeof n.userAgent == \"string\" ? n.userAgent : \"\", null), a?.reloadPage(!!n.ignoreCache, r), this.status.OK()) : this.s",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14771,
+      "text": "this.dispatchCallback(t.requestId, n, this.status.E_FAILED(\"Permission denied\"));",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14952,
+      "text": "else if (!this.extensionEnabled(r)) n = this.status.E_FAILED(\"Permission denied\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 14998,
+      "text": "if (!l?.isAllowedOnTarget(c.url)) return this.status.E_FAILED(\"Permission denied\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/common-FvY02e_q.js",
+      "line": 15015,
+      "text": "if (!l?.isAllowedOnTarget(o.origin)) return this.status.E_FAILED(\"Permission denied\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/explain-DhYWIwIk.js",
+      "line": 670,
+      "text": "throw e.message === \"Server responded: permission denied\" ? y.actionTaken(C.InsightErroredPermissionDenied) : e.message.startsWith(\"Cannot send request:\") ? y.actionTaken(C.InsightErroredCannotSend) :",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 1125,
+      "text": "n.fail(/* @__PURE__ */ Error(\"Server responded: permission denied\"));",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 10054,
+      "text": "if (this.constructorString = e, this.pattern = t, t.hasRegExpGroups) throw Error(\"RegExp groups are not allowed\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 21092,
+      "text": "403: \"Forbidden\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 21094,
+      "text": "405: \"Method Not Allowed\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 21354,
+      "text": "thisSetcookieHadADisallowedCharacter: \"This `Set-Cookie` header contained a disallowed character (a forbidden ASCII control character, or the tab character if it appears in the middle of the cookie na",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 21355,
+      "text": "theSchemeOfThisConnectionIsNot: \"The scheme of this connection is not allowed to store cookies.\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/legacy-B_nAHOxS.js",
+      "line": 28598,
+      "text": "if (super(e), e.type !== pv && e.type !== dv && e.type !== mv) throw Error(\"The `live` directive is not allowed on child or event bindings\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/network-B7oyLNra.js",
+      "line": 135,
+      "text": "patternFailedWithRegExpGroups: \"RegExp groups are not allowed\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/network-B7oyLNra.js",
+      "line": 478,
+      "text": "inScopeRefreshNotAllowed: \"Not deferred (Request is in scope of session but initiator is not allowed to trigger refresh)\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/object_ui-w2YXs77j.js",
+      "line": 1362,
+      "text": "if (!rt.includes(t)) return c.instance().error(\"Broken formatter: element \" + t + \" is not allowed!\"), document.createElement(\"span\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/puppeteer-xGpmPP-i.js",
+      "line": 7000,
+      "text": "throw e instanceof TypeError && e.message.startsWith(\"Converting circular structure to JSON\") && (e.message += \" Recursive objects are not allowed.\"), e;",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/puppeteer-xGpmPP-i.js",
+      "line": 8144,
+      "text": "403: \"Forbidden\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/puppeteer-xGpmPP-i.js",
+      "line": 8146,
+      "text": "405: \"Method Not Allowed\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/recorder-FOtNkkfq.js",
+      "line": 987,
+      "text": "].some((t) => o(e, t)) && e !== \"about:blank\") throw Error(`Navigation to ${e} is not allowed, due to blocked schema`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/recorder-FOtNkkfq.js",
+      "line": 4707,
+      "text": "if (e.steps.length > 4096) throw Error(\"Recording with steps over 4096 is not allowed\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/devtools/chunks/recorder-FOtNkkfq.js",
+      "line": 4708,
+      "text": "if (e.title.length > 300) throw Error(\"Recording with title over 300 characters is not allowed\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/index.js",
+      "line": 2480,
+      "text": "const reason = rejection === 401 ? \"Unauthorized\" : \"Forbidden\";",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-inspector/lib/worker.js",
+      "line": 5112,
+      "text": "socket.end(\"HTTP/1.1 403 Forbidden\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-experimental-liveshare/lib/index.js",
+      "line": 620,
+      "text": "message: \"the owner has not allowed forking this share\"",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-fs-local/lib/index.js",
+      "line": 501,
+      "text": "if (isPermissionError(error)) return new FsError(`cannot write \"${path}\": permission denied`, \"FS_PERMISSION_DENIED\", { cause: error });",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-fs/lib/index.js",
+      "line": 84,
+      "text": "case \"EPERM\": return new FsError(`${failure}: permission denied`, \"FS_PERMISSION_DENIED\", { cause: error });",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 3062,
+      "text": "if (refDestructuringErrors.trailingComma > -1) this.raiseRecoverable(refDestructuringErrors.trailingComma, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 3217,
+      "text": "if (context) this.raise(this.start, \"Using declaration is not allowed in single-statement positions\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 3322,
+      "text": "if ((init.kind === \"using\" || init.kind === \"await using\") && !init.declarations[0].init) this.raise(this.start, \"Using declaration is not allowed in for-in loops\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 4039,
+      "text": "if (this.type === types$1.comma) this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 4599,
+      "text": "if (this.eat(types$1.comma) && this.eat(types$1.parenR)) this.raiseRecoverable(errorPos, \"Trailing comma is not allowed in import()\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 4647,
+      "text": "if (this.type === types$1.comma) this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 4766,
+      "text": "if (this.type === types$1.comma) this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 6402,
+      "text": "if (isLegacyOctalNumericLiteral) this.raiseRecoverable(this.pos, \"Numeric separator is not allowed in legacy octal numeric literals\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 6404,
+      "text": "if (i === 0) this.raiseRecoverable(this.pos, \"Numeric separator is not allowed at the first of digits\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/persistent-process.js",
+      "line": 6416,
+      "text": "if (allowSeparators && lastCode === 95) this.raiseRecoverable(this.pos - 1, \"Numeric separator is not allowed at the last of digits\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 3062,
+      "text": "if (refDestructuringErrors.trailingComma > -1) this.raiseRecoverable(refDestructuringErrors.trailingComma, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 3217,
+      "text": "if (context) this.raise(this.start, \"Using declaration is not allowed in single-statement positions\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 3322,
+      "text": "if ((init.kind === \"using\" || init.kind === \"await using\") && !init.declarations[0].init) this.raise(this.start, \"Using declaration is not allowed in for-in loops\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 4039,
+      "text": "if (this.type === types$1.comma) this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 4599,
+      "text": "if (this.eat(types$1.comma) && this.eat(types$1.parenR)) this.raiseRecoverable(errorPos, \"Trailing comma is not allowed in import()\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 4647,
+      "text": "if (this.type === types$1.comma) this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 4766,
+      "text": "if (this.type === types$1.comma) this.raiseRecoverable(this.start, \"Comma is not permitted after the rest element\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 6402,
+      "text": "if (isLegacyOctalNumericLiteral) this.raiseRecoverable(this.pos, \"Numeric separator is not allowed in legacy octal numeric literals\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 6404,
+      "text": "if (i === 0) this.raiseRecoverable(this.pos, \"Numeric separator is not allowed at the first of digits\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-ptc-runtime-node/lib/process.js",
+      "line": 6416,
+      "text": "if (allowSeparators && lastCode === 95) this.raiseRecoverable(this.pos - 1, \"Numeric separator is not allowed at the last of digits\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-pwsh-sandbox/lib/index.js",
+      "line": 191,
+      "text": "if (runnerFailure !== void 0) throw new SandboxUnavailableError(mode, runnerFailure.detail);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-pwsh-sandbox/lib/index.js",
+      "line": 202,
+      "text": "if (confined !== void 0 && isRunnerSpawnFailure(error, confined.argv[0], spec.workdir)) throw new SandboxUnavailableError(mode, String(error));",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox-local/lib/index.js",
+      "line": 112,
+      "text": "return new SandboxPreparationError(`sandbox-local: windows-acl ${failed}: ${String(error)}. The command did not run; check that the current user can change permissions on the workspace and temp direct",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox-local/lib/index.js",
+      "line": 227,
+      "text": "\"permission denied\",",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox-local/lib/index.js",
+      "line": 228,
+      "text": "\"operation not permitted\"",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox-local/lib/index.js",
+      "line": 422,
+      "text": "if (tempInsideWorkspace) throw new SandboxPreparationError(`sandbox-local: windows-acl temp root must be outside the workspace: workspace=${workspaceRoot}; temp=${tmpdir()}. A private temp directory t",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox-local/lib/index.js",
+      "line": 526,
+      "text": "if (this.selectedRunner === \"unavailable\") throw new SandboxUnavailableError(mode);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox-policy/lib/index.js",
+      "line": 189,
+      "text": "if (!isExecutionWorldPath(cwd)) throw new SandboxInvalidRootError(cwd, \"the Session working directory must be an absolute execution-world path without NUL bytes\", \"sandbox workspace root\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox-windows-acl/lib/types-DXWX0PXB.js",
+      "line": 671,
+      "text": "if (isTempRootInsideWorkspace(workspaceRoot, tempRoot)) throw new Error(`Windows ACL temp root must be outside the workspace: workspace=${workspaceRoot}; temp=${tempRoot}`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 228,
+      "text": "throw new SandboxInvalidRootError(path, `cannot read the directory: ${String(error)}`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 230,
+      "text": "if (!directory) throw new SandboxInvalidRootError(path, \"expected an existing directory\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 231,
+      "text": "if (relative(path, physical) !== \"\") throw new SandboxInvalidRootError(path, `use the physical directory path ${JSON.stringify(physical)}; symlinked grants are not supported`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-session-telemetry-otel/lib/index.js",
+      "line": 49,
+      "text": "throw new Error(`session-telemetry-otel: unsupported mode ${JSON.stringify(value)}`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-tool-bash/lib/index.js",
+      "line": 378,
+      "text": "if (escalationModes.length === 0) throw new SandboxEscalationError(\"sandbox_permissions is not available in this composition (no sandboxing executor to escalate)\", \"SANDBOX_ESCALATION_UNAVAILABLE\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-cordis/lib/types/api-catalog.js",
+      "line": 2694,
+      "text": "description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitr",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-tool-pwsh/lib/index.js",
+      "line": 352,
+      "text": "if (escalationModes.length === 0) throw new SandboxEscalationError(\"sandbox_permissions is not available in this composition (no sandboxing executor to escalate)\", \"SANDBOX_ESCALATION_UNAVAILABLE\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-str-replace-editor/lib/index.js",
+      "line": 129,
+      "text": "if (viewRange !== void 0) throw new ToolArgsError([\"The `view_range` parameter is not allowed when `path` points to a directory.\"]);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 88,
+      "text": "throw new Error(`child LLM route \"${provider}/${model}\" is not allowed for this Session` + (policy === void 0 ? \"; without a recorded model-selection policy, explicit selection is limited to the paren",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 189,
+      "text": "if (firstRoute === void 0) throw new Error(`LLM provider \"${request.provider}\" is not allowed for this Session`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 197,
+      "text": "if (!allowedRoutes.some((route) => route.model === request.model)) throw new Error(`child LLM route \"${provider.id}/${request.model}\" is not allowed for this Session`);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-web-fetch-http/lib/index.js",
+      "line": 31,
+      "text": "if (url.username.length > 0 || url.password.length > 0) throw new WebError(\"credentials in URLs are not allowed\", \"WEB_BLOCKED_URL\");",
+      "coveredBy": null
+    },
+    {
+      "pattern": "confine-call",
+      "rel": "dsh-bash-sandbox/lib/index.js",
+      "line": 162,
+      "text": "return this.ctx.sandbox.confine([",
+      "coveredBy": null
+    },
+    {
+      "pattern": "confine-call",
+      "rel": "dsh-experimental-client-ui-forge/lib/index.js",
+      "line": 407,
+      "text": "const argv = policy.mode === \"danger-full-access\" ? command : (await ctx.sandbox.confine(command, {",
+      "coveredBy": null
+    },
+    {
+      "pattern": "confine-call",
+      "rel": "dsh-experimental-worktree/lib/index.js",
+      "line": 441,
+      "text": "const wrapped = policy.mode === \"danger-full-access\" ? command : (await ctx.sandbox.confine(command, {",
+      "coveredBy": null
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-plugin-manager/lib/types/tools.js",
+      "line": 96,
+      "text": "await approveEscalation({",
+      "coveredBy": null
+    },
+    {
+      "pattern": "confine-call",
+      "rel": "dsh-ptc-runtime-node/lib/index.js",
+      "line": 1146,
+      "text": "this.confined = policy.mode === \"danger-full-access\" ? void 0 : await this.ctx.sandbox.confine(argv, {",
+      "coveredBy": null
+    },
+    {
+      "pattern": "confine-call",
+      "rel": "dsh-pwsh-sandbox/lib/index.js",
+      "line": 248,
+      "text": "return this.ctx.sandbox.confine(this.argv(spec), policy, signal);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "policy-enum",
+      "rel": "dsh-sandbox-policy/lib/index.js",
+      "line": 27,
+      "text": "const SANDBOX_MODES = [",
+      "coveredBy": null
+    },
+    {
+      "pattern": "policy-enum",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 97,
+      "text": "const WIDER_MODES = {",
+      "coveredBy": null
+    },
+    {
+      "pattern": "policy-enum",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 109,
+      "text": "const ESCALATION_TARGETS = [\"workspace-write\", \"danger-full-access\"];",
+      "coveredBy": null
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-bash/lib/index.js",
+      "line": 380,
+      "text": "return approveEscalation({",
+      "coveredBy": null
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-executor-ptc/lib/index.js",
+      "line": 359,
+      "text": "const approvedMode = await approveEscalation({",
+      "coveredBy": null
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-fs/lib/index.js",
+      "line": 1965,
+      "text": "validateEscalationArgs(args.sandbox_permissions, justification);",
+      "coveredBy": null
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-fs/lib/index.js",
+      "line": 1969,
+      "text": "const approvedMode = await approveEscalation({",
+      "coveredBy": null
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-pwsh/lib/index.js",
+      "line": 354,
+      "text": "return approveEscalation({",
+      "coveredBy": null
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-fs-sandbox/lib/index.js",
+      "line": 179,
+      "text": "if (mode === \"read-only\") throw new FsError(`cannot write \"${target.displayPath}\": file access denied under read-only mode`, \"FS_SANDBOX_DENIED\");",
+      "coveredBy": "FS_FENCE_DISABLED"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-fs-sandbox/lib/index.js",
+      "line": 186,
+      "text": "if (!contained) throw new FsError(`cannot write \"${target.displayPath}\": file access denied under workspace-write mode`, \"FS_SANDBOX_DENIED\");",
+      "coveredBy": "FS_FENCE_DISABLED"
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 120,
+      "text": "if (sandboxPermissions !== void 0 && justification === void 0) throw new SandboxEscalationError(\"invalid escalation: sandbox_permissions requires a justification\", \"SANDBOX_ESCALATION_INVALID_ARGUMENT",
+      "coveredBy": "SANDBOX_HINT_NEUTRAL"
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 121,
+      "text": "if (justification !== void 0 && sandboxPermissions === void 0) throw new SandboxEscalationError(\"invalid escalation: justification is only valid together with sandbox_permissions\", \"SANDBOX_ESCALATION",
+      "coveredBy": "SANDBOX_HINT_NEUTRAL"
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 122,
+      "text": "if (justification !== void 0 && justification.trim().length === 0) throw new SandboxEscalationError(\"invalid justification: expected a non-empty sentence\", \"SANDBOX_ESCALATION_INVALID_ARGUMENT\");",
+      "coveredBy": "SANDBOX_HINT_NEUTRAL"
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 171,
+      "text": "if (!(WIDER_MODES[effectiveMode] ?? []).includes(mode)) throw new SandboxEscalationError(`sandbox escalation to \"${mode}\" is not strictly wider than this call's current \"${effectiveMode}\" mode`, \"SAND",
+      "coveredBy": "ESCALATION_WIDENING_EXEMPT"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 172,
+      "text": "if (approval.approver === void 0) throw new SandboxEscalationError(`sandbox escalation to \"${mode}\" requires approval, but no approval service is composed`, \"SANDBOX_ESCALATION_UNAVAILABLE\");",
+      "coveredBy": "ESCALATION_WIDENING_EXEMPT"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 173,
+      "text": "if (approval.agent === void 0) throw new SandboxEscalationError(`sandbox escalation to \"${mode}\" requires approval, but the call has no agent to route it through`, \"SANDBOX_ESCALATION_UNAVAILABLE\");",
+      "coveredBy": "ESCALATION_GRANT_UNCONDITIONAL"
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 184,
+      "text": "case \"rejected\": throw new SandboxEscalationError(`the user rejected escalating this ${subject} to \"${mode}\"; it stays denied, so stop and explain instead of working around it`, \"SANDBOX_ESCALATION_RE",
+      "coveredBy": "ESCALATION_NEVER_REJECT"
+    },
+    {
+      "pattern": "deny-error-class",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 187,
+      "text": "throw new SandboxEscalationError(`approval for escalating to \"${mode}\" was cancelled`, \"SANDBOX_ESCALATION_CANCELLED\");",
+      "coveredBy": "ESCALATION_NEVER_REJECT"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 188,
+      "text": "case \"unavailable\": throw new SandboxEscalationError(`sandbox escalation to \"${mode}\" requires approval, but no approval channel is available`, \"SANDBOX_ESCALATION_UNAVAILABLE\");",
+      "coveredBy": "ESCALATION_NEVER_REJECT"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-pwsh/lib/index.js",
+      "line": 263,
+      "text": "const base = \"Execute a PowerShell command (`pwsh -Command`) and return its stdout/stderr. Each call runs in a fresh pwsh process; pass `workdir` instead of using `cd`. Paths use native Windows form (",
+      "coveredBy": "TOOL_SHELL_DENIAL_PROMPT"
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 119,
+      "text": "function validateEscalationArgs(sandboxPermissions, justification) {",
+      "coveredBy": "SANDBOX_HINT_NEUTRAL"
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-sandbox/lib/index.js",
+      "line": 168,
+      "text": "async function approveEscalation(request, approval) {",
+      "coveredBy": "ESCALATION_WIDENING_EXEMPT"
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-bash/lib/index.js",
+      "line": 248,
+      "text": "validateEscalationArgs(args.sandbox_permissions, justification);",
+      "coveredBy": "TOOL_SHELL_DENIAL_PROMPT"
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-executor-ptc/lib/index.js",
+      "line": 352,
+      "text": "validateEscalationArgs(args.sandbox_permissions, args.justification);",
+      "coveredBy": "OFFICIAL_RUN_CODE_APPROVAL_NEUTRAL"
+    },
+    {
+      "pattern": "escalate-entry",
+      "rel": "dsh-tool-pwsh/lib/index.js",
+      "line": 260,
+      "text": "validateEscalationArgs(args.sandbox_permissions, args.justification);",
+      "coveredBy": "TOOL_SHELL_DENIAL_PROMPT"
+    },
+    {
+      "pattern": "policy-enum",
+      "rel": "dsh-user-approval/lib/index.js",
+      "line": 37,
+      "text": "const APPROVAL_POLICIES = [\"ask\", \"never\"];",
+      "coveredBy": "APPROVAL_NEVER_SENTENCE_BYPASS"
+    }
+  ]
+}

@@ -2317,3 +2317,34 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
 - 覆盖率列用 `npm run test:full` 的实测值，别抄上次的。
 - 从 `❗缺` 里挑活时，优先挑「改坏了没人能发现且用户能感知」的：第三节（提示词注入）与第四节的 HTTP 路由，排在计分口径前面——因为前者影响每一轮对话，后者只在打开演练台时影响。
+
+## 十二、限制面普查（`host:census`，2026-11-15 新增）
+
+> 解决「宿主升级后，新增的限制点在哪、旧的漏了多少」——补丁体检（`host:baseline`）只回答「我打的 86 条还站不站得住」，
+> 回答不了「有没有该打而没打的」。本工具静态扫宿主树，产出**未覆盖限制点候选队列**，再人工收敛成新补丁。
+
+| 能力 | 守卫 | 现状（0.2.2-rc.3 原件） |
+| --- | --- | --- |
+| 拒绝类形状识别（英文/中文拒绝文案、拒绝类错误类、策略枚举、升级入口、沙箱包裹） | `scripts/census-lib.mjs` `DENIAL_PATTERNS` | 6 条形状，注释行 / 生成物 / 单行压缩产物自动排除 |
+| 补丁覆盖落到**行号**（同文件 ±15 行算覆盖），不是「这个包有补丁就算全覆盖」 | `locateNeedle` / `nearestPatch` / `markCovered` | 86 条补丁 → needle 406 处、定位 154 处 |
+| 站点归属分档：只把 agent 范围算候选 | `scopeOf` | agent 80 / vendor 42 / protocol 11 / renderer 1 |
+| 上游满权早返回守卫的包不算候选（守卫每次现探测） | `findShortCircuits` + `SHORT_CIRCUIT_PKGS` | 短路忽略 29 条 |
+| 与上一版基线比新增/消失 | `--write-baseline` → `docs/restriction-census.json` | rc.3 首版基线：候选 **33**（denial 24 / policy 9） |
+
+**用法**：`npm run host:census -- --pristine`（必须扫**未打补丁的原件**；打过补丁的树上 needle 已被替换，覆盖映射会全部落空、数字虚高 —— 与闸表核对同一个坑）。
+
+**为什么是 33 而不是 1615**：三层收敛，缺一层数字就不可用。
+1. 形状收敛：只认「决策发生地」的正则，不认关键词；JSDoc / `landlock: ["permission denied"]` 这类失败签名表 / `*_ERROR_CODES` 之类错误码表都排除。
+2. 归属收敛：`client.js` / `typert.*` 是渲染层与生成物，`dsh-api-*` 的 401/403 是传输语义，devtools chunk 是打包的第三方 —— 都不算「约束 agent 能干什么」。
+3. 短路收敛：`dsh-bash-sandbox` / `pwsh-sandbox` / `ptc-runtime-node` 在 `mode === "danger-full-access"` 时第 68/154/1110 行就返回，里面的 `SandboxUnavailableError` 一行都执行不到。
+
+**候选怎么收敛成补丁**（人工 15 分钟一轮，按顺序）：
+| 类 | 判据 | 处置 |
+| --- | --- | --- |
+| 真闸门 | 用户/agent 行为被拒，且不是 OS 错误码转发 | 进 `host:new-patch --from-census` 起草 |
+| 已被上游补丁覆盖但 span 没对上 | 同文件里有我们改过的相邻代码 | 放宽 `WINDOW` 或把该补丁的 needle 拆细 |
+| OS/协议错误转发 | `EPERM` / `FS_PERMISSION_DENIED` / `SandboxPreparationError`（环境坏，不是策略拦） | 记入 `ignored`，不补 |
+| 结构信号 | `SANDBOX_MODES` / `WIDER_MODES` 枚举只在扩容档位，默认档位由 `cordis.patch.yml` 控制（#7/#8） | 观察到即记基线，不动 |
+
+**已知边界**：静态扫描看不到运行时拼出来的文案（模板字符串里的动态 message 只能看到前缀）；单行超 2000 字符的压缩文件整体跳过（无法定位）；`WINDOW=15` 是折中值，补丁落在被改函数上方 15 行以外时会漏判为未覆盖（上面第 2 类就是它的产物）。
+

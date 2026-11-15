@@ -53,6 +53,7 @@
     "host:preview": "node scripts/host-preview.mjs",
     "host:snapshot": "node scripts/host-snapshot.mjs",
     "host:choke": "node scripts/scan-chokepoints.mjs",
+    "host:census": "node scripts/restriction-census.mjs",
     "host:outcome": "node scripts/patch-outcome-report.mjs",
     "test:behavior": "node scripts/patch-behavior.mjs",
     "host:matrix": "node scripts/patch-matrix.mjs",
