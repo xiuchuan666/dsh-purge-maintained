@@ -274,3 +274,25 @@ test("needsAttention 只对 drifted 与 unknown 为真", function () {
     assert.equal(needsAttention(s), false, s);
   }
 });
+
+test("patchTracePresent：marker 为空时，replacements 产物里的痕迹就是唯一证据", function () {
+  const p = {
+    markers: [],
+    replacements: [
+      { pattern: "OLD", replace: "NEW // [dsh-purge] touched" },
+      { pattern: "KEEP", replace: "plain" },
+    ],
+  };
+  assert.equal(patchTracePresent("a\nNEW // [dsh-purge] touched\nb", p), true);
+  assert.equal(patchTracePresent("a\nplain\nb", p), false);
+});
+
+test("patchTracePresent：replace 不是字符串（null / 缺字段）时跳过，不许抛错", function () {
+  const p = { markers: [], replacements: [{ pattern: "A", replace: null }, { pattern: "B" }] };
+  assert.equal(patchTracePresent("[dsh-purge] 别处的痕迹", p), false);
+});
+
+test("rollupStates：枚举外的状态值不许静默当 applied，落回 na", function () {
+  assert.equal(rollupStates(["bogus"]), PATCH_STATES.NA);
+  assert.equal(rollupStates([PATCH_STATES.APPLIED, "bogus"]), PATCH_STATES.APPLIED);
+});

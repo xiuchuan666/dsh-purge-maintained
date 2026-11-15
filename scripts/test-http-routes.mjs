@@ -24,6 +24,7 @@ import {
   skillRouteTail,
   skillsHttpHandler,
 } from '../lib/http-routes.js'
+import { buildZip, doc } from './zip-fixture-lib.mjs'
 
 // ---------------------------------------------------------------- 沙箱
 
@@ -639,4 +640,13 @@ test('installRulesHttp 的 handler 真的把 deps 传进去（少了 deps 会在
   }), res)
   assert.equal(res.status, 200)
   assert.equal(refreshed, 1)
+})
+
+test('skills import：body.data 走 base64 解包并真的导入（面板拖入技能包的那条路）', async () => {
+  const home = sandbox()
+  const zip = buildZip([{ name: 'pack/SKILL.md', data: doc('zipped-route', '来自 HTTP base64') }])
+  const res = await handleSkillsOp('import', { data: zip.toString('base64'), name: 'skill.zip' })
+  assert.equal(res.ok, true)
+  assert.deepEqual(res.imported.map((item) => item.id), ['zipped-route'])
+  assert.ok(fs.existsSync(path.join(home, 'skills')), '技能必须真落到 $DSH_HOME/skills')
 })

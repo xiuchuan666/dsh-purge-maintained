@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-14T21:13:24.029Z",
-  "commit": "52c7644",
+  "capturedAt": "2026-11-15T00:25:22.626Z",
+  "commit": "82abbcf",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -29,12 +29,12 @@
       "brf": 1
     },
     "lib/bin-preflight.js": {
-      "lh": 83,
+      "lh": 89,
       "lf": 89,
       "fnh": 2,
       "fnf": 2,
-      "brh": 31,
-      "brf": 37
+      "brh": 34,
+      "brf": 38
     },
     "lib/bom-guard.js": {
       "lh": 161,
@@ -69,12 +69,12 @@
       "brf": 90
     },
     "lib/chat-rules-skills.js": {
-      "lh": 224,
+      "lh": 228,
       "lf": 230,
       "fnh": 6,
       "fnf": 6,
-      "brh": 102,
-      "brf": 107
+      "brh": 105,
+      "brf": 108
     },
     "lib/commands.js": {
       "lh": 99,
@@ -109,12 +109,12 @@
       "brf": 636
     },
     "lib/drill-grant.js": {
-      "lh": 45,
+      "lh": 50,
       "lf": 50,
       "fnh": 4,
       "fnf": 4,
-      "brh": 11,
-      "brf": 15
+      "brh": 20,
+      "brf": 20
     },
     "lib/extract-asar.js": {
       "lh": 493,
@@ -129,8 +129,8 @@
       "lf": 339,
       "fnh": 23,
       "fnf": 23,
-      "brh": 128,
-      "brf": 134
+      "brh": 129,
+      "brf": 135
     },
     "lib/hooks-deny.js": {
       "lh": 224,
@@ -141,11 +141,11 @@
       "brf": 70
     },
     "lib/host-clean-floor.js": {
-      "lh": 139,
+      "lh": 141,
       "lf": 141,
       "fnh": 14,
       "fnf": 14,
-      "brh": 58,
+      "brh": 59,
       "brf": 59
     },
     "lib/host-clean.js": {
@@ -165,12 +165,12 @@
       "brf": 5
     },
     "lib/http-routes.js": {
-      "lh": 241,
+      "lh": 243,
       "lf": 243,
       "fnh": 15,
       "fnf": 15,
-      "brh": 132,
-      "brf": 149
+      "brh": 134,
+      "brf": 150
     },
     "lib/http.js": {
       "lh": 105,
@@ -229,12 +229,12 @@
       "brf": 45
     },
     "lib/patch-outcome.mjs": {
-      "lh": 325,
+      "lh": 330,
       "lf": 330,
       "fnh": 24,
       "fnf": 24,
-      "brh": 130,
-      "brf": 142
+      "brh": 135,
+      "brf": 144
     },
     "lib/patches/code-patches.mjs": {
       "lh": 42,
@@ -298,7 +298,7 @@
       "fnh": 16,
       "fnf": 16,
       "brh": 95,
-      "brf": 110
+      "brf": 105
     },
     "lib/profile-insert.js": {
       "lh": 412,
@@ -314,7 +314,7 @@
       "fnh": 24,
       "fnf": 24,
       "brh": 119,
-      "brf": 139
+      "brf": 140
     },
     "lib/reapply.js": {
       "lh": 270,
@@ -341,12 +341,12 @@
       "brf": 47
     },
     "lib/redteam/engagement-meta.js": {
-      "lh": 154,
+      "lh": 155,
       "lf": 155,
       "fnh": 4,
       "fnf": 4,
-      "brh": 23,
-      "brf": 27
+      "brh": 37,
+      "brf": 37
     },
     "lib/redteam/evidence-ledger.mjs": {
       "lh": 516,
@@ -373,12 +373,12 @@
       "brf": 287
     },
     "lib/redteam/report-replay.js": {
-      "lh": 222,
+      "lh": 224,
       "lf": 224,
       "fnh": 9,
       "fnf": 12,
-      "brh": 70,
-      "brf": 99
+      "brh": 75,
+      "brf": 101
     },
     "lib/redteam/role-section.js": {
       "lh": 178,
@@ -402,15 +402,15 @@
       "fnh": 165,
       "fnf": 169,
       "brh": 606,
-      "brf": 752
+      "brf": 756
     },
     "lib/redteam/score-rules.js": {
-      "lh": 933,
+      "lh": 940,
       "lf": 940,
-      "fnh": 30,
+      "fnh": 31,
       "fnf": 31,
-      "brh": 239,
-      "brf": 280
+      "brh": 253,
+      "brf": 291
     },
     "lib/redteam/settings.js": {
       "lh": 78,
@@ -429,12 +429,12 @@
       "brf": 203
     },
     "lib/redteam/skill-fixes.js": {
-      "lh": 523,
+      "lh": 529,
       "lf": 529,
-      "fnh": 9,
+      "fnh": 10,
       "fnf": 10,
-      "brh": 32,
-      "brf": 51
+      "brh": 52,
+      "brf": 62
     },
     "lib/redteam/store-core.js": {
       "lh": 3822,
@@ -442,7 +442,7 @@
       "fnh": 254,
       "fnf": 259,
       "brh": 1410,
-      "brf": 1609
+      "brf": 1610
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -489,16 +489,16 @@
       "lf": 501,
       "fnh": 39,
       "fnf": 46,
-      "brh": 194,
-      "brf": 215
+      "brh": 195,
+      "brf": 217
     },
     "lib/redteam/validate.js": {
-      "lh": 87,
+      "lh": 88,
       "lf": 88,
       "fnh": 7,
       "fnf": 7,
-      "brh": 36,
-      "brf": 40
+      "brh": 42,
+      "brf": 44
     },
     "lib/rewind.js": {
       "lh": 644,
@@ -521,8 +521,8 @@
       "lf": 560,
       "fnh": 46,
       "fnf": 48,
-      "brh": 206,
-      "brf": 230
+      "brh": 209,
+      "brf": 233
     },
     "lib/session-access.js": {
       "lh": 159,
@@ -541,12 +541,12 @@
       "brf": 34
     },
     "lib/skills.js": {
-      "lh": 684,
+      "lh": 697,
       "lf": 747,
-      "fnh": 56,
-      "fnf": 62,
-      "brh": 328,
-      "brf": 392
+      "fnh": 57,
+      "fnf": 63,
+      "brh": 335,
+      "brf": 400
     },
     "lib/status-render.js": {
       "lh": 97,
@@ -625,8 +625,8 @@
       "lf": 186,
       "fnh": 13,
       "fnf": 13,
-      "brh": 81,
-      "brf": 84
+      "brh": 84,
+      "brf": 87
     }
   }
 }

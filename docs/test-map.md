@@ -1475,6 +1475,42 @@ npm run host:preview -- --version 0.2.2-rc.3
 
 **回归**：`test-package-integrity` / `test-host-target-decl` / `test-host-preview` 三个文件 45 条全绿；`npm run check` 六道闸全绿（`[syntax] 272` / `patches=86 tests=131` / `[eol] 343` / `[client]` / `[gates] 58 gated` / `3794 tests 3792 过`）。
 
+**六十四补**：小文件的「最后一层」—— 七个文件补到 100%，顺带挖出一条真缺陷与两条假绿用例
+
+这一批挑的是 `docs/test-baseline.json` 里未覆盖行最少的几个文件（每个只差 1~7 行）。它们的共同点是
+**差的那几行不是边角，而是某条出路一次都没走过** —— 平时不报错，改坏了也不报错。
+
+| 文件 | 补前未覆盖 | 本批新守卫 | 结果 |
+| --- | --- | --- | --- |
+| `lib/redteam/report-replay.js` | 2 行（`:54-55`） | `test-report-replay.mjs`（7 条） | 行 **100%**，分支 74.26% |
+| `lib/redteam/engagement-meta.js` | 1 行（`:141`） | `test-engagement-meta.mjs`（5 条） | 行 **100%**，分支 100% |
+| `lib/redteam/validate.js` | 1 行（`:28`） | `test-redteam-validate.mjs`（4 条） | 行 **100%**，分支 95.45% |
+| `lib/redteam/score-rules.js` | 7 行（`:521-525` `:531-532`） | `test-score-rules.mjs`（4 条） | 行 **100%**，分支 86.94% |
+| `lib/redteam/skill-fixes.js` | 6 行（`:424-428` `:451`） | `test-skill-fixes.mjs`（5 条） | 行 **100%**，分支 83.87% |
+| `lib/drill-grant.js` | 5 行（`:24-25` `:38-40`） | `test-drill-grant.mjs`（7 条） | 行 **100%**，分支 100%→上涨 |
+| `lib/redteam/tools.js` | 1 行（`:131`） | `test-define-tool-resolve.mjs`（4 条） | 行 99.80%（`:131` 见下） |
+
+**真缺陷（合成请求从来没带过 Host 头）**：`report-replay.js` 的 `buildHttpRequest` 里明明算了
+`const lines = [\`${method} ${path} HTTP/1.1\`, 'Host: ' + hostHeader]`，`:113-118` 还专门处理了
+IPv6 的方括号，但 `return` 只拼了 `lines[0]` —— 生成的报文永远缺 `Host:`，那段 hostHeader 计算是
+**整段死代码**。红队报告里「复现这条成果」的 HTTP 报文因此不完整，粘贴到 Burp 里打不出原请求。
+修法只改拼接：`return [lines[0], lines[1], ...headers, '', body].join('\r\n')`。用例按三层钉：
+普通域名、带端口、`[::1]` 形式的 IPv6 —— 只有 IPv6 那条才分得出「有没有拼 lines[1]」和「方括号在不在」。
+
+**两条假绿用例（override 打在工厂之后，什么都没改）**：`test-host-clean-floor.mjs` 里原有用例写的是
+`const d = deps(); d.atomicWriteSync = () => { throw ... }`。而 `createHostCleanFloor(deps)` 在**创建时**
+就把 `deps` 解构走了，事后改 `d` 上的属性与它内部闭包无关 —— 这两条「写盘抛错也不冒泡」的用例一直是绿的，
+但抛错压根没造出来。改成 `deps({ atomicWriteSync: () => { throw ... } })`（`deps()` 内部 `Object.assign`
+之后才创建工厂）才真的走到 catch。新增一条：**写盘失败时不许补 `DSH_DESKTOP_INSTALL`** —— 半套状态比
+没记录更危险（下次重启会拿一个不存在的目录去换包）。
+
+**共用 fixture**：`scripts/zip-fixture-lib.mjs` 导出 `doc(name, description, extra)` 与 `buildZip(entries)`
+（手拼本地头 + 中央目录 + EOCD，method 0/8，`zlib.deflateRawSync` + `zlib.crc32`）。之前技能包导入、
+zip 解析各抄一份打包器，改一处漏一处；现在 `test-http-routes.mjs` 的「面板拖入技能包」那条也走它。
+
+**一处签名踩坑记下来**：`handleSkillsOp(op, body, queryId)` **没有 deps 形参**（`handleRulesOp` 才有）。
+按 `handleRulesOp` 的形状去调，第三个参数会被当成 queryId，import 静默落回默认 home。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
@@ -2147,6 +2183,29 @@ npm run host:preview -- --version 0.2.2-rc.3
     检测办法：`node --test --experimental-test-coverage --test-reporter=lcov
     --test-reporter-destination=.tmp-x.info scripts/test-score-report.mjs` 后
     `awk '/SF:.*score-report\.js/{f=1} f&&/^DA:/{split(substr($0,4),a,","); if(a[2]=="0") print a[1]}'`。
+
+112. **`lib/status-render.js:15-16` 的 `fsExists` catch 不可达。** Node 的 `existsSync` 对任何输入都只回
+     true/false，连 NUL 字节路径也只回 false，不抛错。探针实测确认（`existsSync('a\0b')` === false），
+     于是那条 `catch { return false }` 是纯防御。改坏也看不出差别，因为上游永远拿不到抛错。
+113. **`lib/hide-console.js:95-97` 的 `createRequire` 兜底 return null 不可达。** `createRequire('node:child_process')`
+     不会抛，且返回的模块必带 `spawn`；要让它抛错得先让 Node 自己的内建模块解析失败。
+114. **`lib/routes.js:618`（`POST /dsh-purge/own-servers` 的成功回包）不可达。** 它依赖 `lib/net-scope.js` 的
+     `writeAllowText`，而后者是**上游空壳**：函数体引用了未声明的变量，一调用就 ReferenceError，
+     这个 POST 恒回 500。`routes.js` 是静态 `import`，没有注入点，所以成功分支在本仓库永远走不到。
+     不该为了覆盖率去修上游的空壳（见第十节第 3 条的 FTS5 同款判断）。
+115. **`lib/chat-rules-skills.js:113-114` 的 catch 不可达。** `resetToOriginal` 内部逐段 try/catch 之后继续，
+     对外不抛；给它一个 ENOTDIR 的家目录，返回的仍是「逐段失败」而不是异常，所以外层 catch 是防御性分支。
+116. **`lib/redteam/schema.js:45-47` 的 `HAS_FTS5` catch 不可达。** 它是模块顶层 IIFE：`REDTEAM_NO_FTS5=1`
+     先短路返回 false，否则真建一张 `fts5` 虚表；要走到 catch 得让 `DatabaseSync` 或 `exec` 抛错，
+     而进程内没有注入点（`node:sqlite` 是内建模块）。降级路径本身已由 `test-fts-fallback.mjs` 用
+     `REDTEAM_NO_FTS5=1` 的子进程钉住，**这条 catch 只是最后的兜底**。
+117. **`lib/host.js:19` `:23`（`scheduleRestart` / `scheduleCleanupRestart` 的转发）不可调用。** 它们直接
+     调 `web.scheduleRestart`，后者 spawn 一个 detached helper 然后 `setTimeout(() => process.exit(0), 250)` ——
+     在测试进程里调用等于把测试杀掉。已由 `test-host-restart.mjs` 的注释与本条共同记录。
+118. **`lib/identity.js:1090-1099`（`rewritePromptAssembly` 的「注入没进任何 section 时补一份置顶」）不可达。**
+     探针按三种形态试过（普通 / redteam / `capabilityProtocol:false`）+ 三种注入长度（313 / 5000 / 20000B），
+     `outSections` 里始终能找到 `injectText` 的前 80 字符 —— `leadWithInject` 一定先把它塞进 `dsh-purge` 段，
+     `overlayOfficialIdentity` 也不会丢它。保留代码是对的（防 overlay 未来改行为），但别指望用例能覆盖。
 
 ## 维护约定
 

@@ -218,3 +218,30 @@ test("installBinPreflight：revert 之后再 install 能重新挂上（不是一
   assert.equal(installBinPreflight(t.ai), "injected");
   assert.equal(fs.readFileSync(t.binJs, "utf8"), `#!/usr/bin/env node\n${MARK_LINE}\nx\n`);
 });
+
+test("installBinPreflight：sidecar 写不进去时报 error，不许假装 injected", () => {
+  // 临时文件位置被目录占住：writeHostFileAtomic 的 writeFileSync 必失败
+  const t = hostTree("#!/usr/bin/env node\nx\n");
+  fs.mkdirSync(`${t.side}.${process.pid}.tmp`);
+  const status = installBinPreflight(t.ai);
+  assert.match(status, /^error:/, "写不进去必须如实报错，否则孤儿 web server 会一直占端口");
+  assert.equal(fs.readFileSync(t.binJs, "utf8"), "#!/usr/bin/env node\nx\n", "sidecar 没落地就不许动 bin.js");
+  assert.equal(fs.existsSync(t.side), false);
+});
+
+test("installBinPreflight：bin.js 写不进去时报 error，且原文件一个字节不动", () => {
+  const original = "#!/usr/bin/env node\nexport const x = 1;\n";
+  const t = hostTree(original);
+  fs.mkdirSync(`${t.binJs}.${process.pid}.tmp`);
+  const status = installBinPreflight(t.ai);
+  assert.match(status, /^error:/);
+  assert.equal(fs.readFileSync(t.binJs, "utf8"), original);
+  assert.equal(fs.existsSync(t.side), true, "sidecar 已落地，revert 仍能收尾");
+});
+
+test("revertBinPreflight：sidecar 删不掉时如实报 absent，不许报 reverted", () => {
+  const t = hostTree("#!/usr/bin/env node\nx\n");
+  fs.mkdirSync(t.side); // 目录占位 → unlinkSync 必失败
+  assert.equal(revertBinPreflight(t.ai), "absent");
+  assert.equal(fs.existsSync(t.side), true, "没删掉就不能声称删掉了");
+});

@@ -494,21 +494,25 @@ test("rememberDesktopInstallForHandoff：只在本机没设 DSH_DESKTOP_INSTALL 
 });
 
 test("rememberDesktopInstallForHandoff：写盘抛错也不能冒出来（这条是「非致命」的承诺）", () => {
-  const d = deps();
-  d.atomicWriteSync = () => {
-    throw new Error("EPERM");
-  };
+  // 注意：override 必须走 deps(over) —— 工厂创建时已把 deps 解构走，
+  // 事后 d.atomicWriteSync = ... 改的是测试自己的对象，这条用例会变空转。
+  const d = deps({
+    atomicWriteSync: () => {
+      throw new Error("EPERM");
+    },
+  });
   assert.doesNotThrow(() => d.api.rememberDesktopInstallForHandoff({ exe: "C:/Apps/H/DeepSeek Harness.exe" }));
 });
 
 test("rememberDesktopInstallForHandoff：读旧值抛错也照样吞掉，不阻断重启流程", () => {
-  const d = deps();
-  d.hostFs = {
-    existsSync: () => true,
-    readFileSync: () => {
-      throw new Error("EACCES");
+  const d = deps({
+    hostFs: {
+      existsSync: () => true,
+      readFileSync: () => {
+        throw new Error("EACCES");
+      },
     },
-  };
+  });
   assert.doesNotThrow(() => d.api.rememberDesktopInstallForHandoff({ exe: "C:/Apps/H/DeepSeek Harness.exe" }));
 });
 
@@ -564,4 +568,22 @@ test("源码形状：门板函数仍然是 async/同步，调用方 await 的写
   assert.equal(/export function rememberDesktopInstallForHandoff\(handoff\)/.test(CORE_SRC), true);
   assert.equal(/async function ensureHostClean\(\)/.test(FLOOR_SRC), true);
   assert.equal(/function restartSealedDesktopIfNeeded\(input = \{\}\)/.test(FLOOR_SRC), true);
+});
+
+test("rememberDesktopInstallForHandoff：写盘失败时也不补环境变量（半套状态比没记录更危险）", () => {
+  const saved = process.env.DSH_DESKTOP_INSTALL;
+  delete process.env.DSH_DESKTOP_INSTALL;
+  // 工厂在创建时就把 deps 解构走了：override 必须在 createHostCleanFloor 之前进 deps()
+  const d = deps({
+    atomicWriteSync: () => {
+      throw new Error("EPERM");
+    },
+  });
+  try {
+    d.api.rememberDesktopInstallForHandoff({ exe: "C:/Apps/H/DeepSeek Harness.exe" });
+    assert.equal(process.env.DSH_DESKTOP_INSTALL, undefined, "记录没落盘就不许对外声称知道安装目录");
+  } finally {
+    if (saved === undefined) delete process.env.DSH_DESKTOP_INSTALL;
+    else process.env.DSH_DESKTOP_INSTALL = saved;
+  }
 });

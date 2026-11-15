@@ -628,3 +628,27 @@ test("skills create 的 description 缺省表达式与 saveSkill 的回落是两
   // 谁哪天把 `|| id` 删掉，SKILL.md 里的 description 仍然会变回 id —— 这条只钉住写法。
   assert.match(src, /const description = args\.slice\(2\)\.join\(" "\)\.trim\(\) \|\| id;/);
 });
+
+// ---------------------------------------------------------------- 落盘失败（家目录不可写）
+
+/** 家目录指向「一个普通文件下面的子路径」：任何 mkdir/写盘都会 ENOTDIR。 */
+function unwritableHome(tag) {
+  const home = freshHome(tag);
+  const blocker = path.join(home, "not-a-dir");
+  fs.writeFileSync(blocker, "x");
+  return path.join(blocker, "sub");
+}
+
+test("/rules create 落盘失败时回 error 并带出原因，不许回 success", async () => {
+  const { deps } = depsFor(unwritableHome("rules-create-fail"));
+  const r = await handleRulesCommand("create broken-rule", deps);
+  assert.equal(r.kind, "error");
+  assert.match(r.text, /创建失败/);
+});
+
+test("/skills create 落盘失败时回 error，不许说已写入官方目录", async () => {
+  const { deps } = depsFor(unwritableHome("skills-create-fail"));
+  const r = await handleSkillsCommand("create broken-skill 描述", deps);
+  assert.equal(r.kind, "error");
+  assert.match(r.text, /安装失败/);
+});
