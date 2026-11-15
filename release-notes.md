@@ -10,7 +10,7 @@
 
 ## 验证
 
-- `npm run check` 全绿：syntax 287 / metadata patches=88 / eol 361 / client PASS / gates 88 行 60 gated / node:test 3887 例。
+- `npm run check` 全绿：syntax 287 / metadata patches=88 / eol 361 / client PASS / gates 88 行 60 gated / node:test 3888 例（本机再多跑两条原点断言）。
 - 真机 `host:status`：91、94 从 would-apply 变 **settled**，`dsh-tool-subagent/lib/index.js` 28458 → 28169 字节。
 
 # 1.1.95
