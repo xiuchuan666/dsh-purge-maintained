@@ -77,6 +77,17 @@ test('hasEventName：单双引号都认，写错必须 false', () => {
   assert.equal(hasEventName('ctx.on("session/created", fn)', 'session/createdx'), false)
 })
 
+test('hasMemberDecl / hasServiceProvider / hasEventName：压缩发行物（单行、反引号）也要认', () => {
+  // rc.3 的 asar 发行物是单行 minified：super(ctx, `slots`)，方法声明紧跟在 } 后面。
+  // 少了这一条，rc.3 会假报 service slots 未找到 + member slots.inject 没有声明（契约 23/25）。
+  const minified = 'var SlotRegistry=class extends Service{constructor(ctx){super(ctx,`slots`);this.x=1}inject(key,callback){const ctx=this.ctx}install(r){}};'
+  assert.equal(hasServiceProvider(minified, 'slots'), true, '反引号 super 必须认得')
+  assert.equal(hasMemberDecl(minified, 'inject'), true, '} 之后的方法声明必须认得')
+  assert.equal(hasMemberDecl(minified, 'install'), true)
+  assert.equal(hasEventName('ctx.emit(`slots/changed`,key)', 'slots/changed'), true, '反引号事件名必须认得')
+  assert.equal(hasMemberDecl('}if(a){', 'inject'), false, '别的控制语句不能当成成员')
+  assert.equal(hasServiceProvider(minified, 'tools'), false)
+})
 test('hasExportDecl：函数声明 / const / export 列表三种形态', () => {
   assert.equal(hasExportDecl('function dshHomePath(...segments) {', 'dshHomePath'), true)
   assert.equal(hasExportDecl('export const dshHomePath = (x) => x', 'dshHomePath'), true)

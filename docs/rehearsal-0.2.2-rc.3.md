@@ -18,6 +18,18 @@ node scripts/host-rehearse.mjs \
 
 注意 `--baseline-tree` 要指到 **`node_modules/@deepseek-ai`**（该目录下有 `dsh/`），不是 `.../@deepseek-ai/dsh`；指错了会以 `TypeError: The "path" argument must be of type string. Received null` 崩在 `resolveBaseline`。
 
+## 真机落地：rc.3 已装，发行物是 asar（2026-11-15）
+
+1. 真机升级到 0.2.2-rc.3 后，`resources/app/` 消失，只剩 `app.asar`（209 MB）。用 `.tmp-rehearse/swap-rc3.cmd` 完成「解包 → 打补丁 → 换目录」：
+   解包到 `resources/app`（`extractAsarToSide` + `overlayAsarUnpacked` + `commitExtractedDir`，7.1 s / 247 MB）→ `applyPatches`（patchStatus：applied 71 / na 13 / missing_file 1 / skipped 1，无 drifted/pending）
+   → `repairOfficialCliAfterUnpack` → 把 `app.asar` 改名 `app.asar.bak` → 重启宿主。
+   脚本经 `wmic process call create` 脱离宿主 job object 启动（否则 `taskkill` 会连自己一起收掉），并带**自动回滚**：
+   重启后 25 s 若进程不在，就把 `app.asar.bak` 移回并再启一次。本次日志 `.tmp-rehearse/swap.log`：swapped → launched → app-up，无 ROLLBACK。
+2. 落到 `resources/app/dsh/...` 后 `host:baseline` 能自动定位宿主了（此前 asar 下报「没找到宿主安装」）。
+   先 `--capture` 记 rc.3 基线：`settled 72 / would-apply 7 / drifted 0 / no-file 7 / na 0`，62 个目标文件记了指纹。
+3. 比对一度 `verdict=broken`，根因不是补丁而是**宿主契约扫描器不认 rc.3 的 minified 写法**（见 test-map 第十一节末段）。
+   修 `scripts/host-contract-lib.mjs` 后：`host:contract` PASS 25/25（699 文件 / 833 ms），`host:baseline` **verdict=ok**（补丁与契约都与基线一致）。
+4. 现状：宿主跑的就是打过补丁的 `resources/app/dsh`（checkout = `resources\app\dsh\`），`app.asar.bak` 保留，随时可把目录换回 asar 回滚。
 ## 六步证据
 
 | 步 | 结果 | 数字 |

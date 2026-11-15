@@ -2251,6 +2251,35 @@ zip 解析各抄一份打包器，改一处漏一处；现在 `test-http-routes.
      `@deepseek-ai/dsh-tools`）；CI 上也只在宿主包被裁掉的发行物里才可达。`scripts/test-define-tool-resolve.mjs`
      已经把「返回函数」和「候选全坏时抛 cannot resolve」两侧都钉住了，这 1 行按盲区记账即可。
 
+## 十一、官方发行物改用 asar 打包（0.2.2-rc.3，2026-11-15）
+
+rc.3 起官方安装包不再是 `resources/app/` 目录，而是 `resources/app.asar`（约 209 MB）+ `app.asar.unpacked`；asar 根即
+`@deepseek-ai/dsh-desktop` 包（`main: lib/main.js`），桌面壳代码在 `resources/app/lib/main.js`。三个口径变化，改脚本或读结果前先看这节：
+
+1. **宿主定位/解包**：`core.openSealedDesktopHost({forApply:true})` 在纯 node（surface≠desktop）下返回 `aiBase=null`。
+   等价流程是 `extractAsarToSide(asar, appDir)` → `overlayAsarUnpacked(asar, side.next)` → `commitExtractedDir(appDir, side.next)`
+   → `applyPatches(aiBase)`；手工绕过时别忘补 `desktop.repairOfficialCliAfterUnpack(exe)`（修 runtime junction 与 `runtime/cli/bin/dsh*` shim）。
+   实测 asar 209 MB 解包 7.1 s，`resources/app` 247 MB。
+2. **闸表核对必须用 pristine 解包副本**：在**已打补丁**的树上跑 `patch-gates.mjs --verify` 会得到 `gated 24 / not-found 41`
+   的假警报——补丁替换掉了上游原文，needle 自然消失。正确姿势：对 `.tmp-rehearse/asar-pristine`（`extractAsar(asar, dest)`，3.5 s）跑
+   `--verify docs/patch-gates.json --tree asar=<…/asar-pristine/dsh/node_modules/@deepseek-ai>` → **present 58 / missing 0 / unreadable 0 / skipped 28**；
+   与 rc.3 npm 树口径一致（`--compare`：gated 58 / no-target 14 / trace-anchored 12 / native 2）。
+3. **桌面 7 条按 surface 跳过是预期**：#45 #46 #82 #83 #84 #92 #93（desktop-shell → `resources/app/lib/main.js`）。纯 node/CLI 下
+   `allowTargetForPatch` 不放行 desktop 目标，`applyPatches` 记 `missing_file`、`host:baseline` 提示「补丁不在树上（重打即可）」——这不是漂移，
+   宿主以 desktop surface 启动时会自行打上（改 main.js 需重启生效）。先后依赖也要记住：#46 的两条 needle 本身是 #45 插入的代码（必须先 #45 后 #46）；
+   #84 的 needle 含 #92 插入的 `${suffix}`。
+
+e2e（asar 树）：`apply#1 {applied:64, already:4, missing_file:10, skipped:1}` 无 drifted、二次幂等、`revertAll` 54 条逐字节还原。
+10 条 missing_file 是发行物里**根本没有这些文件**（功能未随包发，npm 树里落在安装版专属包里）：PRESET_UNRESTRICTED_IDENTITY_STRIP、
+LIANGSHEN_IDENTITY_LINE、LIANGSHEN_PHASE1_KEEP_INJECT、HOOKS_CLAUDE_DENY_ALLOW、HOOKS_CODEX_DENY_ALLOW、ANTHROPIC_OAUTH_NO_CLAUDE_IDENTITY、
+ANTHROPIC_OAUTH_CLI_NEUTRAL、DEEPSEEK_SYSTEM_ROLE、HOOKS_STOP_STEER_NEUTRAL、HOOKS_PRESTEP_REJECT_NEUTRAL —— 属 `na`，不是漂移。
+另注：仓库 `ALL_PATCHES` 的 id 与 `docs/patch-gates.json` 的补丁编号不是同一套（gates #5 = APPROVAL_NEVER_SENTENCE，ALL_PATCHES #5 = PRESET_UNRESTRICTED_IDENTITY_STRIP）。
+
+命中判定跟进：rc.3 asar 发行物是**单行 minified**——服务名用反引号包裹（形如 super(ctx, `slots`)），
+方法声明挤在同一行 `}` 后面（`…})}inject(key,callback){…`）。`scripts/host-contract-lib.mjs` 的四组正则
+（`hasMemberDecl` / `hasServiceProvider` / `hasEventName` + `scanHost` 内联三处）已同时接受双引号、单引号与反引号，
+以及 `; } ,` 之后的方法声明；否则 rc.3 会假报 `service slots 未找到` + `member slots.inject 没有声明`（契约 23/25）。
+修完后 `host:contract` 25/25、`host:baseline` verdict=ok。
 ## 反查：改一个文件，谁会响
 
 ```bash

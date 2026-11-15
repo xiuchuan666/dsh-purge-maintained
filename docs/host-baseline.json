@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-15T00:02:03.675Z",
+  "capturedAt": "2026-11-15T03:18:26.286Z",
   "pluginVersion": "1.1.94",
   "host": {
-    "version": "0.2.2-rc.1",
+    "version": "0.2.2-rc.3",
     "name": "@deepseek-ai/dsh",
     "packagePath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app\\dsh\\node_modules\\@deepseek-ai\\dsh\\package.json"
   },
@@ -16,8 +16,8 @@
     },
     "web-app": {
       "rel": "dsh-web-app/cordis.patch.yml",
-      "bytes": 22818,
-      "sha256": "37d4e932246bf97b55650a8c1cfb18ba248a0677ded5ef61394a3ff443efeb41"
+      "bytes": 24113,
+      "sha256": "a0a46caa4791412f2740b9a8af279c04f6f0e9cb6cd8667184543f20b9b4df48"
     },
     "web-app-lib": {
       "rel": "dsh-web-app/lib/index.js",
@@ -41,8 +41,8 @@
     },
     "agent-preset": {
       "rel": "dsh-web-app/presets/standard.patch.yml",
-      "bytes": 6931,
-      "sha256": "9d024855e0e92d1894d82f0f9f6fd6cc01bfc92cc1fabe9894ce9cb055d0432f"
+      "bytes": 7359,
+      "sha256": "e83cc9866b0fa1b60bd354d597d3147c94c2a71b1053fbefd2abab7297de8383"
     },
     "user-approval": {
       "rel": "dsh-user-approval/lib/types/index.js",
@@ -56,23 +56,23 @@
     },
     "escalation": {
       "rel": "dsh-sandbox/lib/index.js",
-      "bytes": 19064,
-      "sha256": "83a468404036bb1f625f63f6c2fe869a4553ccd945f006475ac07e6b4c2cb007"
+      "bytes": 22105,
+      "sha256": "dc5de46e7195426652ab36530cdc3efad4f95b52698f8d6203b6b016f922a159"
     },
     "fs-sandbox": {
       "rel": "dsh-fs-sandbox/lib/index.js",
-      "bytes": 8767,
-      "sha256": "1464eb5e2ba3715a1752d7f4290666a5048371ede21eecf09d1f6c64e7196534"
+      "bytes": 8669,
+      "sha256": "c84f84176707c590ab2278c2ac7d3210e32afaffc04e279b5710c3a624ca8667"
     },
     "sandbox-local": {
       "rel": "dsh-sandbox-local/lib/index.js",
-      "bytes": 22694,
-      "sha256": "0084d8471a9536ce30610ac00258f1f27308eae216ada22414806fb7b3134457"
+      "bytes": 24471,
+      "sha256": "f5ad9c345a3238d8ad9b4e751660d1715f65476814db9d20abfe56f3c16b3e5c"
     },
     "base": {
       "rel": "dsh-base/cordis.patch.yml",
-      "bytes": 21093,
-      "sha256": "0f92d92f84afb0632ec2d9ac3bbfdc6ec8a654f1dcb7939603ce1ea27dcaa345"
+      "bytes": 21668,
+      "sha256": "fa6787e8caeef1d3a35cc75e9ee5a2e34bc5e7138a00be0353bd6207ad3421e8"
     },
     "settings": {
       "rel": "dsh-settings/lib/index.js",
@@ -86,8 +86,8 @@
     },
     "repeat-tool-reminder": {
       "rel": "dsh-repeat-tool-reminder/lib/index.js",
-      "bytes": 92925,
-      "sha256": "512abbb6a061b0c6c84b80baad21916e67794a3fac187ce663eaeea9bf63dce7"
+      "bytes": 97054,
+      "sha256": "f314b54eb8737b083ec25702392aeea41c2457568a811caacfc0ec326b922dca"
     },
     "compaction-tool-result-pruner": {
       "rel": "dsh-compaction-tool-result-pruner/lib/index.js",
@@ -96,38 +96,38 @@
     },
     "tool-fs": {
       "rel": "dsh-tool-fs/lib/index.js",
-      "bytes": 76992,
-      "sha256": "6c83d4ed7c66604bd0a52bda3f7d08de12518c7e3595c3cc08d937bbb981724e"
+      "bytes": 79399,
+      "sha256": "51bf6a555347544fc89c13fe2593cd062454501650634c5e7f28dc39f1baf1f6"
     },
     "tool-subagent": {
       "rel": "dsh-tool-subagent/lib/index.js",
-      "bytes": 28145,
-      "sha256": "224423377e79db6153c3b6891ac4957b497e41bc7631286b11f5effaa921e366"
+      "bytes": 28458,
+      "sha256": "8168805b03796873c5c02e7b0edfb29b4c383090e70ad7997a96bb0797d0f880"
     },
     "subagent": {
       "rel": "dsh-subagent/lib/index.js",
-      "bytes": 142389,
-      "sha256": "2a85a14f100e3ee0f3dc385dd45cb125b201caf0035921958a0137bc0eb2edee"
+      "bytes": 139883,
+      "sha256": "30fff642073ee3342bf3ed5d8113532109cd097b68f16e01c7fef528d9342831"
     },
     "subagent-types": {
       "rel": "dsh-subagent/lib/types/child-agent.js",
-      "bytes": 10248,
-      "sha256": "363ebdfd94fd5e3f6e093f088443381a9b9e98c46e2bdd3b82366f81a738c946"
+      "bytes": 10356,
+      "sha256": "3daea879c473a813b7a27da663bff1ff89f5b3faba27ab40aba0988d9c3c3f12"
     },
     "base-package": {
       "rel": "dsh-base/package.json",
-      "bytes": 6242,
-      "sha256": "e4c91192e947bfe6879092845d65f5bccb9fd77d3251b292f446205f442a95d8"
+      "bytes": 6401,
+      "sha256": "298b684da00883de6218d790d5bf54a42eeb9ddc2518df2fd77193ef3248db0e"
     },
     "preset-standard": {
       "rel": "dsh-web-app/presets/standard.patch.yml",
-      "bytes": 6931,
-      "sha256": "9d024855e0e92d1894d82f0f9f6fd6cc01bfc92cc1fabe9894ce9cb055d0432f"
+      "bytes": 7359,
+      "sha256": "e83cc9866b0fa1b60bd354d597d3147c94c2a71b1053fbefd2abab7297de8383"
     },
     "preset-cordis": {
       "rel": "dsh-web-app/presets/cordis.patch.yml",
-      "bytes": 7488,
-      "sha256": "02e24f835db08c1ac19bc3c0484016e6fc81f7820052452e1f5e177e5254fdf4"
+      "bytes": 7465,
+      "sha256": "8f897c2805b49b22f0b64458de9f3f051c16abf228c12c9e704b213cf334a405"
     },
     "preset-minimal": {
       "rel": "dsh-web-app/presets/minimal.patch.yml",
@@ -136,8 +136,8 @@
     },
     "preset-ptc": {
       "rel": "dsh-web-app/presets/ptc.patch.yml",
-      "bytes": 7036,
-      "sha256": "b5688b8a2baa154e02e5f550955727d3335851e111093959efa576c93321e391"
+      "bytes": 7172,
+      "sha256": "3852b5584d6a097c3d2cfbef0f192e4c403c1465973e36c7002c7fd716279686"
     },
     "preset-acp-app": {
       "rel": "dsh-acp-app/cordis.patch.yml",
@@ -146,8 +146,8 @@
     },
     "preset-sdk-app": {
       "rel": "dsh-sdk-app/cordis.patch.yml",
-      "bytes": 2818,
-      "sha256": "45673e5cd8aaaeeff8b61a1dfe3144a447850ba2047c14e93844ffcb49d840a2"
+      "bytes": 2708,
+      "sha256": "180c00b8a5451f93119635ee519f04b98e2609670f7b35fe87ccaa89e3c064d7"
     },
     "preset-sdk-minimal": {
       "rel": "dsh-sdk-minimal/cordis.patch.yml",
@@ -156,13 +156,13 @@
     },
     "tool-bash": {
       "rel": "dsh-tool-bash/lib/index.js",
-      "bytes": 27841,
-      "sha256": "4f512a60fcb6c17185fafbcb46d9e19452b0d5f5eada7acde4ce2800e5d11179"
+      "bytes": 29166,
+      "sha256": "cd8db94d95ac73a7c1ee95637958c28a960ad49e7fa2a428098ad96c11840a42"
     },
     "tool-pwsh": {
       "rel": "dsh-tool-pwsh/lib/index.js",
-      "bytes": 30631,
-      "sha256": "485f38009c804a4e04c1becd6b1198ece30d51235c14531c9cf6fb502f2a1813"
+      "bytes": 31956,
+      "sha256": "c8c2c46c206051b43442e16a32a3a857217d6f19e7fdebdbe98fda0c180d3ab5"
     },
     "persona": {
       "rel": "dsh-persona/lib/index.js",
@@ -176,18 +176,18 @@
     },
     "system-prompt": {
       "rel": "dsh-system-prompt/lib/index.js",
-      "bytes": 20707,
-      "sha256": "9f9aa091d22d734ac22d58014937546961bb802486bf13e5f9de77f3c5072639"
+      "bytes": 20709,
+      "sha256": "b03d3dc6a32fab37992012b028210484e6a7efa577f3468d4b1ca495eb4a9e63"
     },
     "tool-web": {
       "rel": "dsh-tool-web/lib/index.js",
-      "bytes": 36512,
-      "sha256": "bc4879458d26acde0ff43f2390b3c77ce18f85c34f76c459fec844e28a9a3bc5"
+      "bytes": 36516,
+      "sha256": "ce0c2cf039b8c79c68a3d306d253a4f8e51d5b34809d25f1f98a3851637a5da1"
     },
     "api-session-controller": {
       "rel": "dsh-api-session-controller/lib/index.js",
-      "bytes": 159347,
-      "sha256": "3940393fa4cab1a6fa841ffc18c850c9e88ee3c8d43854a19e672fd284ab254c"
+      "bytes": 163010,
+      "sha256": "2c119e7c5ba57f25d3e29b23bd687879480250e60792849a7a0df30742c424f7"
     },
     "pi-ai-completions": {
       "rel": "../@earendil-works/pi-ai/dist/api/openai-completions.js",
@@ -251,28 +251,28 @@
     },
     "llm-deepseek": {
       "rel": "dsh-llm-deepseek/lib/index.js",
-      "bytes": 127748,
-      "sha256": "263dcd84b4c97b19c6fdc85cc431f81bf185922682d17c4c884132514b59af1d"
+      "bytes": 130478,
+      "sha256": "210106fa47dc72deca5a0a4897d903b8bc05fa4435b3836a39bda253d68b41aa"
     },
     "session": {
       "rel": "dsh-session/lib/index.js",
-      "bytes": 96375,
-      "sha256": "cfa7963b0ce1e660bd2815b66cb3e4b86d55a6534603f50e785d71ef0864e995"
+      "bytes": 97888,
+      "sha256": "b5f90c2f47210514a370a0d2bc735ee46edcc7f6935351fc9bb32a94bc2374b7"
     },
     "agent-loop": {
       "rel": "dsh-agent-loop/lib/index.js",
-      "bytes": 67867,
-      "sha256": "ad1dc00cb410680f1af0ecffe332e0d77b1f6cb188f886c2fc44e0501c4f1bfc"
+      "bytes": 68786,
+      "sha256": "04dba727ca438d9da83e110b1ea3e8d73e7d16e68235817e0b01c99e96288577"
     },
     "app-boot": {
       "rel": "dsh-app-boot/lib/index.js",
-      "bytes": 226030,
-      "sha256": "5fe6f8568503e0278654527dfbcac50524237bf07449380a59586075f662d38d"
+      "bytes": 227452,
+      "sha256": "1fcf60c78ad0e32b8c0edc16996354643bb9870f0477160ed81ddfdc7b67f797"
     },
     "conversation-client": {
       "rel": "dsh-client-ui-conversation/lib/client.js",
-      "bytes": 942662,
-      "sha256": "e9894a7f81f9f1308c724abe21ecc2f087f18b4e7fdc040b351dce66016eac15"
+      "bytes": 705985,
+      "sha256": "eda38661c3e13e0a809eac935746056998078be2e634fc8f3f3d37d284230291"
     },
     "tool-todo": {
       "rel": "dsh-tool-todo/lib/index.js",
@@ -286,38 +286,38 @@
     },
     "dsh-tools": {
       "rel": "dsh-tools/lib/index.js",
-      "bytes": 27415,
-      "sha256": "1889cbf718d64518dd83245d4dba1e1f080b2c5326259c3ed5b1be7a7666a2bd"
+      "bytes": 27559,
+      "sha256": "bf71a6ce1e95c5dfba06be7f69827bab19c5d2d9cf272875d92013ba2a8dadb0"
     },
     "dsh-tools-types": {
       "rel": "dsh-tools/lib/types/index.js",
-      "bytes": 16627,
-      "sha256": "595154ed8db690d5bea18dc32e03cbca07fbdf20b55f75fbd33e66480dd20511"
+      "bytes": 16708,
+      "sha256": "857e4c6c7c23ee2f3dbb0f589e73c3f4269bed26d4e513336edd19d409d0ca0b"
     },
     "dsh-tools-pipeline": {
       "rel": "dsh-tools/lib/pipeline.js",
-      "bytes": 34265,
-      "sha256": "a05224ab40fde127296c0deb126f05049624e7baf5a2f12b77edd96c1ef69aa0"
+      "bytes": 35531,
+      "sha256": "82846b4f7e6689428c8d41695ad06b9a48ca3a6909a1db2d439f5056fe03a889"
     },
     "dsh-tools-pipeline-types": {
       "rel": "dsh-tools/lib/types/pipeline.js",
-      "bytes": 31481,
-      "sha256": "ecffcf3e1f344ee3a01164d3bc4d9d951f7eba603251b9b4802fc77edc810a98"
+      "bytes": 32919,
+      "sha256": "ae47c3f5148c34d634687a67bb73e588fe4cbd4668c599b44b63b54ac9d39798"
     },
     "tool-executor-ptc": {
       "rel": "dsh-tool-executor-ptc/lib/index.js",
-      "bytes": 80308,
-      "sha256": "90c467870d35aa4fc48f24cf33a7500a6992683cd179543a623f91800db28489"
+      "bytes": 85836,
+      "sha256": "e0537229efe28da5f09038384460a14e8a27688cba159f26775975695db73165"
     },
     "tool-executor-ptc-types": {
       "rel": "dsh-tool-executor-ptc/lib/types/ptc.js",
-      "bytes": 39207,
-      "sha256": "cf985d87f72dab1dbb77cd30a57b0415463c0dbb87619024d3a22aeb372fbc50"
+      "bytes": 40563,
+      "sha256": "511f2938d29f23786cf77dfc3d834741cb971773427aadde6f23c0651abe147a"
     },
     "sandbox-policy": {
       "rel": "dsh-sandbox-policy/lib/index.js",
-      "bytes": 8921,
-      "sha256": "1d03396e25ab5bf55d736ac483f0b727f79d262b9abf6241306bc9745818d3ba"
+      "bytes": 11710,
+      "sha256": "213c3af3ad93f7d8370bc33b11a12654e289f8acc020a6e8d4f7b881d965639a"
     }
   },
   "patches": [
@@ -717,17 +717,17 @@
     {
       "id": 45,
       "name": "OFFICIAL_DESKTOP_UPDATE_HANDOFF",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "would-apply"
       }
     },
     {
       "id": 46,
       "name": "OFFICIAL_DESKTOP_UPDATE_ASCII",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "pending"
       }
     },
     {
@@ -827,33 +827,33 @@
     {
       "id": 83,
       "name": "DESKTOP_HOST_CLOSE_NO_FATAL",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "would-apply"
       }
     },
     {
       "id": 84,
       "name": "DESKTOP_HOST_CLOSE_CODE0_NO_FAIL",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "pending"
       }
     },
     {
       "id": 92,
       "name": "DESKTOP_HOST_EXIT_TRACE",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "pending"
       }
     },
     {
       "id": 93,
       "name": "DESKTOP_MAIN_EXIT_TRACE",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "would-apply"
       }
     },
     {
@@ -1012,9 +1012,9 @@
     {
       "id": 82,
       "name": "DESKTOP_SHELL_PROFILE_FALLBACK",
-      "status": "settled",
+      "status": "would-apply",
       "files": {
-        "desktop-shell": "settled"
+        "desktop-shell": "would-apply"
       }
     },
     {
@@ -1069,8 +1069,8 @@
   ],
   "summary": {
     "patches": 86,
-    "settled": 79,
-    "wouldApply": 0,
+    "settled": 72,
+    "wouldApply": 7,
     "drifted": 0,
     "noFile": 7,
     "na": 0

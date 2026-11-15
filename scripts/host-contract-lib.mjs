@@ -75,19 +75,22 @@ export function readHostSource(filePath, { exists = fs.existsSync, read = fs.rea
 export function hasMemberDecl(text, member) {
   const m = escapeRe(member)
   if (new RegExp(`^\\s{1,12}(?:async\\s+)?(?:static\\s+)?(?:get\\s+|set\\s+)?${m}\\s*\\(`, 'm').test(text)) return true
+  // 压缩发行物（rc.3 起 asar 里是单行 minified）：方法声明挤在别的语句后面，前面是 ; } ,
+  if (new RegExp(`(?:^|[;},])\\s*(?:async\\s+)?(?:static\\s+)?(?:get\\s+|set\\s+)?${m}\\s*\\([^)]*\\)\\s*\\{`, 'm').test(text)) return true
   return new RegExp(`\\.prototype\\.${m}\\s*=`, 'm').test(text)
 }
 
 /** 服务提供：`super(ownerContext, "settings")` 或 `ctx.provide("name", ...)`。 */
 export function hasServiceProvider(text, name) {
   const n = escapeRe(name)
-  if (new RegExp(`super\\(\\s*[\\w$]+\\s*,\\s*"${n}"\\s*\\)`).test(text)) return true
-  return new RegExp(`(?:ctx|this\\.ctx|ownerContext)\\.provide\\(\\s*"${n}"`).test(text)
+  // rc.3 压缩发行物用反引号：super(ctx, `slots`)
+  if (new RegExp(`super\\(\\s*[\\w$]+\\s*,\\s*["'\u0060]${n}["'\u0060]\\s*\\)`).test(text)) return true
+  return new RegExp(`(?:ctx|this\\.ctx|ownerContext)\\.provide\\(\\s*["'\u0060]${n}`).test(text)
 }
 
 /** 事件名是否出现在源码里（字符串字面量）。 */
 export function hasEventName(text, name) {
-  return text.includes(`"${name}"`) || text.includes(`'${name}'`)
+  return text.includes(`"${name}"`) || text.includes(`'${name}'`) || text.includes(`\u0060${name}\u0060`)
 }
 
 /** 导出声明的三种形态：function / const / export 列表。 */
@@ -144,12 +147,12 @@ export function scanHost(aiBase, {
       files.set(rel, { pkg, from })
       sources.set(rel, text)
 
-      for (const m of text.matchAll(/super\(\s*[\w$]+\s*,\s*"([^"]+)"\s*\)/g)) {
+      for (const m of text.matchAll(/super\(\s*[\w$]+\s*,\s*["'\u0060]([^"'\u0060]+)["'\u0060]\s*\)/g)) {
         if (!services.has(m[1])) services.set(m[1], [])
         const arr = services.get(m[1])
         if (!arr.includes(pkg)) arr.push(pkg)
       }
-      for (const m of text.matchAll(/(?:ctx|this\.ctx|ownerContext)\.provide\(\s*"([^"]+)"/g)) {
+      for (const m of text.matchAll(/(?:ctx|this\.ctx|ownerContext)\.provide\(\s*["'\u0060]([^"'\u0060]+)/g)) {
         if (!services.has(m[1])) services.set(m[1], [])
         const arr = services.get(m[1])
         if (!arr.includes(pkg)) arr.push(pkg)
@@ -159,16 +162,15 @@ export function scanHost(aiBase, {
         if (!events.has(n)) events.set(n, new Set())
         events.get(n).add(pkg)
       }
-      for (const m of text.matchAll(/^\s{1,12}(?:async\s+)?(?:static\s+)?(?:get\s+|set\s+)?([A-Za-z_$][\w$]*)\s*\(/gm)) {
-        const key = `${pkg}::${m[1]}`
+      const addMember = (name) => {
+        const key = `${pkg}::${name}`
         if (!members.has(key)) members.set(key, [])
         if (!members.get(key).includes(rel)) members.get(key).push(rel)
       }
-      for (const m of text.matchAll(/\.prototype\.([A-Za-z_$][\w$]*)\s*=/g)) {
-        const key = `${pkg}::${m[1]}`
-        if (!members.has(key)) members.set(key, [])
-        if (!members.get(key).includes(rel)) members.get(key).push(rel)
-      }
+      for (const m of text.matchAll(/^\s{1,12}(?:async\s+)?(?:static\s+)?(?:get\s+|set\s+)?([A-Za-z_$][\w$]*)\s*\(/gm)) addMember(m[1])
+      // 压缩发行物（rc.3 asar）：方法声明挤在同一行，前面是 ; } ,
+      for (const m of text.matchAll(/(?:^|[;},])\s*(?:async\s+)?(?:static\s+)?(?:get\s+|set\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm)) addMember(m[1])
+      for (const m of text.matchAll(/\.prototype\.([A-Za-z_$][\w$]*)\s*=/g)) addMember(m[1])
     }
   }
 
