@@ -2265,6 +2265,22 @@ npm run impact -- --all                  # 全量清单
 用途：宿主升级后先在目标文件上跑一遍，就知道「这处行为归哪几个测试守、哪些分支本来就没人守」，
 不用靠 grep 猜。它只读，不改任何状态。
 
+## 补丁影响矩阵：哪条补丁坏了，谁替它作证
+
+```bash
+npm run impact:patches
+npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判定列
+```
+
+输出 `docs/patch-impact.md`：86 条补丁各一行，列出宿主文件与其 `rel`、基线状态（`settled`/`no-file`/…）、
+**行为**（`scripts/patch-behaviors.mjs` 的 `covers` 里是否有它）、**闸表**（`docs/patch-gates.json` 是否有观测行）、
+**预演**（`host:rehearse --json` 落盘的判定；没给 `--rehearsal` 时整列为 `—`）。
+
+最近一次 rc.3 预演的证据与当天待办见 [rehearsal-0.2.2-rc.3.md](rehearsal-0.2.2-rc.3.md)。
+
+怎么用：升级后先看「预演」列（`stale`/`drifted` 要改锚点、`native` 可退场）；「行为」列空的补丁只有文件标记作证，
+改它的代码前先补一条 `patch-behaviors` 场景，比为它刷行覆盖率更值。改补丁代码前先 `npm run impact -- lib/patches/index.mjs`。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。

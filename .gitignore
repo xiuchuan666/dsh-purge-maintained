@@ -16,6 +16,12 @@ scripts/tmp-*.mjs
 dsh-redteam-mode-main/
 /1
 
+# 预演/演练产物：1.4G 的树和打补丁副本，只在本机
+.tmp-preview/
+.tmp-preview-*
+.tmp-rehearse/
+.tmp-tree/
+
 # 外部参考，不是本插件
 choirboy-prompt/
 /choirboy-prompt/

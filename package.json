@@ -40,6 +40,7 @@
     "test:full": "node scripts/coverage-suite.mjs",
     "test:baseline": "node scripts/check-coverage-baseline.mjs --update",
     "impact": "node scripts/impact.mjs",
+    "impact:patches": "node scripts/patch-impact.mjs",
     "check": "npm run check:syntax && npm run check:metadata && npm run check:eol && npm run check:client && npm run check:gates && npm test",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:metadata": "node scripts/check-metadata.mjs",
