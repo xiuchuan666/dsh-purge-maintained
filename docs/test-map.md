@@ -2276,6 +2276,8 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 **行为**（`scripts/patch-behaviors.mjs` 的 `covers` 里是否有它）、**闸表**（`docs/patch-gates.json` 是否有观测行）、
 **预演**（`host:rehearse --json` 落盘的判定；没给 `--rehearsal` 时整列为 `—`）。
 
+行为断言覆盖 18/86（2026-11-15 新增 6 条：pruner、session-log 默认值、renderPrompt 兜底、fs 观察闸、repeat-reminder 接线、fs 沙箱 checkedTarget）；提示词层与 yml 默认值类补丁不可由模块导出观测，只能靠闸针+标记。
+
 最近一次 rc.3 预演的证据与当天待办见 [rehearsal-0.2.2-rc.3.md](rehearsal-0.2.2-rc.3.md)。
 
 怎么用：升级后先看「预演」列（`stale`/`drifted` 要改锚点、`native` 可退场）；「行为」列空的补丁只有文件标记作证，

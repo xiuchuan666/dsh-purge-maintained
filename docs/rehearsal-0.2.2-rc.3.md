@@ -47,6 +47,8 @@ node scripts/host-rehearse.mjs \
 
    本次**没有**改写 `docs/patch-gates.json`：真机还是 rc.1，表必须能对得上已装的树。等装 rc.3 那天再重钉，一次成形。
 
+> 2026-11-15 更新：升级动手前已用 rc.3 树重钉全表（提交 `a11a1a2`），86 条针逐条验证「在 rc.3 树中唯一且落在所记行」，needle 文本实际变化 3 条（#13/#56/#77），其余仅行号漂移。
+
 2. **人眼确认 #56/#77 的新针**：rc.3 的 `dsh-client-ui-conversation/lib/client.js` 被压成单行，重取出来的针是 `var ConversationNodeAssembler=class{` 和 `append(record){const event=record.event;…}`，行号都塌到 4——针变弱了，重钉之后手动确认它钉的仍是「隐藏切割点」那段，别让一条泛锚点混过去。
 
 3. **choke 的 4 条 watch 过一眼**（都是信号形状，不阻断）：

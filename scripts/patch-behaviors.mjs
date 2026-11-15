@@ -241,6 +241,116 @@ export const BEHAVIORS = [
       return policy.SANDBOX_MODES.join(',');
     },
   },
+  {
+    id: 'tool-result-pruner-inert',
+    title: 'tool-result pruner: an oversized result keeps its middle',
+    module: 'dsh-compaction-tool-result-pruner',
+    covers: [19],
+    note: 'pruneContent is the whole gate. The pristine tree replaces the middle with a marker; after the patch it returns null and the result stays untouched.',
+    orig: { kind: 'contains', text: ['[... tool result middle pruned ...]'] },
+    patched: { kind: 'value', value: null },
+    run: async (load) => {
+      const pruner = await load('dsh-compaction-tool-result-pruner');
+      if (!pruner.ToolResultPruner) throw missingError('ToolResultPruner is gone');
+      // The class only needs config for pruneContent; the Service constructor wants a live cordis ctx.
+      const inst = Object.create(pruner.ToolResultPruner.prototype);
+      inst.config = { thresholdChars: 100, headChars: 10, tailChars: 10 };
+      return inst.pruneContent([{ type: 'text', text: 'A'.repeat(300) }]);
+    },
+  },
+  {
+    id: 'session-log-upload-default-off',
+    title: 'session log upload: the config default flips to off',
+    module: 'dsh-session-log-deepseek',
+    covers: [52],
+    note: 'Reads the schema default instead of calling the service, so no network and no host wiring is needed.',
+    orig: { kind: 'value', value: true },
+    patched: { kind: 'value', value: false },
+    run: async (load) => {
+      const log = await load('dsh-session-log-deepseek');
+      const dict = log.Config && (log.Config.dict || (log.Config.meta && log.Config.meta.dict));
+      const enabled = dict && dict.enabled;
+      if (!enabled || !enabled.meta || typeof enabled.meta.default !== 'boolean') {
+        throw missingError('Config.dict.enabled.meta.default is gone');
+      }
+      return enabled.meta.default;
+    },
+  },
+  {
+    id: 'fs-sandbox-target-passthrough',
+    title: 'fs sandbox: a read-only write target is no longer rejected',
+    module: 'dsh-fs-sandbox',
+    covers: [16],
+    note: 'checkedTarget is the single fence for write/edit/patch/delete/move. The pristine tree rejects under read-only mode with FS_SANDBOX_DENIED; the patch returns the target untouched.',
+    orig: { kind: 'throw', error: 'FsError' },
+    patched: { kind: 'value', value: '{"targetKey":"C:/x/a.txt","displayPath":"a.txt"}' },
+    run: async (load) => {
+      const fsb = await load('dsh-fs-sandbox');
+      if (!fsb.SandboxedFileSystem) throw missingError('SandboxedFileSystem is gone');
+      const inst = Object.create(fsb.SandboxedFileSystem.prototype);
+      const target = { targetKey: 'C:/x/a.txt', displayPath: 'a.txt' };
+      return await inst.checkedTarget(target, { mode: 'read-only' });
+    },
+  },
+  {
+    id: 'fs-observation-gate-inert',
+    title: 'fs observation policy: editing an unread file no longer rejects',
+    module: 'dsh-fs-observation-policy',
+    covers: [17],
+    note: 'The plugin registers fs/edit-intent; the pristine gate rejects with FS_NOT_OBSERVED when the file was never read. After the patch the listener resolves without a guard.',
+    orig: { kind: 'throw', error: 'FsError' },
+    patched: { kind: 'value', value: 'undefined' },
+    run: async (load) => {
+      const policy = await load('dsh-fs-observation-policy');
+      if (typeof policy.apply !== 'function') throw missingError('apply is gone');
+      const handlers = {};
+      const ctx = {
+        effect: () => () => {},
+        on: (event, fn) => { handlers[event] = fn; },
+      };
+      policy.apply(ctx);
+      const editIntent = handlers['fs/edit-intent'];
+      if (typeof editIntent !== 'function') throw missingError('fs/edit-intent listener is gone');
+      const target = { targetKey: 'k1', displayPath: 'a.txt' };
+      const actor = { agent: { session: {} } };
+      return await editIntent(target, actor, () => undefined);
+    },
+  },
+  {
+    id: 'repeat-tool-reminder-unwired',
+    title: 'repeat-tool-reminder: the post-execute guard is not wired at all',
+    module: 'dsh-repeat-tool-reminder',
+    covers: [18],
+    note: 'The patch replaces the whole ctx.on("tools/post-execute") registration with a comment, so the count of registered listeners is the observation.',
+    orig: { kind: 'value', value: 1 },
+    patched: { kind: 'value', value: 0 },
+    run: async (load) => {
+      const reminder = await load('dsh-repeat-tool-reminder');
+      if (typeof reminder.apply !== 'function') throw missingError('apply is gone');
+      const handlers = {};
+      let count = 0;
+      const ctx = {
+        effect: () => () => {},
+        on: (event) => { if (event === 'tools/post-execute') count += 1; },
+      };
+      reminder.apply(ctx, { thresholds: [3], include: [], exclude: [], argumentsPreviewChars: 40 });
+      return count;
+    },
+  },
+  {
+    id: 'render-prompt-undefined-section',
+    title: 'system prompt: a section without text renders empty instead of throwing',
+    module: 'dsh-system-prompt',
+    covers: [66],
+    note: 'The unguarded renderer crashes on the second turn when a section has no text; the patch makes it contribute an empty string.',
+    orig: { kind: 'throw', error: 'TypeError' },
+    patched: { kind: 'value', value: '' },
+    run: async (load) => {
+      const sp = await load('dsh-system-prompt');
+      if (typeof sp.renderPrompt !== 'function') throw missingError('renderPrompt is gone');
+      return sp.renderPrompt({ sections: [{ text: undefined, interpolate: true }], variables: {} });
+    },
+  },
 ];
 
 export default BEHAVIORS;
