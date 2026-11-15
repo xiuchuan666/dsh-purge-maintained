@@ -25,10 +25,15 @@ test("路径在允许根内时放行，越界时抛错（不许静默返回内�
   );
 });
 
-test("根本不存在的祖先（Windows 盘符）也能给出确定结论", () => {
+test("根本不存在的祖先（Windows 盘符 / POSIX 相对路径）也能给出确定结论", () => {
+  const tmp = path.resolve(os.tmpdir());
   if (process.platform !== "win32") {
-    // POSIX 上 "Z:\\..." 只是普通文件名，没有「盘符不存在」这一档
-    assert.doesNotThrow(() => assertPathWithin("Z:\\no-such-drive\\sub", [path.resolve(os.tmpdir())]));
+    // POSIX 上 "Z:\\..." 只是相对路径，按 cwd 解析后落在 /tmp 之外 —— 必须照样拒绝，
+    // 不能因为「这串看着像盘符」就放行（早期写成 doesNotThrow，Linux CI 直接红）。
+    assert.throws(() => assertPathWithin("Z:\\no-such-drive\\sub", [tmp]), /path outside allowed roots/);
+    // 允许根之内、哪怕整条路径都不存在，仍要放行并原样返回
+    const inside = path.join(tmp, "no-such-drive", "sub");
+    assert.equal(assertPathWithin(inside, [tmp]), inside);
     return;
   }
   const target = "Z:\\no-such-drive\\sub";

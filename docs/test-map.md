@@ -1511,6 +1511,12 @@ zip 解析各抄一份打包器，改一处漏一处；现在 `test-http-routes.
 **一处签名踩坑记下来**：`handleSkillsOp(op, body, queryId)` **没有 deps 形参**（`handleRulesOp` 才有）。
 按 `handleRulesOp` 的形状去调，第三个参数会被当成 queryId，import 静默落回默认 home。
 
+> **踩坑（2026-11-15，CI 红过一次）**：`test-redteam-validate.mjs` 最初把 `Z:\\no-such-drive\\sub` 当成
+> 「盘符不存在」的固定输入，POSIX 分支断言 `doesNotThrow`。但 POSIX 上它只是相对路径，按 cwd 解析后落在
+> `/tmp` 之外，`assertPathWithin` 照样拒绝 —— Linux CI 当场红。**教训**：凡是拿盘符/反斜杠当道路径的用例，
+> 两种平台都要断言「真实判决」，不能用「我们这边跑得通」当跨平台契约；允许根之内但整条路径不存在的用例，
+> 用 `path.join(root, ...)` 造，别用字面量。
+
 ## 五、前端产物链（client.js）
 
 | 能力 | 守卫 | 覆盖率 |
