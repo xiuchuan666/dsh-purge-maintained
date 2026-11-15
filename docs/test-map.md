@@ -2230,6 +2230,27 @@ zip 解析各抄一份打包器，改一处漏一处；现在 `test-http-routes.
      但触发不了；真正要防的是「整段 prompt-inject 做 loose 匹配」把 V8 的源码长度上限打爆，
      那一层已经由 `INJECT_LOOSE_REGEXP_MAX` 挡在构造之前。）
 
+122. **`lib/uninstall.js` 里剩下的 18 行全是「失败只记一笔、继续往下走」的 catch，不建议硬凑。**
+     逐条看过可达性：`:129-130` `rmIfExists`（`fsp.rm({recursive:true,force:true})` 只有在删到被占用的句柄或只读目录这类
+     Windows 独占状态时才抛，测试里造得出来但造出来靠的是抢句柄，CI 上是 POSIX，跑不出同一套行为）；
+     `:176-177` `realpathSync` 兜底（`existsSync(nm)` 为真时 `realpathSync` 只在 ACL 拒绝时才抛）；
+     `:239-240/255-256/262-263/274-275/282-283` 是 `revertAll` / `revertAllShims` / `revertCmdFlash` /
+     `removeOverride` / `resetRules` / `clearOwnedSelectedDefault` 六处抛错兜底 —— `core` 是静态 import，
+     没有注入点，只能靠真让宿主树进入坏状态（例如 bak 文件被换成目录）才进得去；
+     `:252-253` `shim.reverted` 标记要求 `state.shim_*` 是 `patched` **且** `revertAllShims` 成功返回，
+     现有夹具能造前半段，后半段要真改 `$DSH_HOME` 外的东西。
+     **结论**：这 18 行不作为待补项；真要补，先在 `uninstall.js` 里把 `core` 变成可注入参数（那是一次结构改动，不是补测试）。
+123. **`lib/index.js:140-142` 可达但外部不可观测。** `watchWebTreeReady` 在 `typeof ctx?.inject !== "function"` 时
+     先 `mark()`（`webState.ready = true`）再 return；紧接着的 `installWebServer` 自己会 `ctx.inject([...])` 抛
+     `TypeError`。也就是说这条路径的产出是「`/status` 说就绪 + apply 抛错」，`webState` 是模块私有的，
+     测试唯一能断言的是「抛的是 `ctx.inject is not a function`」，对可维护性没有信息量，写出来就是凑数。
+     `:229-230`（seed 抛错只 warn）与 `:271-275`（settle 拒绝且错误属于 inactive-context）同理：
+     两者都要求 `core.seedPromptInjectAtBoot` / `bootSettle.settleInstalledPatches` 抛特定错误，
+     而这两个都是模块级静态装配，没有注入点。
+124. **`lib/redteam/tools.js:131` 是 `loadDefineTool` 里 `import` 失败的那一支**，本机永远走不到（宿主一定装了
+     `@deepseek-ai/dsh-tools`）；CI 上也只在宿主包被裁掉的发行物里才可达。`scripts/test-define-tool-resolve.mjs`
+     已经把「返回函数」和「候选全坏时抛 cannot resolve」两侧都钉住了，这 1 行按盲区记账即可。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
