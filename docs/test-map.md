@@ -2381,5 +2381,21 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 - 结构性锁：`scripts/test-rewind-button-off.mjs`（2 例）断言开关为 `false`、挂载点被它挡住、且上面那些东西都还在（防止有人「清理死代码」时把 /rewind 一起带走）。
 - 生效方式：改的是插件前端产物 `client.js`，要重新打包 tgz 并重装（`dsh plugin --profile desktop add "file:<...>.tgz"`）后重启；只重启不重装不会变。
 
+## 十六、33 条普查候选的逐条裁决（2026-11-15）
+
+跑 `node scripts/restriction-census.mjs --pristine --candidates` 拿到编号清单，再分五组逐条读原件裁决。结论先行：**33 条里没有一条是「我们 agent 的真闸门还没打」**；真正的收获是三条条件项 + 一个配置键 bug。
+
+| 组 | 条目 | 裁决 |
+| --- | --- | --- |
+| 沙箱核心 13 | #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #26 #27 #28 | 全不打。10 条已被 #15 `SANDBOX_CONFINE_PASSTHROUGH`（confine 直通、`denialSignatures:[]`）与 #16 `FS_FENCE_DISABLED` 变成死代码/死词表；#7/#8 的 needle 还不唯一（全文件 3 处 / 2 处）；#12 连 patch target 都没有（`dsh-sandbox-windows-acl` 不在 core.js TARGETS）；#26/#27/#28 是纯枚举，其中 #28 `ESCALATION_TARGETS` 被 5 个工具的 schema `enum` 共享，动它=同时改五个工具的参数面。 |
+| 审批/提权 8 | #17 #19 #25 #29 #30 #31 #32 #33 | #25/#29/#30/#32/#33 全不打：`approveEscalation` 内核已被 #13（删严格加宽阶梯）/ #14（无 approver 直接 allowed-once）/ #35（任何 outcome 都 return mode）打穿，这五处恒定返回请求的 mode，再打零变化；改写方式一错（用 `Promise.resolve` 顶替 return 型调用）就会把对象当 mode 塞进下游 policy。#17/#19 是「无沙箱组合下带 sandbox_permissions 就整 call 失败」的组合守卫，当前部署 `ctx.shell.sandboxMode` 已定义 → 不可达，属防御性修补（要打就 `return void 0`），bash/pwsh 必须同进同退。#31 不能单删：真修法是 1964-1966 联合补丁（justification 缺省化 + 去成对校验 + 保留升级分支），单删只把「明确报错」换成「静默不升级」。 |
+| 文件/参数 4 | #4 #5 #20 #24 | 全不打。#4/#5 是 `EPERM/EACCES` 的 OS 错误转发，代码里没有「按 code 决定放行还是拒绝」的分支，改文案只会把真实 ACL 误配藏起来（`FS_PERMISSION_DENIED` 还被 api-session-controller 映射成 403）。#20 是「目录上不许带 view_range」的参数校验，删掉只少一次纠正提示。#24 是 URL 里带 `user:pass` 的抓取被拒——唯一有真价值但属加功能：要支持 basic-auth 抓取得两处改（剥离 URL 凭据 + 注入 Authorization 头 + 跨源重定向清头），单删只换来 undici 的一句 TypeError。 |
+| 子代理路由 3 | #21 #22 #23 | #21 是三条里唯一的真能力闸门（`assertAllowedModelSelection` 拦「显式指定策略外的 provider/model」），单行唯一 needle、替换成 `return;` 即可，下游 `llm.resolveCallConfig` 仍会拒绝未注册路由。#23 与它配套（发现面），单行删除安全。#22 不打（单删会 `firstRoute.model` 未定义崩）。但三条在当前出货配置下都是死代码：门 1 要 `config.modelSelection===true`，门 2/3 要 `modelDiscovery===true`，全仓没有一处打开。 |
+| 实验/基础设施 5 | #1 #2 #3 #16 #18 | 全不打。#1 与 #59 重复（#59 已在 `tools/pre-execute` handler 入口 `return next()`，denied 文案根本走不到）；#2 把 GitHub `FORBIDDEN` 从「明确失败」降级成「结果未知」，负优化；#3 是 liveshare owner 的 fork 授权（另有 3 处一致性检查，单改会「fork 成功又被 revoke」）；#16 是配置枚举守卫，schema 已先收敛；#18 是给模型看的契约描述文本，改了零运行效果。 |
+
+**新发现（不在 33 条里，但比它们都值得修）**：`presets/redteam/agent.cordis.yml:307` 写的是 `modelSelectionSettings: true`，而宿主 Config 字段名是 `modelSelection`（`dsh-tool-subagent/lib/index.js:295-309`，schemastery `z.object` 会静默剥掉未知键）——红队预设「开了模型选择」其实一直没生效。这才是决定 #21/#23 是否有意义的那颗螺丝。
+
+**下一步三选一**：(a) 修预设键名 + 把 `modelSelection` 默认值改 true，再打 #21+#23（真能按模型切子代理路由）；(b) #24 改成 basic-auth 抓取（加功能）；(c) #17+#19 防御性补丁（当前不可达）。其余 29 条明确写进「不打」名单，避免下次升级重复讨论。
+
 
 

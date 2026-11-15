@@ -11,6 +11,7 @@
  *   node scripts/restriction-census.mjs --baseline <file>       # 与另一份基线比（升级前后）
  *   node scripts/restriction-census.mjs --pattern deny-copy-en  # 只看某些形状（可重复）
  *   node scripts/restriction-census.mjs --limit 40              # 报告里未覆盖条目上限
+ *   node scripts/restriction-census.mjs --candidates            # 逐条列出可裁决的候选（编号 + 形状 + 位置 + 原文）
  *
  * 退出码：0 = 没有未覆盖站点；1 = 有未覆盖站点；2 = 用法或环境失败。
  *
@@ -39,7 +40,7 @@ const SHORT_CIRCUIT_PKGS = new Set([
   "dsh-experimental-worktree",
   "dsh-experimental-client-ui-forge",
 ]);
-import { CENSUS_SCHEMA, DENIAL_PATTERNS, scanSites, locateNeedle, markCovered, rankCandidates, diffCensus, summarize, renderCensusReport } from "./census-lib.mjs";
+import { CENSUS_SCHEMA, DENIAL_PATTERNS, scanSites, locateNeedle, markCovered, rankCandidates, diffCensus, summarize, renderCensusReport, scopeOf } from "./census-lib.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -67,6 +68,7 @@ function fail(msg) {
 const JSON_OUT = opt("json");
 const WRITE_BASELINE = flag("--write-baseline");
 const LIMIT = Number(opt("limit", "30")) || 30;
+const LIST_CANDIDATES = flag("--candidates");
 const PATTERN_FILTER = opts("pattern");
 const givenBase = opt("ai-base") || (flag("--pristine") ? PRISTINE : "");
 const aiBase = givenBase ? resolveAiBase(givenBase) : findAiBase();
@@ -197,6 +199,20 @@ async function main() {
     fs.mkdirSync(path.dirname(DEFAULT_BASELINE), { recursive: true });
     fs.writeFileSync(DEFAULT_BASELINE, JSON.stringify(doc, null, 2) + "\n", "utf8");
     console.log("[census] 基线已写 " + DEFAULT_BASELINE);
+  }
+
+  if (LIST_CANDIDATES) {
+    // 逐条列出「候选」（agent 范围 + 未覆盖 + 未被上游短路 + 真闸门/策略结构），
+    // 给人工裁决用：一条一条判「该打 / 不该打」，而不是只看数字。
+    const roleOf = (pid) => (DENIAL_PATTERNS.find((p) => p.id === pid) || {}).role;
+    const cands = ranked.filter((s) => scopeOf(s.rel) === "agent"
+      && s.coveredBy == null
+      && !s.shortCircuited
+      && (roleOf(s.pattern) === "denial" || roleOf(s.pattern) === "policy"));
+    console.log("[census] 候选 " + cands.length + " 条：");
+    cands.forEach((s, i) => {
+      console.log([i + 1, s.pattern, s.rel + ":" + s.line, String(s.text || "").replace(/\s+/g, " ").slice(0, 160)].join(" | "));
+    });
   }
 
   if (!JSON_OUT) console.log(report);

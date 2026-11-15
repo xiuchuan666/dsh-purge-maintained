@@ -1,3 +1,17 @@
+# 1.1.95
+
+## 维护性更新（第二轮）
+
+- **移除输入框工具条里的「回退」按钮**：按钮是本插件 `client.js` 用 `createPortal` 往宿主控件条里插的 DOM，代价是给输入框加 64px 预留、500ms 位置轮询、宿主改布局就错位。现由 `REWIND_BUTTON_ENABLED = false` 关闭挂载，组件、样式、i18n 与 `installRewindWatch` 全部保留，`/rewind` 命令与 #56/#58/#75/#77 四条补丁不受影响；要恢复只需把常量改回 `true`。
+- **站点级限制面（`host:choke --sites`）**：chokepoints 从「包级覆盖」升级到「站点级覆盖」，能指出一个包里 17 个决策点哪些还没被补丁覆盖，而不是只知道「这个包有补丁」。
+- **限制面普查（`host:census`）**：静态扫描宿主，列出 agent 范围里尚未被 86 条补丁覆盖的拦人点，并在 `docs/restriction-census.json` 记录基线；新增 `--candidates` 逐条列出可裁决候选（形状 / 位置 / 原文）。
+- **覆盖率补尾**：新增 YAML/压缩包边角、`/rules reset` 失败分支、桌面重启分派三组测试；覆盖率闸对 `lib/desktop.js` 的一次环境漂移做了显式容差（附证据注释），容差外仍红。
+
+## 验证
+
+- `npm run check` 全绿：syntax 287 文件 / metadata patches=86 / eol 360 文件 / client 锚点与 drill 同步 / gates 86 行 58 gated / node:test 3884 例。
+- 不修改任何宿主补丁定义、提示词注入与闸表。
+
 # 1.1.94
 
 ## 维护性更新

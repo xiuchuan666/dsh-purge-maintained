@@ -33,6 +33,9 @@ fs.mkdirSync(path.join(HOME, 'dsh-purge'), { recursive: true })
 
 const u = await import('../lib/update.js')
 
+// 当前版本跟着 package.json 走，别把发版号写死在断言里——每抬一次版本就要改测试是噪音。
+const CURRENT_VERSION = u.localVersion()
+
 const ORIGIN_REQUEST = https.request
 const CHANNEL_FILE = path.join(HOME, 'dsh-purge', 'channel.json')
 const HISTORY_FILE = path.join(HOME, 'dsh-purge', 'version-history.json')
@@ -556,7 +559,7 @@ test('listRemoteVersions：在线更新关闭时不联网，只给出本机在�
     assert.equal(listed.versions.length, 1)
     const row = listed.versions[0]
     assert.equal(row.kind, 'local', '本机在跑的版本以 local 行插入')
-    assert.equal(row.version, '1.1.94')
+    assert.equal(row.version, CURRENT_VERSION)
     assert.equal(row.channel, 'stable')
     assert.equal(row.ref, 'main', '列表里没有 main 时用 STABLE_REF 当 ref')
     assert.equal(row.latest, true)
@@ -622,7 +625,7 @@ test('checkUpdate：beta 车道没有远端时安静回「还没有测试版」�
   assert.equal(result.hasUpdate, false)
   assert.equal(result.hasBeta, false)
   assert.equal(result.error, '还没有测试版')
-  assert.equal(result.localVersion, '1.1.94')
+  assert.equal(result.localVersion, CURRENT_VERSION)
   assert.equal(result.remoteVersion, '')
   assert.equal(result.remoteSha, '')
   assert.equal(result.updateTarget, 'beta', 'beta 车道的目标是 beta 分支')
