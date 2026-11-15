@@ -2207,6 +2207,23 @@ zip 解析各抄一份打包器，改一处漏一处；现在 `test-http-routes.
      `outSections` 里始终能找到 `injectText` 的前 80 字符 —— `leadWithInject` 一定先把它塞进 `dsh-purge` 段，
      `overlayOfficialIdentity` 也不会丢它。保留代码是对的（防 overlay 未来改行为），但别指望用例能覆盖。
 
+119. **`lib/identity.js:852-857`（`withOwnServers` 的正文）不可达，根因在 `lib/net-scope.js`。**
+     `ownServerNote()` 与 `writeAllowText()` 一样是**上游空壳**：`ownServerNote` 恒返回 `""`，
+     于是 `if (!note) return text` 每次都命中，下面拼 `OWN SERVERS — EXACT LIST ONLY` 的三行永远走不到。
+     与第十节第 114 条（`routes.js:618`）是同一个根因，一并记在这里：**本仓库不替上游补功能**，
+     真要修得先确认宿主那侧是否已经实现；宿主一旦实现，这两处会自动变成死代码再变活，届时补测。
+120. **`lib/redteam/tool-specs-recon.js:171-204`（宿主没有 skills 服务且仓库没有随包技能时的回退）在本机不可达。**
+     条件是 `skills` 未注入 **且** `bundledSkillSummaries()` 为空；后者扫的是仓库里的
+     `skills/redteam`（经 `lib/redteam/skill-availability.js:111` 的两个候选 home），本仓库始终非空。
+     它只在「打包成桌面壳、把 skills 目录漏掉」的发行物里才会走到 —— 换句话说，这段代码的正确性只能靠
+     读，靠到真机上跑一次 `redteam_preflight` 才验证得到。改坏的表现是：桌面端第一次预检直接报废，
+     而不是回一句「已跳过技能正文体检」。
+121. **`lib/identity.js:375-376`（`injectMatchers` 里 `new RegExp` 的 catch）不可达。**
+     构造正则前已经把 `.*+?^${}()|[]\\` 全部转义、把连续空白换成 `\\s+`，再限定在 4096 字符以内，
+     拼出来的 pattern 不会抛 `SyntaxError`。（`:377` 之后的 `loose = null` 是有意义的兜底，
+     但触发不了；真正要防的是「整段 prompt-inject 做 loose 匹配」把 V8 的源码长度上限打爆，
+     那一层已经由 `INJECT_LOOSE_REGEXP_MAX` 挡在构造之前。）
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
