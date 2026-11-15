@@ -2405,6 +2405,22 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 - 新增 `scripts/test-subagent-route-patch.mjs`（3 例）：原件上真跑 needle，断言唯一性、标记落地、`:189` provider 校验与 `resolveModelInfo` 未被误伤，并锁死预设字段名。
 - 真机验证：`host:status` 里 91/94 由 would-apply → **settled**，`dsh-tool-subagent` 那个文件 28458 → 28169 字节；`patch-gates --verify` 60/60 present、missing 0。
 - 其余 30 条按上表进「不打」名单：#17/#19（不可达）、#24（加功能，另议）、#31（需联合补丁）保留为待办，不阻塞发布。
+## 十五、右下角「dsh-purge」浮标定位（2026-11-15 用户反馈）
+
+**症状**：主页面右下角那个 `dsh-purge` 胶囊会「乱飘」，压在输入框的发送行上，挡住旁边的按钮。
+
+**根因**：`.dshp-launch` 是 `position:fixed; right:16px; bottom:16px` —— 钉死视口右下角，而宿主 composer 就在那里，永远是同一块地上互相踩。它不是「飘」，是浮层和输入框抢同一个角。
+
+**修法**（`client.js`）：
+
+1. CSS 改 `bottom:var(--dshp-launch-bottom,132px)`，默认 132px 先离开底部工具条；加 `opacity:.78` 降低视觉干扰。
+2. 新增 `purgeComposerTop()`：优先取真实输入元素（`textarea` / `[contenteditable="true"]`）的 `getBoundingClientRect().top`，取最大值（最靠下那个）；没有输入元素时才退回 `[class*="composer" i]` / `[data-composer]` / `[class*="standardControls"]` 的 class 匹配。宽 <160px、高 <16px 的节点直接忽略，并排除插件自己的 `.dshp-dock` / `.dshp-launch`。
+3. `PurgeLauncher` 的 effect 每 400ms + `resize` + 捕获阶段 `scroll` 重算：`bottom = clamp(vh - top + 14, 72, vh - 120)`，写进 `documentElement` 的 `--dshp-launch-bottom`。输入区顶边动了，浮标跟着动，但永远在它上面 14px。
+
+**结构锁**：`scripts/test-launch-pill-placement.mjs`（3 例）—— 断言 bottom 由变量驱动且旧的 `bottom:16px` 不许回来、`purgeComposerTop()` 优先 textarea/contenteditable、入口 `PurgeLauncher` 与 `data-testid="dsh-purge-launch"` 不许被顺手删。RED 演练：把默认值改回 16px，第 1 例立刻红（pass 2 / fail 1），恢复后 3/3。
+
+**已知边界**：几何是运行时测量，静态测试只能锁「按输入区算」这条逻辑，真实像素位置要在宿主窗口里看。改动要生效得让前端重新加载（桌面端重开窗口或应用内重启）。
+
 
 
 

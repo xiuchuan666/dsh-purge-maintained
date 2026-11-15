@@ -1009,7 +1009,7 @@ body[data-ds-dark-theme] .dshp-restart-card .dshp-btn-primary,body[data-ds-dark-
 
 .dshp-dock{position:fixed;top:12px;right:12px;z-index:10050;display:flex;flex-direction:column;width:var(--dshp-dock-w,620px);height:var(--dshp-dock-h,72vh);min-width:380px;min-height:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,var(--dshp-paper,#fffcf7)) 52%,transparent);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 65%,transparent);border-radius:12px;box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent),0 0 0 1px color-mix(in srgb,#fff 6%,transparent);pointer-events:auto;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));overflow:visible}
 .dshp-dock[data-open="0"]{display:none}
-.dshp-launch{position:fixed;right:16px;bottom:16px;z-index:10040;appearance:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 55%,transparent);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fffcf7) 46%,transparent);color:var(--dsw-alias-label-primary,#16140f);cursor:pointer;font:13px/1 inherit;box-shadow:0 8px 22px color-mix(in srgb,#000 28%,transparent);pointer-events:auto}
+.dshp-launch{position:fixed;right:16px;bottom:var(--dshp-launch-bottom,132px);z-index:10040;appearance:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 55%,transparent);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fffcf7) 46%,transparent);color:var(--dsw-alias-label-primary,#16140f);cursor:pointer;font:13px/1 inherit;box-shadow:0 8px 22px color-mix(in srgb,#000 28%,transparent);pointer-events:auto;opacity:.78;transition:opacity 160ms ease}
 .dshp-launch:hover{border-color:var(--dsw-alias-brand-primary,#6dbf8c);background:color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 18%,transparent)}
 .dshp-launch[data-open="1"],.dshp-launch[data-hide="1"]{display:none}
 .dshp-dock-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 55%,transparent);background:transparent;cursor:grab;user-select:none;touch-action:none;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));border-radius:12px 12px 0 0}
@@ -8970,10 +8970,55 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			return false;
 		}
 
+		/** 输入区上边界：优先真实输入元素（textarea / contenteditable），class 匹配只做兜底。
+		 *  浮标只许贴在这条边界上方，永远不许压住发送/工具按钮。 */
+		function purgeComposerTop() {
+			if (typeof document === "undefined") return 0;
+			let best = 0;
+			const bump = (el) => {
+				if (!el || (el.closest && el.closest(".dshp-dock, .dshp-launch"))) return;
+				const r = el.getBoundingClientRect();
+				if (r.width < 160 || r.height < 16) return;
+				if (r.top > best) best = r.top;
+			};
+			const editors = document.querySelectorAll('textarea, [contenteditable="true"], [contenteditable=""]');
+			for (let i = 0; i < editors.length; i += 1) bump(editors[i]);
+			if (best > 0) return best;
+			const boxes = document.querySelectorAll('[class*="composer" i], [data-composer], [class*="standardControls"]');
+			for (let i = 0; i < boxes.length; i += 1) bump(boxes[i]);
+			return best;
+		}
+
 		function PurgeLauncher() {
 			const t = useT();
 			const st = useDock();
 			const [hide, setHide] = useState(hasInlinePurgeEntry);
+			useEffect(() => {
+				/* 浮标位置 = 输入区顶边 - 12px；输入区不存在时退回 72px（避开底部工具条）。 */
+				if (typeof document === "undefined") return undefined;
+				const root = document.documentElement;
+				let last = -1;
+				const measure = () => {
+					const top = purgeComposerTop();
+					const vh = window.innerHeight || 0;
+					let bottom = 132;
+					if (vh && top > 96) bottom = Math.min(Math.max(Math.round(vh - top + 14), 72), Math.max(vh - 120, 72));
+					if (bottom !== last) {
+						last = bottom;
+						root.style.setProperty("--dshp-launch-bottom", bottom + "px");
+					}
+				};
+				measure();
+				const onMove = () => measure();
+				window.addEventListener("resize", onMove);
+				window.addEventListener("scroll", onMove, true);
+				const iv = window.setInterval(measure, 400);
+				return () => {
+					window.removeEventListener("resize", onMove);
+					window.removeEventListener("scroll", onMove, true);
+					window.clearInterval(iv);
+				};
+			}, []);
 			useEffect(() => {
 				const sync = () => setHide(hasInlinePurgeEntry());
 				sync();
