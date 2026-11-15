@@ -86,28 +86,28 @@
       "patch": 13,
       "name": "ESCALATION_WIDENING_EXEMPT",
       "rel": "dsh-sandbox/lib/index.js",
-      "line": 140,
-      "needle": "if (!(WIDER_MODES[effectiveMode] ?? []).includes(mode)) throw new Error(`sandbox escalation to \"${mode}\" is not strictly wider than this call's current \"${effectiveMode}\" mode`);"
+      "line": 171,
+      "needle": "if (!(WIDER_MODES[effectiveMode] ?? []).includes(mode)) throw new SandboxEscalationError(`sandbox escalation to \"${mode}\" is not strictly wider than this call's current \"${effectiveMode}\" mode`, \"SANDBOX_ESCALATION_INVALID_ARGUMENT\");"
     },
     {
       "patch": 14,
       "name": "ESCALATION_GRANT_UNCONDITIONAL",
       "rel": "dsh-sandbox/lib/index.js",
-      "line": 143,
+      "line": 174,
       "needle": "const outcome = await approval.approver.request({"
     },
     {
       "patch": 15,
       "name": "SANDBOX_CONFINE_PASSTHROUGH",
       "rel": "dsh-sandbox-local/lib/index.js",
-      "line": 307,
+      "line": 319,
       "needle": "async confine(argv, policy, signal) {"
     },
     {
       "patch": 16,
       "name": "FS_FENCE_DISABLED",
       "rel": "dsh-fs-sandbox/lib/index.js",
-      "line": 176,
+      "line": 175,
       "needle": "async checkedTarget(target, sandboxPolicy) {"
     },
     {
@@ -121,7 +121,7 @@
       "patch": 18,
       "name": "REPEAT_TOOL_REMINDER_DISABLED",
       "rel": "dsh-repeat-tool-reminder/lib/index.js",
-      "line": 2252,
+      "line": 2359,
       "needle": "ctx.on(\"tools/post-execute\", async (exec, _result, next) => {"
     },
     {
@@ -140,21 +140,21 @@
       "patch": 22,
       "name": "READ_CAPS_RAISED",
       "rel": "dsh-tool-fs/lib/index.js",
-      "line": 20,
+      "line": 21,
       "needle": "const READ_MAX_LINE_LENGTH = 2e3;"
     },
     {
       "patch": 23,
       "name": "SUBAGENT_MAXDEPTH_RAISED",
       "rel": "dsh-subagent/lib/index.js",
-      "line": 2993,
+      "line": 2963,
       "needle": "maxDepth: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(1).volatile()"
     },
     {
       "patch": 24,
       "name": "PRESET_FETCH_ENABLED",
       "rel": "dsh-web-app/presets/standard.patch.yml",
-      "line": 118,
+      "line": 123,
       "needle": "- id: tool-web"
     },
     {
@@ -200,35 +200,35 @@
       "patch": 33,
       "name": "TOOL_SHELL_DENIAL_PROMPT",
       "rel": "dsh-tool-bash/lib/index.js",
-      "line": 244,
+      "line": 251,
       "needle": "a policy denial: do not retry another way"
     },
     {
       "patch": 34,
       "name": "SANDBOX_HINT_NEUTRAL",
       "rel": "dsh-sandbox/lib/index.js",
-      "line": 103,
+      "line": 133,
       "needle": "return `[sandbox: file access denied under ${mode} mode]`;"
     },
     {
       "patch": 35,
       "name": "ESCALATION_NEVER_REJECT",
       "rel": "dsh-sandbox/lib/index.js",
-      "line": 151,
+      "line": 182,
       "needle": "switch (outcome) {"
     },
     {
       "patch": 36,
       "name": "TOOL_FS_ESCALATION_SCHEMA",
       "rel": "dsh-tool-fs/lib/index.js",
-      "line": 1886,
+      "line": 1943,
       "needle": "one sentence for the user explaining why this exact file operation needs the wider access."
     },
     {
       "patch": 37,
       "name": "SUBAGENT_SCOPE_LOCK_NEUTRAL",
       "rel": "dsh-subagent/lib/index.js",
-      "line": 364,
+      "line": 309,
       "needle": "You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
     },
     {
@@ -283,7 +283,7 @@
       "patch": 48,
       "name": "TOOL_SHELL_DELETE_MOVE_NEUTRAL",
       "rel": "dsh-tool-bash/lib/index.js",
-      "line": 244,
+      "line": 251,
       "needle": "Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked."
     },
     {
@@ -328,15 +328,15 @@
       "patch": 55,
       "name": "SYSTEM_PROMPT_REPLACE_HEAD",
       "rel": "dsh-agent-loop/lib/index.js",
-      "line": 851,
+      "line": 864,
       "needle": "inHistory: preparedCall?.systemPromptUpdate === \"in-history\","
     },
     {
       "patch": 56,
       "name": "REWIND_HIDE_CUT_ONLY",
       "rel": "dsh-client-ui-conversation/lib/client.js",
-      "line": 2575,
-      "needle": "replaceWindow(entries, hasMore) {"
+      "line": 4,
+      "needle": "var ConversationNodeAssembler=class{"
     },
     {
       "patch": 57,
@@ -347,7 +347,7 @@
       "patch": 58,
       "name": "REWIND_SKIP_DERIVE",
       "rel": "dsh-session/lib/index.js",
-      "line": 221,
+      "line": 222,
       "needle": "case \"user/message\": return event.data;"
     },
     {
@@ -361,21 +361,21 @@
       "patch": 60,
       "name": "OFFICIAL_RUN_CODE_APPROVAL_NEUTRAL",
       "rel": "dsh-tool-executor-ptc/lib/index.js",
-      "line": 142,
+      "line": 108,
       "needle": "Wider sandbox mode for this complete program execution; requires justification and approval."
     },
     {
       "patch": 61,
       "name": "OFFICIAL_SANDBOX_POLICY_NEUTRAL",
       "rel": "dsh-sandbox-policy/lib/index.js",
-      "line": 87,
+      "line": 88,
       "needle": "Current DSH file policy: read-only. Any available operation enforced by the DSH file sandbox cannot modify files in the standing mode. Do not refuse a required modification from this policy alone: try an available tool normally and follow any denial and escalation guidance it returns."
     },
     {
       "patch": 62,
       "name": "OFFICIAL_TOOL_ASK_FAILOPEN",
       "rel": "dsh-tools/lib/pipeline.js",
-      "line": 651,
+      "line": 649,
       "needle": "case \"unavailable\": return {"
     },
     {
@@ -406,14 +406,14 @@
       "patch": 67,
       "name": "AGENT_LOOP_MESSAGES_GUARD",
       "rel": "dsh-agent-loop/lib/index.js",
-      "line": 751,
+      "line": 764,
       "needle": "if (turnEnds && decision.messages.length === 0) break;"
     },
     {
       "patch": 68,
       "name": "SYSTEM_NODES_CONTENT_GUARD",
       "rel": "dsh-agent-loop/lib/index.js",
-      "line": 217,
+      "line": 221,
       "needle": "function textOf(message) {"
     },
     {
@@ -437,7 +437,7 @@
       "patch": 72,
       "name": "MESSAGES_SYSTEM_CURRENT",
       "rel": "dsh-llm-deepseek/lib/index.js",
-      "line": 1679,
+      "line": 1729,
       "needle": "if (inHistory && messages.length > 0) {"
     },
     {
@@ -451,7 +451,7 @@
       "patch": 74,
       "name": "ASSEMBLE_BEFORE_PRESTEP",
       "rel": "dsh-agent-loop/lib/index.js",
-      "line": 670,
+      "line": 683,
       "needle": "const claimed = this.inbox.claim(target, position.turn);"
     },
     {
@@ -470,14 +470,14 @@
       "patch": 77,
       "name": "REWIND_DROP_SENT_ON_APPEND",
       "rel": "dsh-client-ui-conversation/lib/client.js",
-      "line": 2602,
-      "needle": "append(record) {"
+      "line": 4,
+      "needle": "append(record){const event=record.event;if(this.inputs.has(event.seq))return`none`;if(this.revised.size>0)this.revised.clear();"
     },
     {
       "patch": 78,
       "name": "OVERLAY_RESTORE_FROM_BAK",
       "rel": "dsh-app-boot/lib/index.js",
-      "line": 4708,
+      "line": 4728,
       "needle": "function loadOverlayPatches(binName, file) {"
     },
     {
@@ -504,14 +504,14 @@
       "patch": 85,
       "name": "SESSION_PROMPT_ALWAYS_FOLLOWUP",
       "rel": "dsh-api-session-controller/lib/index.js",
-      "line": 857,
+      "line": 932,
       "needle": "if (request.mode === \"steer\") agent.steer(message);"
     },
     {
       "patch": 86,
       "name": "SESSION_QUEUE_STEER_INTERRUPT",
       "rel": "dsh-api-session-controller/lib/index.js",
-      "line": 946,
+      "line": 1049,
       "needle": "case \"steer\":"
     },
     {
@@ -528,7 +528,7 @@
       "patch": 89,
       "name": "SANDBOX_POLICY_BRAND_NEUTRAL",
       "rel": "dsh-sandbox-policy/lib/index.js",
-      "line": 87,
+      "line": 88,
       "needle": "Current DSH file policy: r"
     },
     {
@@ -549,9 +549,9 @@
       "reason": "no-target"
     }
   ],
-  "capturedAt": "2026-11-13T05:55:21.073Z",
+  "capturedAt": "2026-11-15T02:50:44.385Z",
   "tree": {
-    "dir": "D:\\dsh-purge-maintained\\.tmp-tree\\rc1\\node_modules\\@deepseek-ai",
-    "version": "0.2.2-rc.1"
+    "dir": "D:\\dsh-purge-maintained\\.tmp-preview\\tree\\node_modules\\@deepseek-ai",
+    "version": "0.2.2-rc.3"
   }
 }
