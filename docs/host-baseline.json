@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-12T15:25:40.947Z",
+  "capturedAt": "2026-11-15T00:02:03.675Z",
   "pluginVersion": "1.1.94",
   "host": {
     "version": "0.2.2-rc.1",
@@ -46,13 +46,13 @@
     },
     "user-approval": {
       "rel": "dsh-user-approval/lib/types/index.js",
-      "bytes": 11072,
-      "sha256": "1b32e22c6dc4a1042b67d5418664217b52925ff2184725e9480d476b2dc0beac"
+      "bytes": 11138,
+      "sha256": "f5d77dd184cdf9d5b30dc164bfb1b211343940076f709c4271491b678839d9a2"
     },
     "user-approval-code": {
       "rel": "dsh-user-approval/lib/index.js",
-      "bytes": 8846,
-      "sha256": "24681642bc2f578515daf5752c6990d72ba90900af19590c221a41be77f701ba"
+      "bytes": 8912,
+      "sha256": "8dfb076f7f92c7c5b6ac0fa401eeed5ed7de468327a2aba69891e273a73e8d5a"
     },
     "escalation": {
       "rel": "dsh-sandbox/lib/index.js",
