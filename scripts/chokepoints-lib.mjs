@@ -501,6 +501,170 @@ export function diffShapes(beforeHits, afterHits) {
   return { added: added.sort(rank), grown: grown.sort(rank), removed: removed.sort(rank) };
 }
 
+// ---------------------------------------------------------------- 站点级（sites）
+//
+// 包级覆盖只回答「这个包有没有补丁」，回答不了「这个包里的 5 个决策点改了几个」。
+// 下面这组函数把一条形状的命中展开成「站点」（每个决策行一个），再按补丁 needle
+// 的行号（±window）求交，得到「这个站点到底被哪条补丁盖住、还是漏着」。
+
+/**
+ * 把 scanShapes 的 hits 展开成扁平站点数组。每个站点：
+ *   { shape, role, pkg, rel, line, text }
+ * role 由形状表给出；pkg 取 rel 第一段。按 rel → line → shape 升序，保证确定性。
+ * 返回新数组，不改入参。
+ */
+export function sitesOf(hits) {
+  const out = [];
+  for (const [shape, list] of Object.entries(hits || {})) {
+    const role = roleOf(shape);
+    for (const h of Array.isArray(list) ? list : []) {
+      if (!h) continue;
+      const rel = String(h.rel || "");
+      if (!rel) continue;
+      out.push({
+        shape,
+        role,
+        pkg: rel.split("/")[0],
+        rel,
+        line: Number(h.line) || 0,
+        text: String(h.text == null ? "" : h.text),
+      });
+    }
+  }
+  out.sort((a, b) => {
+    if (a.rel !== b.rel) return a.rel < b.rel ? -1 : 1;
+    if (a.line !== b.line) return a.line - b.line;
+    return a.shape < b.shape ? -1 : a.shape > b.shape ? 1 : 0;
+  });
+  return out;
+}
+
+/** id 数值化：数值 id 按大小比，非数值当无穷大（同距时保留先到的）。 */
+function siteIdNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * 给每个站点标注覆盖来源。spans 为 [{ id, rel, line }]。
+ * 规则：rel 全等且 |site.line - span.line| <= window（闭区间），取最近；
+ * 同距取 id 数值小的。返回新数组（每项加 coveredBy / distance），不改入参。
+ */
+export function coverageOf(sites, spans, { window = 15 } = {}) {
+  const arr = Array.isArray(sites) ? sites : [];
+  const spanList = Array.isArray(spans) ? spans : [];
+  const win = Number.isFinite(window) ? window : 15;
+  return arr.map((site) => {
+    let best = null;
+    if (site && typeof site.rel === "string") {
+      const line = Number(site.line) || 0;
+      for (const sp of spanList) {
+        if (!sp || sp.rel !== site.rel) continue;
+        const dist = Math.abs(line - (Number(sp.line) || 0));
+        if (!(dist <= win)) continue;
+        if (best === null || dist < best.distance
+          || (dist === best.distance && siteIdNum(sp.id) < siteIdNum(best.id))) {
+          best = { id: sp.id, distance: dist };
+        }
+      }
+    }
+    return Object.assign({}, site, {
+      coveredBy: best ? best.id : null,
+      distance: best ? best.distance : null,
+    });
+  });
+}
+
+/**
+ * 站点级缺口分流，语义对齐 findGaps 但以「单个站点」为单位：
+ *   - 已覆盖 → ignored（reason 写明覆盖来源与距离）
+ *   - 未覆盖 + 形状可短路 + 包内有满权守卫（且形状受 mode 门控）→ ignored
+ *   - 未覆盖 + 形状可短路 + 上游包已覆盖 → ignored
+ *   - 未覆盖 + role 是 target / signal → watch（挂载点与路标，不构成缺口）
+ *   - 其余未覆盖（role=restriction）→ gaps
+ * shortCircuits: Map<pkg,{rel,line,text}>；upstream: { [pkg]: truthy } 表示该（上游）包已被补丁覆盖。
+ * UPSTREAM / SHORT_CIRCUITABLE / MODE_GATED 直接复用模块常量，不另抄一份表。
+ */
+export function findSiteGaps(coveredSites, { shapes = SHAPES, shortCircuits = new Map(), upstream = {} } = {}) {
+  const list = Array.isArray(coveredSites) ? coveredSites : [];
+  const roleById = new Map();
+  for (const s of Array.isArray(shapes) ? shapes : []) {
+    if (s && s.id) roleById.set(s.id, s.role || "restriction");
+  }
+  const guardMap = shortCircuits instanceof Map ? shortCircuits : new Map(Object.entries(shortCircuits || {}));
+  const upMap = upstream && typeof upstream === "object" ? upstream : {};
+  const gaps = [];
+  const watch = [];
+  const ignored = [];
+  for (const site of list) {
+    if (!site) continue;
+    const shape = site.shape;
+    const pkg = site.pkg || String(site.rel || "").split("/")[0];
+    const role = roleById.get(shape) || roleOf(shape);
+    if (site.coveredBy != null) {
+      ignored.push(Object.assign({}, site, {
+        reason: "已被 " + site.coveredBy + " 覆盖（Δ" + site.distance + "）",
+      }));
+      continue;
+    }
+    if (SHORT_CIRCUITABLE.has(shape)) {
+      const guard = guardMap.get(pkg);
+      if (guard && MODE_GATED.has(shape)) {
+        ignored.push(Object.assign({}, site, {
+          reason: "包内有满权早返回守卫（" + guard.rel + ":" + guard.line + "），此站点不执行",
+        }));
+        continue;
+      }
+      const up = UPSTREAM[pkg];
+      if (up && (upMap[up.via] || upMap[pkg])) {
+        ignored.push(Object.assign({}, site, { reason: up.via + " 已覆盖：" + up.why }));
+        continue;
+      }
+    }
+    if (role === "target" || role === "signal") watch.push(site);
+    else gaps.push(site);
+  }
+  const rank = (a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0) || (a.line - b.line);
+  return { gaps: gaps.sort(rank), watch: watch.sort(rank), ignored: ignored.sort(rank) };
+}
+
+/**
+ * 中文站点级报告串：总览 → 未覆盖站点列表（rel:line 形状 文本）→ 按包汇总
+ * （包内站点数 / 已覆盖 / 未覆盖）。summary 由 CLI 计算后传入，字段：
+ *   { total, covered, uncovered, byPkg: [{ pkg, sites, covered, uncovered }] }
+ */
+export function renderSiteReport({ gaps, watch = [], ignored = [], summary, limit = 30 } = {}) {
+  const gapList = Array.isArray(gaps) ? gaps : [];
+  const watchList = Array.isArray(watch) ? watch : [];
+  const sum = summary && typeof summary === "object" ? summary : {};
+  const uncoveredList = gapList.concat(watchList);
+  const total = Number.isFinite(sum.total) ? sum.total : uncoveredList.length;
+  const covered = Number.isFinite(sum.covered) ? sum.covered : null;
+  const uncovered = Number.isFinite(sum.uncovered) ? sum.uncovered : uncoveredList.length;
+  const lines = [];
+  lines.push("[choke:sites] 总览：站点 " + total + " / 未覆盖 " + uncovered
+    + (covered == null ? "" : " / 已覆盖 " + covered));
+  lines.push("[choke:sites] 未覆盖站点（前 " + limit + " 条）：");
+  if (uncoveredList.length === 0) {
+    lines.push("[choke:sites]   （无）");
+  } else {
+    for (const s of uncoveredList.slice(0, limit)) {
+      lines.push("[choke:sites]   " + s.rel + ":" + s.line + "  " + s.shape + "  " + String(s.text || "").slice(0, 100));
+    }
+  }
+  lines.push("[choke:sites] 按包汇总（站点 / 已覆盖 / 未覆盖）：");
+  const byPkg = Array.isArray(sum.byPkg) ? sum.byPkg : [];
+  if (byPkg.length === 0) {
+    lines.push("[choke:sites]   （无）");
+  } else {
+    for (const row of byPkg) {
+      const sites = row.sites != null ? row.sites : (row.total || 0);
+      lines.push("[choke:sites]   " + row.pkg + "  " + sites + " / " + (row.covered || 0) + " / " + (row.uncovered || 0));
+    }
+  }
+  return lines.join("\n");
+}
+
 // ANCHOR_END
 
 /** 人看的报告行：形状汇总 → 与基线对比 → 真缺口 → 排除理由。 */

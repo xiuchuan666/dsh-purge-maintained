@@ -27,6 +27,10 @@ import {
   renderChokeReport,
   scanShapes,
   summarizeHits,
+  sitesOf,
+  coverageOf,
+  findSiteGaps,
+  renderSiteReport,
 } from "./chokepoints-lib.mjs";
 
 /** 造一棵假宿主树：{ "dsh-x/lib/index.js": "代码" }。 */
@@ -277,4 +281,147 @@ test("renderChokeReport 三段都进报告，排除理由聚合", () => {
   assert.match(text, /路标.*1 组/);
   assert.match(text, /附着点.*1 组/);
   assert.match(text, /2 组（已有补丁覆盖）/);
+});
+
+// ---------------------------------------------------------------- 站点级（sites）回归
+//
+// 核心目的：把「包级覆盖」升成「站点级覆盖」。下面这条最重要 ——
+// 同一个包里一条补丁只覆盖一个决策点，另一个决策点仍然必须算缺口。
+
+test("sitesOf：把 hits 展平成站点，按 rel/line 排序，role/pkg 正确", () => {
+  const hits = {
+    "sandbox-confine": [
+      { rel: "dsh-b/lib/index.js", line: 5, text: "b5" },
+      { rel: "dsh-a/lib/index.js", line: 9, text: "a9" },
+    ],
+    vocab: [{ rel: "dsh-a/lib/index.js", line: 2, text: "a2" }],
+  };
+  const flat = sitesOf(hits);
+  assert.equal(flat.length, 3);
+  assert.deepEqual(flat.map((s) => s.rel + ":" + s.line),
+    ["dsh-a/lib/index.js:2", "dsh-a/lib/index.js:9", "dsh-b/lib/index.js:5"]);
+  assert.equal(flat[0].shape, "vocab");
+  assert.equal(flat[0].role, "signal");
+  assert.equal(flat[0].pkg, "dsh-a");
+  assert.equal(flat[0].text, "a2");
+  assert.equal(flat[1].shape, "sandbox-confine");
+  assert.equal(flat[1].role, "restriction");
+  assert.equal(flat[2].pkg, "dsh-b");
+});
+
+test("sitesOf：空/缺字段输入返回空数组", () => {
+  assert.deepEqual(sitesOf({}), []);
+  assert.deepEqual(sitesOf({ "deny-throw": [] }), []);
+  assert.deepEqual(sitesOf({ "deny-throw": [{ rel: "", line: 3, text: "x" }] }), []);
+});
+
+test("coverageOf：window=15 闭区间命中", () => {
+  const sites = [{ rel: "dsh-a/lib/i.js", line: 100, shape: "deny-throw", pkg: "dsh-a" }];
+  const spans = [{ id: "p1", rel: "dsh-a/lib/i.js", line: 85 }];
+  const out = coverageOf(sites, spans, { window: 15 });
+  assert.equal(out[0].coveredBy, "p1");
+  assert.equal(out[0].distance, 15);
+});
+
+test("coverageOf：距离 16 不命中 → null", () => {
+  const sites = [{ rel: "dsh-a/lib/i.js", line: 100, shape: "deny-throw", pkg: "dsh-a" }];
+  const spans = [{ id: "p1", rel: "dsh-a/lib/i.js", line: 84 }];
+  const out = coverageOf(sites, spans, { window: 15 });
+  assert.equal(out[0].coveredBy, null);
+  assert.equal(out[0].distance, null);
+});
+
+test("coverageOf：跨文件（rel 不同）不命中", () => {
+  const sites = [{ rel: "dsh-a/lib/i.js", line: 100, shape: "deny-throw", pkg: "dsh-a" }];
+  const spans = [{ id: "p1", rel: "dsh-b/lib/i.js", line: 100 }];
+  const out = coverageOf(sites, spans, { window: 15 });
+  assert.equal(out[0].coveredBy, null);
+});
+
+test("coverageOf：同距取 id 数值小的", () => {
+  const sites = [{ rel: "dsh-a/lib/i.js", line: 100, shape: "deny-throw", pkg: "dsh-a" }];
+  const spans = [
+    { id: "5", rel: "dsh-a/lib/i.js", line: 90 },
+    { id: "2", rel: "dsh-a/lib/i.js", line: 110 },
+  ];
+  const out = coverageOf(sites, spans, { window: 15 });
+  assert.equal(out[0].coveredBy, "2");
+  assert.equal(out[0].distance, 10);
+});
+
+test("coverageOf：无 span 覆盖时为 null", () => {
+  const sites = [{ rel: "dsh-a/lib/i.js", line: 100, shape: "deny-throw", pkg: "dsh-a" }];
+  const out = coverageOf(sites, [], { window: 15 });
+  assert.equal(out[0].coveredBy, null);
+  assert.equal(out[0].distance, null);
+});
+
+test("findSiteGaps 核心：同包一条补丁只覆盖一个站点，另一个站点仍算 gap", () => {
+  const sites = [
+    { shape: "approval-call", role: "restriction", pkg: "dsh-user-approval",
+      rel: "dsh-user-approval/lib/index.js", line: 10, coveredBy: "p1", distance: 0 },
+    { shape: "approval-call", role: "restriction", pkg: "dsh-user-approval",
+      rel: "dsh-user-approval/lib/index.js", line: 40, coveredBy: null, distance: null },
+  ];
+  const res = findSiteGaps(sites, {});
+  assert.equal(res.gaps.length, 1);
+  assert.equal(res.gaps[0].line, 40);
+  assert.equal(res.ignored.length, 1);
+  assert.equal(res.ignored[0].line, 10);
+  assert.match(res.ignored[0].reason, /覆盖/);
+});
+
+test("findSiteGaps：满权守卫时 sandbox-confine/mode-literal 进 ignored，approval-call 仍进 gaps", () => {
+  const sites = [
+    { shape: "sandbox-confine", role: "restriction", pkg: "dsh-bash-sandbox",
+      rel: "dsh-bash-sandbox/lib/index.js", line: 5, coveredBy: null, distance: null },
+    { shape: "mode-literal", role: "signal", pkg: "dsh-bash-sandbox",
+      rel: "dsh-bash-sandbox/lib/index.js", line: 68, coveredBy: null, distance: null },
+    { shape: "approval-call", role: "restriction", pkg: "dsh-bash-sandbox",
+      rel: "dsh-bash-sandbox/lib/index.js", line: 90, coveredBy: null, distance: null },
+  ];
+  const guards = new Map([["dsh-bash-sandbox", { rel: "dsh-bash-sandbox/lib/index.js", line: 68, text: "guard" }]]);
+  const res = findSiteGaps(sites, { shortCircuits: guards });
+  assert.deepEqual(res.gaps.map((s) => s.shape), ["approval-call"]);
+  const ignoredShapes = res.ignored.map((s) => s.shape).sort();
+  assert.deepEqual(ignoredShapes, ["mode-literal", "sandbox-confine"]);
+  assert.ok(res.ignored.every((s) => /守卫/.test(s.reason)));
+});
+
+test("findSiteGaps：上游包已覆盖时短路上游站点进 ignored", () => {
+  const sites = [
+    { shape: "sandbox-confine", role: "restriction", pkg: "dsh-bash-sandbox",
+      rel: "dsh-bash-sandbox/lib/index.js", line: 1, coveredBy: null, distance: null },
+  ];
+  const res = findSiteGaps(sites, { upstream: { "dsh-sandbox-policy": true } });
+  assert.equal(res.gaps.length, 0);
+  assert.equal(res.ignored.length, 1);
+  assert.match(res.ignored[0].reason, /dsh-sandbox-policy/);
+});
+
+test("findSiteGaps：role 分流 target/signal → watch，restriction → gaps", () => {
+  const sites = [
+    { shape: "sandbox-policy", role: "restriction", pkg: "dsh-a",
+      rel: "dsh-a/lib/i.js", line: 1, coveredBy: null, distance: null },
+    { shape: "vocab", role: "signal", pkg: "dsh-b",
+      rel: "dsh-b/lib/i.js", line: 2, coveredBy: null, distance: null },
+    { shape: "tool-register", role: "target", pkg: "dsh-c",
+      rel: "dsh-c/lib/i.js", line: 3, coveredBy: null, distance: null },
+  ];
+  const res = findSiteGaps(sites, {});
+  assert.deepEqual(res.gaps.map((s) => s.shape), ["sandbox-policy"]);
+  assert.deepEqual(res.watch.map((s) => s.shape).sort(), ["tool-register", "vocab"]);
+});
+
+test("renderSiteReport：含「未覆盖」字样与逐包汇总行", () => {
+  const text = renderSiteReport({
+    gaps: [{ rel: "dsh-a/lib/i.js", line: 3, shape: "deny-throw", text: "throw new Error" }],
+    watch: [],
+    ignored: [],
+    summary: { total: 2, covered: 1, uncovered: 1, byPkg: [{ pkg: "dsh-a", sites: 2, covered: 1, uncovered: 1 }] },
+    limit: 5,
+  });
+  assert.match(text, /未覆盖/);
+  assert.match(text, /dsh-a\s+2 \/ 1 \/ 1/);
+  assert.match(text, /dsh-a\/lib\/i\.js:3/);
 });
