@@ -9129,6 +9129,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		   Android WebView 切后台返回时，宿主 composer 的 React 子树只要在提交阶段抛一次，
 		   整块输入框就会被卸载；把按钮挪到 body 上的 fixed 宿主 + createPortal，
 		   渲染树完全离开 composer，位置按 .standardControls 的矩形对齐。 */
+		/* 2026-11-15 按用户要求下线「回退」按钮：
+		   按钮是挂在 body 上的 fixed 宿主 + createPortal，还要给 .standardControls 预留 64px padding，
+		   属于纯 DOM 手术、维护成本高而使用率为零。后端（lib/rewind.js + /rewind 命令 + 补丁 #56/#58/#75/#77）保持不动，
+		   想恢复只把 REWIND_BUTTON_ENABLED 改回 true。 */
+		const REWIND_BUTTON_ENABLED = false;
 		const REWIND_HOST_ATTR = "data-dsh-purge-rewind-host";
 		const REWIND_RESERVE_PX = 64;
 
@@ -9355,7 +9360,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				name: "shell.overlay",
 				id: "dsh-purge-dock",
 				order: 50,
-			}, () => h(react.Fragment, null, h(WelcomeNotice), h(PurgeLauncher), h(PurgeDock), h(HeroNewSessionMount), h(TabRowPurgeMount), h(EnvAdaptSendGate), h(RewindDockMount))));
+			}, () => h(react.Fragment, null, h(WelcomeNotice), h(PurgeLauncher), h(PurgeDock), h(HeroNewSessionMount), h(TabRowPurgeMount), h(EnvAdaptSendGate), REWIND_BUTTON_ENABLED ? h(RewindDockMount) : null)));
 			try {
 				if (typeof ctx.inject === "function") {
 					ctx.inject(["sessions", "uiWorkspace", "workspaces", "conversation"], (host) => installRewindUi(host));

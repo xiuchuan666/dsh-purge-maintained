@@ -2373,5 +2373,13 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 - 追加两处（同日）：`handleRulesCommand` 的 `reset` 在 `findDshHome()` 返回 undefined 时走 `还原失败: <err>`（`lib/chat-rules-skills.js:113-114`，RED 演练：把 `return { kind:"error", ... }` 改成 `throw e` 后该例立刻红）；`lib/host.js:18-20` 的 `scheduleRestart` 转发现在有测试（把 `DSH_SURFACE` 设为 `desktop`，用 `desktop.scheduleRestart` 里 `openBrowser:false` 那条不 spawn 的分支验证分派，见 `scripts/test-host-restart.mjs`）。结果：`lib/chat-rules-skills.js` 行 228→230（**100%**）、`lib/host.js` 行 24→26/28。
 - `lib/host.js` 剩最后 2 行是 `scheduleCleanupRestart` 的转发（`lib/host.js:22-24`）：桌面适配器那条会 `copyFileSync` 一个 restart 脚本再 spawn helper，直接调用会拉起后台进程，故与文件头注释一致留作盲区。
 
+## 十五、「回退」按钮下线（2026-11-15）
+
+- 用户判定工具栏里的「回退」按钮无用。它不是宿主功能，是本插件自己的 UI：`client.js` 里 `RewindDockMount` 用 `createPortal` 把按钮挂到 `body` 上的 fixed 宿主，再按 `[class*="standardControls"]` 的矩形自己定位、还给输入框左侧预留 64px padding（`REWIND_RESERVE_PX`），是纯 DOM 手术。
+- 处置：只关挂载，不加开关菜单。`client.js:9136` 新增 `const REWIND_BUTTON_ENABLED = false;`，`client.js:9363` 的 overlay 子节点由 `h(RewindDockMount)` 改成 `REWIND_BUTTON_ENABLED ? h(RewindDockMount) : null`。恢复只需把常量改回 `true`。
+- 刻意没动的东西：`RewindDockMount` / `RewindButton` / `RewindSafe` / `RewindFallback` / `REWIND_CSS` / i18n 文案（`rewind.label` 等）/ `installRewindWatch` 全部保留——`/rewind` 命令仍可用，回退后仍靠 watch 把新会话拉起、把上一句塞回输入框；补丁 #56/#58/#75/#77 一个字没改，闸表仍是 86 条 58 gated。
+- 结构性锁：`scripts/test-rewind-button-off.mjs`（2 例）断言开关为 `false`、挂载点被它挡住、且上面那些东西都还在（防止有人「清理死代码」时把 /rewind 一起带走）。
+- 生效方式：改的是插件前端产物 `client.js`，要重新打包 tgz 并重装（`dsh plugin --profile desktop add "file:<...>.tgz"`）后重启；只重启不重装不会变。
+
 
 
