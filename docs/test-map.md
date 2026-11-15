@@ -2370,5 +2370,8 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 - `lib/skills.js` 行覆盖 697/747 → **703/747**；剩余 44 行集中在 `restoreSkillFromBackup` / `installBundleDir` 的失败回滚（需要注入 fs 故障）与 `extractArchive` 的 tar 分支，属「要么造假故障、要么依赖外部 tar」的边界，暂不追。
 - `lib/index.js` 剩 10 行（140-142 / 229-230 / 271-275）：140-142 在 `apply()` 里走不到（`installWebServer` 无条件 `ctx.inject`，测试文件第 231 行已注明）；229-230 需要 `seedPromptInjectAtBoot` 抛错但该函数按契约只返回 `action:"error"` 不抛；271-275 需要 `settleInstalledPatches` 的 promise 拒绝。三条都属「实现上不可达」，只在源码形状测试里钉住。
 - `lib/uninstall.js` 剩 18 行全是各段 `catch (e) { report.errors.push(...) }`：要覆盖必须让 `core.revertAll` / `core.revertAllShims` / `core.revertCmdFlash` 逐个抛错，而它们是直接 import 的模块导出（ESM 命名空间不可改），故保留为已知盲区。
+- 追加两处（同日）：`handleRulesCommand` 的 `reset` 在 `findDshHome()` 返回 undefined 时走 `还原失败: <err>`（`lib/chat-rules-skills.js:113-114`，RED 演练：把 `return { kind:"error", ... }` 改成 `throw e` 后该例立刻红）；`lib/host.js:18-20` 的 `scheduleRestart` 转发现在有测试（把 `DSH_SURFACE` 设为 `desktop`，用 `desktop.scheduleRestart` 里 `openBrowser:false` 那条不 spawn 的分支验证分派，见 `scripts/test-host-restart.mjs`）。结果：`lib/chat-rules-skills.js` 行 228→230（**100%**）、`lib/host.js` 行 24→26/28。
+- `lib/host.js` 剩最后 2 行是 `scheduleCleanupRestart` 的转发（`lib/host.js:22-24`）：桌面适配器那条会 `copyFileSync` 一个 restart 脚本再 spawn helper，直接调用会拉起后台进程，故与文件头注释一致留作盲区。
+
 
 

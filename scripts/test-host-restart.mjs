@@ -394,3 +394,16 @@ test("子会话判定的三条依据都认：origin / delegationDepth / parentSe
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(sink, ["ask", "ask", "ask"]);
 });
+
+test("host.scheduleRestart 真的分派到桌面面：openBrowser:false 的自检请求必须被当成跳过", () => {
+  // 这层 wrapper 少一行转发，桌面端按重启就什么都不会发生（拿到的是 web 的 scheduleRestart）。
+  // 用 openBrowser:false 走桌面适配器里唯一不 spawn 的分支，既验证分派又不会把测试进程杀掉。
+  const old = process.env.DSH_SURFACE;
+  process.env.DSH_SURFACE = "desktop";
+  try {
+    assert.deepEqual(host.scheduleRestart({}, {}, { openBrowser: false }), { restarting: false, skipped: true });
+  } finally {
+    if (old === undefined) delete process.env.DSH_SURFACE;
+    else process.env.DSH_SURFACE = old;
+  }
+});

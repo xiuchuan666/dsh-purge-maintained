@@ -652,3 +652,11 @@ test("/skills create 落盘失败时回 error，不许说已写入官方目录",
   assert.equal(r.kind, "error");
   assert.match(r.text, /安装失败/);
 });
+
+test("handleRulesCommand：reset 拿不到家目录时回 error，不许冒充已还原", async () => {
+  // reset 的 catch 只在「路径参数本身坏了」时走到（例如宿主尚未启动、findDshHome 返回 undefined）。
+  // 漏掉这条 catch 的后果是一次未捕获异常冒到聊天层，用户看到的是静默失败而不是「还原失败」。
+  const r = await handleRulesCommand("reset", { core: { findDshHome: () => undefined } });
+  assert.equal(r.kind, "error");
+  assert.match(r.text, /^还原失败: /);
+});
