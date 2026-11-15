@@ -304,7 +304,10 @@
       config:
         provider: spawn
         toolName: subagent
-        modelSelectionSettings: true
+        # 0.2.2 的 Config 字段名是 modelSelection / modelDiscovery；
+        # 旧写法 modelSelectionSettings 会被 schemastery 静默剥掉，等于从没开过。
+        modelSelection: true
+        modelDiscovery: true
         backgroundMode: continuable
         # 子智能体是角色执行者（信息收集/资产梳理/漏洞发现/漏洞利用/内网渗透），**必须是叶子节点**：
         # 靠提示词劝"不要再往下委派"是软的——模型完全可以无视。这里直接把委派工具从子会话的

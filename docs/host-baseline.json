@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-15T03:18:26.286Z",
-  "pluginVersion": "1.1.94",
+  "capturedAt": "2026-11-15T05:01:52.562Z",
+  "pluginVersion": "1.1.95",
   "host": {
     "version": "0.2.2-rc.3",
     "name": "@deepseek-ai/dsh",
@@ -717,17 +717,17 @@
     {
       "id": 45,
       "name": "OFFICIAL_DESKTOP_UPDATE_HANDOFF",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "would-apply"
+        "desktop-shell": "settled"
       }
     },
     {
       "id": 46,
       "name": "OFFICIAL_DESKTOP_UPDATE_ASCII",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "pending"
+        "desktop-shell": "settled"
       }
     },
     {
@@ -827,33 +827,33 @@
     {
       "id": 83,
       "name": "DESKTOP_HOST_CLOSE_NO_FATAL",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "would-apply"
+        "desktop-shell": "settled"
       }
     },
     {
       "id": 84,
       "name": "DESKTOP_HOST_CLOSE_CODE0_NO_FAIL",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "pending"
+        "desktop-shell": "settled"
       }
     },
     {
       "id": 92,
       "name": "DESKTOP_HOST_EXIT_TRACE",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "pending"
+        "desktop-shell": "settled"
       }
     },
     {
       "id": 93,
       "name": "DESKTOP_MAIN_EXIT_TRACE",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "would-apply"
+        "desktop-shell": "settled"
       }
     },
     {
@@ -1012,9 +1012,9 @@
     {
       "id": 82,
       "name": "DESKTOP_SHELL_PROFILE_FALLBACK",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "desktop-shell": "would-apply"
+        "desktop-shell": "settled"
       }
     },
     {
@@ -1065,12 +1065,28 @@
       "files": {
         "skill-badge": "settled"
       }
+    },
+    {
+      "id": 91,
+      "name": "SUBAGENT_ROUTE_POLICY_BYPASS",
+      "status": "would-apply",
+      "files": {
+        "tool-subagent": "would-apply"
+      }
+    },
+    {
+      "id": 94,
+      "name": "SUBAGENT_MODEL_DISCOVERY_BYPASS",
+      "status": "would-apply",
+      "files": {
+        "tool-subagent": "would-apply"
+      }
     }
   ],
   "summary": {
-    "patches": 86,
-    "settled": 72,
-    "wouldApply": 7,
+    "patches": 88,
+    "settled": 79,
+    "wouldApply": 2,
     "drifted": 0,
     "noFile": 7,
     "na": 0

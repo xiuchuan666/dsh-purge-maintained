@@ -104,16 +104,18 @@ test('core 的公开导出名一字不差（测试用例放开的私有判定除
   assert.deepEqual([...EXPORT_EXTRA].filter((k) => !now.includes(k)), [], 'stale EXPORT_EXTRA entry')
 })
 
-test('补丁总数是 86', () => {
-  assert.equal(after.ALL_PATCHES.length, 86)
+// 拆分快照是 86 条；本期按普查裁决追加 #91（子代理路由放开）与 #94（模型发现放开）两条。
+test('补丁数 = 拆分快照 86 + 本期追加 2', () => {
+  assert.equal(after.ALL_PATCHES.length, before.ALL_PATCHES.length + 2)
 })
 
-test('每条补丁的 id 与顺序与拆分前一致', () => {
+test('拆分前的每条补丁 id 与顺序不变（新条目只能追加在末尾）', () => {
   assert.deepEqual(
-    after.ALL_PATCHES.map(({ id }) => id),
+    after.ALL_PATCHES.slice(0, before.ALL_PATCHES.length).map(({ id }) => id),
     before.ALL_PATCHES.map(({ id }) => id),
     'application order',
   )
+  assert.deepEqual(after.ALL_PATCHES.slice(before.ALL_PATCHES.length).map(({ id }) => id), [91, 94], 'appended ids')
 })
 
 test('除 replacements 外的每个字段逐字段相等（含 RegExp flags 与函数型 replace）', () => {
@@ -122,7 +124,7 @@ test('除 replacements 外的每个字段逐字段相等（含 RegExp flags 与�
     delete copy.replacements
     return copy
   }
-  for (let i = 0; i < after.ALL_PATCHES.length; i++) {
+  for (let i = 0; i < before.ALL_PATCHES.length; i++) {
     const now = after.ALL_PATCHES[i]
     const was = before.ALL_PATCHES[i]
     assert.ok(
@@ -133,7 +135,7 @@ test('除 replacements 外的每个字段逐字段相等（含 RegExp flags 与�
 })
 
 test('既有 replacement 一字不改，只在末尾追加', () => {
-  for (let i = 0; i < after.ALL_PATCHES.length; i++) {
+  for (let i = 0; i < before.ALL_PATCHES.length; i++) {
     const now = after.ALL_PATCHES[i]
     const was = before.ALL_PATCHES[i]
     const nowReps = replacementsOf(now)
@@ -147,7 +149,7 @@ test('既有 replacement 一字不改，只在末尾追加', () => {
 
 test('追加条数逐条等于登记值（多一条少一条都要在这里说清楚）', () => {
   const extra = new Map()
-  for (let i = 0; i < after.ALL_PATCHES.length; i++) {
+  for (let i = 0; i < before.ALL_PATCHES.length; i++) {
     const now = after.ALL_PATCHES[i]
     const was = before.ALL_PATCHES[i]
     const delta = replacementsOf(now).length - replacementsOf(was).length

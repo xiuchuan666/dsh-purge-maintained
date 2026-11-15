@@ -1,3 +1,18 @@
+# 1.1.96
+
+## 按普查裁决新增两条补丁
+
+- **#91 `SUBAGENT_ROUTE_POLICY_BYPASS`**：`dsh-tool-subagent/lib/index.js:88` 的 `assertAllowedModelSelection` 抛错改为 `return;`。显式指定子代理 provider/model 时不再受 Session 记录的 model-selection policy 限制；未注册的路由仍由 `preflightChildLlmRoute` → `llm.resolveCallConfig` 拒绝。
+- **#94 `SUBAGENT_MODEL_DISCOVERY_BYPASS`**：同文件 `:197` 的策略过滤 throw 改为 `void 0`，`list_subagent_models` 不再只能看见策略内的 model；未知 model 仍由 `resolveModelInfo` 报错。与 #91 配套。
+- **预设键名修复**：`presets/redteam/agent.cordis.yml` 的 `modelSelectionSettings: true`（宿主 Config 无此字段，schemastery 静默剥掉）改为 `modelSelection: true` + `modelDiscovery: true`。不改这一处，上面两条补丁永远不会被走到。
+- 新增 `scripts/test-subagent-route-patch.mjs`（3 例）：在原件上真跑两条 needle，断言唯一、标记落地、且 `:189` 的 provider 校验与 `resolveModelInfo` 未被误伤；同时锁死预设必须用真实字段名。
+- 闸表 86 → **88 行**（60 gated），基线重记 88 条（settled 79 / would-apply 2 / no-file 7），影响矩阵重新生成（行为 18 / 闸表 88 / 双证 18）。
+
+## 验证
+
+- `npm run check` 全绿：syntax 287 / metadata patches=88 / eol 361 / client PASS / gates 88 行 60 gated / node:test 3887 例。
+- 真机 `host:status`：91、94 从 would-apply 变 **settled**，`dsh-tool-subagent/lib/index.js` 28458 → 28169 字节。
+
 # 1.1.95
 
 ## 维护性更新（第二轮）

@@ -276,7 +276,7 @@
       "patch": 47,
       "name": "ANTHROPIC_OAUTH_NO_CLAUDE_IDENTITY",
       "rel": "../@earendil-works/pi-ai/dist/api/anthropic-messages.js",
-      "line": 1114,
+      "line": 929,
       "needle": "// For OAuth tokens, we MUST include Claude Code identity"
     },
     {
@@ -290,7 +290,7 @@
       "patch": 49,
       "name": "ANTHROPIC_OAUTH_CLI_NEUTRAL",
       "rel": "../@earendil-works/pi-ai/dist/api/anthropic-messages.js",
-      "line": 74,
+      "line": 68,
       "needle": "const toClaudeCodeName = (name) => ccToolLookup.get(name.toLowerCase()) ?? name;"
     },
     {
@@ -539,6 +539,13 @@
       "needle": "Add the official “powered by dsh” badge to documents, pull requests, merge requests, and other content produced with DeepSeek Harness."
     },
     {
+      "patch": 91,
+      "name": "SUBAGENT_ROUTE_POLICY_BYPASS",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 88,
+      "needle": "throw new Error(`child LLM route \"${provider}/${model}\" is not allowed for this Session` + (policy === void 0 ? \"; without a recorded model-selection policy, explicit selection is limited to the parent route\" : \"\"));"
+    },
+    {
       "patch": 92,
       "name": "DESKTOP_HOST_EXIT_TRACE",
       "reason": "no-target"
@@ -547,11 +554,18 @@
       "patch": 93,
       "name": "DESKTOP_MAIN_EXIT_TRACE",
       "reason": "no-target"
+    },
+    {
+      "patch": 94,
+      "name": "SUBAGENT_MODEL_DISCOVERY_BYPASS",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 197,
+      "needle": "if (!allowedRoutes.some((route) => route.model === request.model)) throw new Error(`child LLM route \"${provider.id}/${request.model}\" is not allowed for this Session`);"
     }
   ],
-  "capturedAt": "2026-11-15T02:50:44.385Z",
+  "capturedAt": "2026-11-15T05:01:46.612Z",
   "tree": {
-    "dir": "D:\\dsh-purge-maintained\\.tmp-preview\\tree\\node_modules\\@deepseek-ai",
+    "dir": "D:\\dsh-purge-maintained\\.tmp-rehearse\\asar-pristine\\dsh\\node_modules\\@deepseek-ai",
     "version": "0.2.2-rc.3"
   }
 }

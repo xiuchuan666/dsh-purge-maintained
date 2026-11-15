@@ -2397,5 +2397,14 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 **下一步三选一**：(a) 修预设键名 + 把 `modelSelection` 默认值改 true，再打 #21+#23（真能按模型切子代理路由）；(b) #24 改成 basic-auth 抓取（加功能）；(c) #17+#19 防御性补丁（当前不可达）。其余 29 条明确写进「不打」名单，避免下次升级重复讨论。
 
+**已按 (a) 实施（2026-11-15，1.1.96）**：
+
+- 预设改 `modelSelection: true` + `modelDiscovery: true`（`presets/redteam/agent.cordis.yml`，原键名 `modelSelectionSettings` 被 schemastery 静默剥掉）。
+- 新增 **#91 `SUBAGENT_ROUTE_POLICY_BYPASS`**（`dsh-tool-subagent/lib/index.js:88` 抛错 → `return;`）与 **#94 `SUBAGENT_MODEL_DISCOVERY_BYPASS`**（`:197` 策略过滤 → `void 0`）。两处 needle 在原件里各唯一一次。
+- 闸表重生成 88 行（60 gated）；`docs/host-baseline.json` 重记 88 条（settled 79 / would-apply 2 / no-file 7）；`docs/patch-impact.md` 重生成（行为 18 / 闸表 88 / 双证 18）。
+- 新增 `scripts/test-subagent-route-patch.mjs`（3 例）：原件上真跑 needle，断言唯一性、标记落地、`:189` provider 校验与 `resolveModelInfo` 未被误伤，并锁死预设字段名。
+- 真机验证：`host:status` 里 91/94 由 would-apply → **settled**，`dsh-tool-subagent` 那个文件 28458 → 28169 字节；`patch-gates --verify` 60/60 present、missing 0。
+- 其余 30 条按上表进「不打」名单：#17/#19（不可达）、#24（加功能，另议）、#31（需联合补丁）保留为待办，不阻塞发布。
+
 
 

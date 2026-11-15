@@ -258,7 +258,7 @@ test('一条撞名不影响其余三条（逐条 try/catch 的意义）', (t) =>
 /** 假 core：三个工具用到的每个函数都可单独改写。 */
 function fakeCore(overrides = {}) {
   return {
-    ALL_PATCHES: new Array(86).fill({}),
+    ALL_PATCHES: new Array(88).fill({}),
     gatherState: async () => ({ ai_base: '/host/ai', dsh_home: '/home' }),
     missingAiBaseMessage: () => '找不到宿主',
     applyRuntimeEnv: () => {},
@@ -307,8 +307,8 @@ test('每个工具的 output.schema 只回一个 text 字符串，render 也照�
 
 test('description 里带补丁数，改注册表时描述会跟着变', () => {
   const specs = toolsOf()
-  assert.match(specs[0].description, /86 patch/)
-  assert.match(specs[1].description, /86 patch/)
+  assert.match(specs[0].description, /88 patch/)
+  assert.match(specs[1].description, /88 patch/)
 })
 
 test('purge_status 把 gatherState 的结果交给 renderStatus', async () => {
