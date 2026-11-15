@@ -2251,6 +2251,20 @@ zip 解析各抄一份打包器，改一处漏一处；现在 `test-http-routes.
      `@deepseek-ai/dsh-tools`）；CI 上也只在宿主包被裁掉的发行物里才可达。`scripts/test-define-tool-resolve.mjs`
      已经把「返回函数」和「候选全坏时抛 cannot resolve」两侧都钉住了，这 1 行按盲区记账即可。
 
+## 反查：改一个文件，谁会响
+
+```bash
+npm run impact -- lib/skills.js          # 单文件
+npm run impact -- lib/skills.js lib/uninstall.js
+npm run impact -- --all                  # 全量清单
+```
+
+输出四段：① **直接 import 它的测试**（改了必跑）② **经共享 lib 间接覆盖的测试**（例如 `scripts/behavior-lib.mjs` 中转）
+③ **能力地图里相关的记账行**（来自本文件表格）④ **lcov 里当前未覆盖的行**（需先跑 `npm run test:full`）。
+
+用途：宿主升级后先在目标文件上跑一遍，就知道「这处行为归哪几个测试守、哪些分支本来就没人守」，
+不用靠 grep 猜。它只读，不改任何状态。
+
 ## 维护约定
 
 - 补一行时，`守卫` 列必须写**能跑的东西**（脚本名或 npm 命令），不要写「已测试」。
