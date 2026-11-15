@@ -2348,3 +2348,27 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 **已知边界**：静态扫描看不到运行时拼出来的文案（模板字符串里的动态 message 只能看到前缀）；单行超 2000 字符的压缩文件整体跳过（无法定位）；`WINDOW=15` 是折中值，补丁落在被改函数上方 15 行以外时会漏判为未覆盖（上面第 2 类就是它的产物）。
 
+## 十三、站点级限制面（`host:choke --sites`，2026-11-15 新增）
+
+> 包级覆盖只能回答「这个包有没有补丁」。`dsh-sandbox` 有 17 个决策点、被一条补丁命中 5 个，
+> 包级会显示「有补丁」，站点级才看得出「还剩 12 个决策点裸着」。这是升级动机的直接量化。
+
+| 能力 | 守卫 | 现状（0.2.2-rc.3，已打补丁的宿主树） |
+| --- | --- | --- |
+| 把每个补丁的命中点与被拦的每一处（站点）对齐 | `scripts/chokepoints-lib.mjs`：`sitesOf` / `coverageOf` / `findSiteGaps` / `renderSiteReport` | 站点 237 / 已覆盖 25 / 未覆盖 212 / 真缺口 24 / 路标 151 |
+| 覆盖锚点同时吃「原始 pattern」和「marker」 | `buildSpans`（`scan-chokepoints.mjs`） | pattern 398 → 命中 6；marker 166 → 命中 112；spans 139。**在打补丁的树上必须用 marker**，只用原始串会得到 covered=0 的假象 |
+| 站点级基线（line-agnostic） | `--write-baseline` → `docs/choke-baseline.json` 的 `siteCensus` | 129 组 `(shape,rel)` 计数 |
+| 不加 `--sites` 时逐字节不变 | 与 `git show HEAD:scripts/scan-chokepoints.mjs` 各跑 `--no-dump` 对比 | `DIFF_IDENTICAL` |
+
+**为什么「真缺口 24」比「未覆盖 212」可信**：212 里绝大多数是 `mode==="danger-full-access"` 时根本执行不到的守卫（路由到 `ignored`，reason 写明守卫 `rel:line`）、以及上游自己已经拦掉的（`upstream`）。`gaps` 只剩「这块决策点没人管、也没有满权短路」。rc.3 前五：`dsh-sandbox 4` / `dsh-permission-presets 3` / `dsh-fs-sandbox 2` / `dsh-sandbox-local 2` / `dsh-sandbox-policy 2`。
+
+**注意**：站点级扫描的「已覆盖」只证明**有补丁锚点落在这里**，不证明那条补丁在行为上生效——行为级证据仍看 `docs/patch-impact.md`（18/86 有双证）。两套数字不要互相替代。
+
+## 十四、小文件覆盖率补尾（2026-11-15）
+
+- `scripts/test-skills-parse-edges.mjs`（6 例）：YAML 行内值的兜底（双引号里的非法 JSON 转义退回 slice）、带引号的布尔开关、坏 zip 的报错包装、`findSkillRoots` 收到文件路径不抛、`importFromPath` 的非压缩包 / .zip 两条出口。已做 RED 演练：把 `return value.slice(1, -1)` 改成 `throw` 后第一条立刻变红。
+- `lib/skills.js` 行覆盖 697/747 → **703/747**；剩余 44 行集中在 `restoreSkillFromBackup` / `installBundleDir` 的失败回滚（需要注入 fs 故障）与 `extractArchive` 的 tar 分支，属「要么造假故障、要么依赖外部 tar」的边界，暂不追。
+- `lib/index.js` 剩 10 行（140-142 / 229-230 / 271-275）：140-142 在 `apply()` 里走不到（`installWebServer` 无条件 `ctx.inject`，测试文件第 231 行已注明）；229-230 需要 `seedPromptInjectAtBoot` 抛错但该函数按契约只返回 `action:"error"` 不抛；271-275 需要 `settleInstalledPatches` 的 promise 拒绝。三条都属「实现上不可达」，只在源码形状测试里钉住。
+- `lib/uninstall.js` 剩 18 行全是各段 `catch (e) { report.errors.push(...) }`：要覆盖必须让 `core.revertAll` / `core.revertAllShims` / `core.revertCmdFlash` 逐个抛错，而它们是直接 import 的模块导出（ESM 命名空间不可改），故保留为已知盲区。
+
+
