@@ -2421,6 +2421,22 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 **已知边界**：几何是运行时测量，静态测试只能锁「按输入区算」这条逻辑，真实像素位置要在宿主窗口里看。改动要生效得让前端重新加载（桌面端重开窗口或应用内重启）。
 
+## 十五之二、浮标收成圆点（2026-11-16 用户反馈「悬浮窗有点碍事」）
+
+**症状**：位置虽然挪到了输入区上方，但常驻一颗 36px 胶囊，始终占着视线；用户只在点「应用」时才需要它。
+
+**修法**（`client.js`）：
+
+1. 默认态收成 26px 宽的圆点：`max-width:26px; padding:0; justify-content:center; opacity:.42`，内部只显示 `◆`（`.dshp-launch-dot`），文字 label `display:none`。
+2. `[data-hover="1"]` / `[data-pin="1"]` 展开：`max-width:260px; padding:0 14px; justify-content:flex-start; opacity:1`，label 显示、圆点隐藏；`max-width` 过渡 190ms，不是瞬移。
+3. hover 离开 900ms 后收回（`hoverTimer` + `setTimeout`），`focus/blur` 同样展开/收回，键盘可达。
+4. 面板头部新增「钉住浮标 / 取消钉住」按钮：`writeLaunchPin()` 写 `localStorage["dshp.launchPin"]` 并派发 `dshp:launch-pin` 自定义事件；`PurgeLauncher` 与 `PurgeDock` 都订阅（外加 `storage` 事件做多窗口同步）。钉住=常驻展开——只想随时点「应用」的人钉住，其余人保留圆点。
+5. 关键坑：`.dshp-launch` 后置规则里的 `min-width:max-content!important` 会把收起态撑回原宽度，已改成 `min-width:0!important;white-space:nowrap!important`。
+
+**结构锁**：`scripts/test-launch-pill-placement.mjs` 从 3 例扩到 6 例，新增三条：默认收成圆点的 CSS 数值、钉住状态持久化 + 事件同步、hover 900ms 收回且圆点/文字互斥显示；并锁死 `.dshp-launch` 自身 `min-width:0`（hero-chip 的 `max-content` 是另一回事，不误锁）。RED 演练：把 `max-width:26px` 改回 `none`，第 4 例立刻红（pass 5 / fail 1），恢复后 6/6。
+
+**使用**：面板头部「钉住浮标」→ 常驻；再点「取消钉住」→ 回到圆点。选择存在 localStorage，重开窗口仍然生效。
+
 
 
 

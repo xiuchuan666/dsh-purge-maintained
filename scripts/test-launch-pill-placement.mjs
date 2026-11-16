@@ -33,3 +33,29 @@ test("浮标：计算时排除宿主浮标自身，入口与 testid 不许丢", 
 	assert.match(src, /function PurgeLauncher\(\)/);
 	assert.match(src, /"data-testid": "dsh-purge-launch"/);
 });
+
+/* 2026-11-16 用户反馈「悬浮窗有点碍事，只有点应用时才有用」：默认收成一个圆点，hover 或钉住才展开。 */
+test("浮标：默认收成圆点，hover / 钉住才展开成完整胶囊", () => {
+	assert.match(src, /\.dshp-launch\{position:fixed;right:16px;bottom:var\(--dshp-launch-bottom,132px\)[^}]*max-width:26px/);
+	assert.match(src, /\.dshp-launch\[data-hover="1"\],\.dshp-launch\[data-pin="1"\]\{max-width:260px/);
+	assert.match(src, /\.dshp-launch \.dshp-launch-label\{display:none/);
+	assert.match(src, /\[data-hover="1"\] \.dshp-launch-label,[^{]*\[data-pin="1"\] \.dshp-launch-label\{display:inline\}/);
+	/* 只锁 .dshp-launch 自己那条；hero-chip 的 min-width:max-content 是另一回事。 */
+	assert.match(src, /\.dshp-launch\{font-size:13px!important;line-height:1!important;font-weight:600!important;min-width:0!important/);
+});
+
+test("浮标：钉住状态持久化，并在面板与浮标之间同步", () => {
+	assert.match(src, /const LAUNCH_PIN_KEY = "dshp\.launchPin"/);
+	assert.match(src, /localStorage\.setItem\(LAUNCH_PIN_KEY/);
+	assert.match(src, /new CustomEvent\("dshp:launch-pin"/);
+	assert.match(src, /addEventListener\("dshp:launch-pin"/);
+	assert.match(src, /useState\(readLaunchPin\)/);
+	assert.match(src, /t\("dock\.pinOn"\)/);
+});
+
+test("浮标：hover 离开后定时收回，圆点与文字互斥显示", () => {
+	assert.match(src, /hoverTimer\.current = setTimeout\(\(\) => \{ hoverTimer\.current = 0; setHover\(false\); \}, 900\)/);
+	assert.match(src, /onMouseLeave: onLeave/);
+	assert.match(src, /className: "dshp-launch-dot"/);
+	assert.match(src, /className: "dshp-launch-label"/);
+});

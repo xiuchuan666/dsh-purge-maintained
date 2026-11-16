@@ -135,6 +135,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"dock.redteam": "红队模式",
 			"dock.full": "全面浏览",
 			"dock.close": "收起",
+			"dock.pinOn": "钉住浮标",
+			"dock.pinOff": "取消钉住",
 			"dock.unauthorized": "未授权",
 			"welcome.title": "用户须知",
 			"welcome.lead": "首次安装本插件时请阅读以下说明。确认后本窗不再弹出。",
@@ -496,6 +498,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"dock.redteam": "Red team",
 			"dock.full": "Full view",
 			"dock.close": "Collapse",
+			"dock.pinOn": "Pin pill",
+			"dock.pinOff": "Unpin pill",
 			"dock.unauthorized": "Unauthorized",
 			"welcome.title": "User notice",
 			"welcome.lead": "Please read this on first install. After you confirm, it will not appear again.",
@@ -1009,9 +1013,14 @@ body[data-ds-dark-theme] .dshp-restart-card .dshp-btn-primary,body[data-ds-dark-
 
 .dshp-dock{position:fixed;top:12px;right:12px;z-index:10050;display:flex;flex-direction:column;width:var(--dshp-dock-w,620px);height:var(--dshp-dock-h,72vh);min-width:380px;min-height:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,var(--dshp-paper,#fffcf7)) 52%,transparent);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 65%,transparent);border-radius:12px;box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent),0 0 0 1px color-mix(in srgb,#fff 6%,transparent);pointer-events:auto;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));overflow:visible}
 .dshp-dock[data-open="0"]{display:none}
-.dshp-launch{position:fixed;right:16px;bottom:var(--dshp-launch-bottom,132px);z-index:10040;appearance:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 55%,transparent);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fffcf7) 46%,transparent);color:var(--dsw-alias-label-primary,#16140f);cursor:pointer;font:13px/1 inherit;box-shadow:0 8px 22px color-mix(in srgb,#000 28%,transparent);pointer-events:auto;opacity:.78;transition:opacity 160ms ease}
+.dshp-launch{position:fixed;right:16px;bottom:var(--dshp-launch-bottom,132px);z-index:10040;appearance:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0;overflow:hidden;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 55%,transparent);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fffcf7) 46%,transparent);color:var(--dsw-alias-label-primary,#16140f);cursor:pointer;font:13px/1 inherit;box-shadow:0 8px 22px color-mix(in srgb,#000 28%,transparent);pointer-events:auto;opacity:.42;max-width:26px;justify-content:center;transition:opacity 160ms ease,max-width 190ms ease,padding 190ms ease}
 .dshp-launch:hover{border-color:var(--dsw-alias-brand-primary,#6dbf8c);background:color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 18%,transparent)}
 .dshp-launch[data-open="1"],.dshp-launch[data-hide="1"]{display:none}
+.dshp-launch[data-hover="1"],.dshp-launch[data-pin="1"]{max-width:260px;padding:0 14px;justify-content:flex-start;opacity:1}
+.dshp-launch .dshp-launch-dot{font-size:12px;line-height:1;letter-spacing:0}
+.dshp-launch .dshp-launch-label{display:none;white-space:nowrap}
+.dshp-launch[data-hover="1"] .dshp-launch-dot,.dshp-launch[data-pin="1"] .dshp-launch-dot{display:none}
+.dshp-launch[data-hover="1"] .dshp-launch-label,.dshp-launch[data-pin="1"] .dshp-launch-label{display:inline}
 .dshp-dock-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 55%,transparent);background:transparent;cursor:grab;user-select:none;touch-action:none;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));border-radius:12px 12px 0 0}
 .dshp-dock-head:active{cursor:grabbing}
 .dshp-dock-head b{font-size:14px;font-weight:600;color:inherit;text-shadow:0 1px 0 color-mix(in srgb,#000 18%,transparent)}
@@ -1117,7 +1126,7 @@ body[data-ds-dark-theme] .dshp-hero-chip-btn.on,.dshp-dock[data-theme="dusk"] .d
 .dshp-tab-btn.on{color:#2f6b4f!important;-webkit-text-fill-color:#2f6b4f!important}
 body[data-ds-dark-theme] .dshp-tab-btn{color:#c9c3b8!important;-webkit-text-fill-color:#c9c3b8!important}
 body[data-ds-dark-theme] .dshp-tab-btn.on{color:#6dbf8c!important;-webkit-text-fill-color:#6dbf8c!important}
-.dshp-launch{font-size:13px!important;line-height:1!important;font-weight:600!important;min-width:max-content!important}
+.dshp-launch{font-size:13px!important;line-height:1!important;font-weight:600!important;min-width:0!important;white-space:nowrap!important}
 .dshp-btn{font-size:16px!important;line-height:24px!important;font-weight:600!important}
 .dshp-btn-primary{color:#fff!important;-webkit-text-fill-color:#fff!important}
 .dshp-btn-tiny{font-size:14px!important;line-height:20px!important}
@@ -8722,7 +8731,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			const t = useT();
 			const st = useDock();
 			const [geom, setGeom] = useState(() => loadDockGeom());
-			const [dockTheme, setDockTheme] = useState(detectHostTheme);
+			const [dockTheme, setDockTheme] = useState(detectHostTheme);const [pinned, setPinned] = useState(readLaunchPin);
 			useEffect(() => {
 				const sync = () => setDockTheme(detectHostTheme());
 				sync();
@@ -8868,6 +8877,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			},
 				h("div", { className: "dshp-dock-head", onMouseDown: startDrag, title: "Drag to move the panel" },
 					h("b", null, "dsh-purge"),
+				h("button", { type: "button", title: pinned ? t("dock.pinOff") : t("dock.pinOn"), onClick: () => { const next = !pinned; writeLaunchPin(next); setPinned(next); } }, pinned ? t("dock.pinOff") : t("dock.pinOn")),
 					h("span", { style: { flex: 1 } }),
 					st.tab === "drill" && readDrillAuth()
 						? h("button", { type: "button", onClick: () => requestDrill("full") }, t("dock.full"))
@@ -8989,10 +8999,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			return best;
 		}
 
-		function PurgeLauncher() {
+		/** 浮标默认收成一个小圆点，鼠标靠近才展开；钉住（面板头部按钮）则常驻展开。 */
+const LAUNCH_PIN_KEY = "dshp.launchPin";
+function readLaunchPin() {
+	try { return window.localStorage.getItem(LAUNCH_PIN_KEY) === "1"; } catch (e) { return false; }
+}
+function writeLaunchPin(on) {
+	try { window.localStorage.setItem(LAUNCH_PIN_KEY, on ? "1" : "0"); } catch (e) { /* ignore */ }
+	try { window.dispatchEvent(new CustomEvent("dshp:launch-pin", { detail: on ? "1" : "0" })); } catch (e) { /* ignore */ }
+}
+
+function PurgeLauncher() {
 			const t = useT();
 			const st = useDock();
-			const [hide, setHide] = useState(hasInlinePurgeEntry);
+			const [hide, setHide] = useState(hasInlinePurgeEntry);const [hover, setHover] = useState(false);const [pin, setPin] = useState(readLaunchPin);
 			useEffect(() => {
 				/* 浮标位置 = 输入区顶边 - 12px；输入区不存在时退回 72px（避开底部工具条）。 */
 				if (typeof document === "undefined") return undefined;
@@ -9032,16 +9052,36 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					clearInterval(iv);
 				};
 			}, []);
+			const hoverTimer = useRef(0);
+			const onEnter = () => {
+				if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = 0; }
+				setHover(true);
+			};
+			const onLeave = () => {
+				if (hoverTimer.current) clearTimeout(hoverTimer.current);
+				hoverTimer.current = setTimeout(() => { hoverTimer.current = 0; setHover(false); }, 900);
+			};
+			useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
+			useEffect(() => {
+				const onPin = (e) => setPin(!!(e && e.detail === "1"));
+				const onStore = (e) => { if (!e || e.key === LAUNCH_PIN_KEY) setPin(readLaunchPin()); };
+				window.addEventListener("dshp:launch-pin", onPin);
+				window.addEventListener("storage", onStore);
+				return () => {
+					window.removeEventListener("dshp:launch-pin", onPin);
+					window.removeEventListener("storage", onStore);
+				};
+			}, []);
 			if (st.open || hide) return null;
 			return h("button", {
 				type: "button",
 				className: "dshp-launch",
 				"data-open": "0",
 				"data-hide": "0",
-				"data-testid": "dsh-purge-launch",
+				"data-testid": "dsh-purge-launch","data-hover": hover || pin ? "1" : "0","data-pin": pin ? "1" : "0",onMouseEnter: onEnter,onMouseLeave: onLeave,onFocus: onEnter,onBlur: onLeave,
 				title: t("dock.newSession"),
 				onClick: () => toggleDock(),
-			}, t("dock.newSession"));
+			}, h("span", { className: "dshp-launch-dot", "aria-hidden": "true" }, "◆"), h("span", { className: "dshp-launch-label" }, t("dock.newSession")));
 		}
 
 		/** 首页：模式旁挂「dsh-purge」→ 打开插件。红队模式走模式下拉（registry 声明）。 */
