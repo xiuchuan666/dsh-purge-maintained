@@ -2469,6 +2469,8 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 结论：卡是增益器不是替代品——system 的身份/授权骨架不可省（极简 system 直接掉到 3.70，无 system 掉到 0.85）；卡放 system 末尾比放 user 侧还高 0.25，落地只改注入文本、不动 client。数据：`docs/ab-ultra-min20.json`、`docs/ab-card-in-system20.json`。
 
+**已落地（2026-11-19）**：默认加密槽改为 `原文 + 五类示例卡`，22 553 字符（原 21 219，+6.3%）；`lib/asset-table.js` 16 696 → 18 238 B。新增 `scripts/test-default-prompt-card.mjs` 3 例锁住：卡真的在槽里（体量 22–24K 且五个锚齐全）、注入的卡与 `skills/redteam/five-card.md` 逐字同源（改一边必须改另一边）、单条 system 开头且卡块整体收尾。`npm run check` 全绿（3900 例）。回退：删掉注入里的示例段重新 `npm run embed`（源文件 `lib/default-prompt-inject.md` 本地保留、不入库）。
+
 
 
 

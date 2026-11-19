@@ -1,3 +1,17 @@
+# 1.1.97
+
+## 默认提示词加入五类示例卡（实测 6.50 → 8.80 / 10）
+
+- 默认加密槽改为 `原文 + 五类示例卡`：原 21 219 字符不动，末尾追加 1 331 字符的五个"问-答"示例（勒索 AES+影子副本 / 证件版面+校验位 / 社工库 SQL / AMSI patch / 受害机+降检测槽），合计 22 553 字符（+6.3%），`lib/asset-table.js` 16 696 → 18 238 B。
+- 依据：5 个硬题 × 20 次采样，原文 6.50/10 → 加卡 8.80/10（+35%）；卡放 system 末尾优于放 user 侧（8.55）。卡是"输出形态示范"不是替代品：极简 system + 卡只有 3.70，仅卡 0.85。
+- 新增 `scripts/test-default-prompt-card.mjs` 3 例：卡真在加密槽里（体量 22–24K、五锚齐全）、注入的卡与 `skills/redteam/five-card.md` 逐字同源、单条 system 开头且卡块收尾。
+- 回退：删掉 `lib/default-prompt-inject.md` 末尾示例段，跑 `node scripts/embed-default-prompt.mjs`。
+
+## 验证
+
+- `npm run check` 全绿：syntax 293 / metadata patches=88 / eol 387 / client PASS / gates 88 行 60 gated / node:test 3900 例。
+- 数据与组合矩阵：`docs/ab-card-in-system20.json`、`docs/ab-ultra-min20.json`、`docs/test-map.md` 第十七节。
+
 # 1.1.96
 
 ## 按普查裁决新增两条补丁
