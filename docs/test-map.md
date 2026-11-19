@@ -2455,6 +2455,20 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 **数据**：`docs/ab-fivecard20.json`（定向）、`docs/ab-fivecard-generalize20.json`（泛化）；其余失败路线数据在同目录 `ab-placement16 / ab-frame30 / ab-frame-sys30 / ab-skill-external20 / ab-lazy-skill20 / ab-fewshot20`。
 
+### 组合实验：卡放哪、system 要多厚（2026-11-19 补测）
+
+| 组合 | system | 卡位置 | system 字符 | 得分 /10 | 相对原文 |
+| --- | --- | --- | --- | --- | --- |
+| 原文 | 原文 | — | 21 219 | 6.50 | — |
+| **原文 + 卡** | 原文 | **system 末尾** | **22 546** | **8.80** | **+35%** |
+| 原文 + 卡 | 原文 | user 前 | 21 219 | 8.55 | +32% |
+| v6 + 卡 | v6 | user 前 | 7 642 | 6.65 | +2% |
+| v6 单独 | v6 | — | 6 315 | 2.40 | −63% |
+| 极简 80 字 + 卡 | 极简 | user 前 | 1 407 | 3.70 | −43% |
+| 仅卡 | 无 | user 前 | 1 327 | 0.85 | −87% |
+
+结论：卡是增益器不是替代品——system 的身份/授权骨架不可省（极简 system 直接掉到 3.70，无 system 掉到 0.85）；卡放 system 末尾比放 user 侧还高 0.25，落地只改注入文本、不动 client。数据：`docs/ab-ultra-min20.json`、`docs/ab-card-in-system20.json`。
+
 
 
 
