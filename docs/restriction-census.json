@@ -1,26 +1,26 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-15T03:42:01.085Z",
-  "aiBase": "D:/dsh-purge-maintained/.tmp-rehearse/asar-pristine/dsh/node_modules/@deepseek-ai",
+  "generatedAt": "2026-11-19T13:39:54.291Z",
+  "aiBase": "D:/dsh-purge-maintained/.tmp-rehearse/asar-rc5/dsh/node_modules/@deepseek-ai",
   "window": 15,
   "spans": {
-    "patches": 86,
-    "withFile": 72,
-    "needles": 406,
-    "located": 154,
+    "patches": 88,
+    "withFile": 74,
+    "needles": 408,
+    "located": 156,
     "outside": 4,
     "unreadable": 0
   },
   "summary": {
     "total": 134,
-    "uncovered": 116,
-    "uncoveredStrict": 87,
+    "uncovered": 113,
+    "uncoveredStrict": 84,
     "uncoveredSignal": 29,
     "byPattern": [
       {
         "pattern": "deny-copy-en",
         "total": 95,
-        "uncovered": 89
+        "uncovered": 86
       },
       {
         "pattern": "deny-error-class",
@@ -102,7 +102,7 @@
       {
         "pkg": "dsh-tool-subagent",
         "total": 3,
-        "uncovered": 3
+        "uncovered": 0
       },
       {
         "pkg": "dsh-api-workspace-files",
@@ -209,8 +209,8 @@
       {
         "scope": "agent",
         "total": 80,
-        "uncovered": 62,
-        "candidates": 33
+        "uncovered": 59,
+        "candidates": 30
       },
       {
         "scope": "vendor",
@@ -231,7 +231,7 @@
         "candidates": 1
       }
     ],
-    "candidates": 33,
+    "candidates": 30,
     "shortCircuited": 29
   },
   "sites": [
@@ -923,27 +923,6 @@
     },
     {
       "pattern": "deny-copy-en",
-      "rel": "dsh-tool-subagent/lib/index.js",
-      "line": 88,
-      "text": "throw new Error(`child LLM route \"${provider}/${model}\" is not allowed for this Session` + (policy === void 0 ? \"; without a recorded model-selection policy, explicit selection is limited to the paren",
-      "coveredBy": null
-    },
-    {
-      "pattern": "deny-copy-en",
-      "rel": "dsh-tool-subagent/lib/index.js",
-      "line": 189,
-      "text": "if (firstRoute === void 0) throw new Error(`LLM provider \"${request.provider}\" is not allowed for this Session`);",
-      "coveredBy": null
-    },
-    {
-      "pattern": "deny-copy-en",
-      "rel": "dsh-tool-subagent/lib/index.js",
-      "line": 197,
-      "text": "if (!allowedRoutes.some((route) => route.model === request.model)) throw new Error(`child LLM route \"${provider.id}/${request.model}\" is not allowed for this Session`);",
-      "coveredBy": null
-    },
-    {
-      "pattern": "deny-copy-en",
       "rel": "dsh-web-fetch-http/lib/index.js",
       "line": 31,
       "text": "if (url.username.length > 0 || url.password.length > 0) throw new WebError(\"credentials in URLs are not allowed\", \"WEB_BLOCKED_URL\");",
@@ -1130,6 +1109,27 @@
       "line": 263,
       "text": "const base = \"Execute a PowerShell command (`pwsh -Command`) and return its stdout/stderr. Each call runs in a fresh pwsh process; pass `workdir` instead of using `cd`. Paths use native Windows form (",
       "coveredBy": "TOOL_SHELL_DENIAL_PROMPT"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 88,
+      "text": "throw new Error(`child LLM route \"${provider}/${model}\" is not allowed for this Session` + (policy === void 0 ? \"; without a recorded model-selection policy, explicit selection is limited to the paren",
+      "coveredBy": "SUBAGENT_ROUTE_POLICY_BYPASS"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 189,
+      "text": "if (firstRoute === void 0) throw new Error(`LLM provider \"${request.provider}\" is not allowed for this Session`);",
+      "coveredBy": "SUBAGENT_MODEL_DISCOVERY_BYPASS"
+    },
+    {
+      "pattern": "deny-copy-en",
+      "rel": "dsh-tool-subagent/lib/index.js",
+      "line": 197,
+      "text": "if (!allowedRoutes.some((route) => route.model === request.model)) throw new Error(`child LLM route \"${provider.id}/${request.model}\" is not allowed for this Session`);",
+      "coveredBy": "SUBAGENT_MODEL_DISCOVERY_BYPASS"
     },
     {
       "pattern": "escalate-entry",

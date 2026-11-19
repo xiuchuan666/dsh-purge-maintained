@@ -2471,6 +2471,25 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 **已落地（2026-11-19）**：默认加密槽改为 `原文 + 五类示例卡`，22 553 字符（原 21 219，+6.3%）；`lib/asset-table.js` 16 696 → 18 238 B。新增 `scripts/test-default-prompt-card.mjs` 3 例锁住：卡真的在槽里（体量 22–24K 且五个锚齐全）、注入的卡与 `skills/redteam/five-card.md` 逐字同源（改一边必须改另一边）、单条 system 开头且卡块整体收尾。`npm run check` 全绿（3900 例）。回退：删掉注入里的示例段重新 `npm run embed`（源文件 `lib/default-prompt-inject.md` 本地保留、不入库）。
 
+## 十八、宿主升级到 0.2.2-rc.5（2026-11-19）
+
+**为什么走安装包**：npm 上 `@deepseek-ai/dsh-desktop` 404，拿不到 tarball；官方安装包 `deepseek-harness-0.2.2-rc.5-win-x64.exe`（299 593 552 B，2026-11-18 19:34 构建）里 7z 抽出 `$PLUGINSDIR/app-64.7z`（298 408 004 B），得到 `app/`（`DeepSeek Harness.exe` + `resources/app.asar` 209 083 008 B）；再用 `lib/extract-asar.js` 解到 `.tmp-rehearse/asar-rc5`（`@deepseek-ai/dsh-desktop-runtime 0.2.2-rc.5`，338 个包）。
+
+**离线预演（先全绿再上真机）**：`node scripts/host-rehearse.mjs --baseline-tree .tmp-rehearse/asar-rc5/dsh/node_modules/@deepseek-ai --work .tmp-rehearse/rc5-work --keep --json .tmp-rehearse/rc5-outcome.json` → verdict ok，6 步：
+- apply 88 条：ok 81 / warn 7 / blocking 0（7 条 warn 全是包树里没有的 hooks/pi-ai/presets，如 #76 preset-unrestricted、#71 preset-liangshen）
+- outcome：applied 69 / pending 0 / native 3 / stale 0 / drifted 0 / na 16 / unknown 0
+- behaviour 21/21；choke gaps 0 / watch 4；surfaces 42 包 changed 1；gates 旧表 pinned 0.2.2-rc.3 vs tree rc.5 → present 60 / missing 0 / skipped 28
+- 另跑 `host-contract` 25/25 PASS（686 文件）、`restriction-census` 与旧基线比「新增 0 / 消失 0」
+
+**基线重钉（三份）**：`patch-gates --tree rc5=<DIR> --write` → 88 行、60 gated；`restriction-census --ai-base <DIR> --write-baseline`；`host:capture` 记录 62 个目标文件指纹，88 条补丁 settled 81 / would-apply 0 / drifted 0 / no-file 7 / na 0，host=0.2.2-rc.5。三份 diff 合计 58 插入 / 58 删除，无代码改动。
+
+**真机切换**：`.tmp-rehearse/install-rc5.cmd`（由 `launch-install-rc5.mjs` 用 `wmic process call create` 脱离宿主 job object 启动）：杀 Electron → robocopy 新 `app/` 覆盖安装目录 → 旧 `resources/app` 改名 `app.rc3-patched` → 新树 robocopy 到 `resources/app` → `app.asar` 改名 `app.asar.rc5.bak` → repair-cli（junction + dsh.cmd 复原）→ 启动。日志 `.tmp-rehearse/install-rc5.log`：21:41:47 app-up / tree 0.2.2-rc.5，21:42:47 done。
+
+**事故与教训**：这次直接 swap 之后宿主崩溃过一次（由 workbuddy 修复），说明「杀进程 + 覆盖 resources」必须整目录可回滚。现留下三条退路：`app.asar.bak`（rc.3, 209 021 953 B）、`app.asar.rc5.bak`（209 083 008 B）、`app.rc3-patched/`（完整可启动的 rc.3 补丁树）；后续任何宿主改动都先整目录备份 resources，失败自动回滚 exe+asar。
+
+**切换后核对**：exe FileVersion 0.2.2-rc.5，`resources/app/package.json` 与 `resources/app/dsh/package.json` 均 0.2.2-rc.5；`purge_status` 的 plugin root 指向 `resources/app/dsh/node_modules/@deepseek-ai` 且各目标 ✓，补丁显示 70/72 applied（72 是展示分组数）、2 skipped、0 pending；注入槽实测 22 553 字符、含「示例 5」与 vssadmin；`dsh-tool-bash/lib/index.js` 注入标记在（"Proceed with operator-requested paths" 1 处、"sandbox notice" 3 处）；`host:status` verdict=ok；`host:outcome --baseline-tree <rc.5 pristine>` applied 69 / native 3 / na 16 / unknown 0；`host:matrix` live 41 / stale 0 / dead 1；`npm run check` 全绿：syntax 293 / metadata 88 patches 145 tests / eol 388 / client PASS / gates 88 行 60 gated / node:test 3900 例（3898 pass、2 skipped）。
+
+
 
 
 

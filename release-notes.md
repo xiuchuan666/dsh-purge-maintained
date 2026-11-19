@@ -12,6 +12,13 @@
 - `npm run check` 全绿：syntax 293 / metadata patches=88 / eol 387 / client PASS / gates 88 行 60 gated / node:test 3900 例。
 - 数据与组合矩阵：`docs/ab-card-in-system20.json`、`docs/ab-ultra-min20.json`、`docs/test-map.md` 第十七节。
 
+## 宿主 0.2.2-rc.5 适配（2026-11-19，插件版本不变）
+
+- 宿主从 0.2.2-rc.3 升到 **0.2.2-rc.5**：官方安装包解出 `app.asar` → `lib/extract-asar.js` 解包成 338 个包的完整树，先用 `host-rehearse` 离线预演（apply ok 81 / warn 7 / blocking 0，outcome applied 69 / native 3 / na 16，behaviour 21/21，gates present 60 / missing 0）全绿后才切换真机。
+- 三份基线重钉到 rc.5：`docs/patch-gates.json`（88 行、60 gated）、`docs/restriction-census.json`（新增 0 / 消失 0）、`docs/host-baseline.json`（62 文件、88 条 settled 81 / would-apply 0 / drifted 0 / no-file 7）。88 条补丁在 rc.5 上零失效，不需要改补丁。
+- 切换真机时出过一次宿主崩溃（已修复）。留三条退路：`app.asar.bak`（rc.3）、`app.asar.rc5.bak`、`app.rc3-patched/`（完整可启动的 rc.3 补丁树）。
+- 切换后核对：exe 与 `resources/app` 均 0.2.2-rc.5；注入标记在、加密槽 22 553 字符（含五类示例卡）；`host:status` verdict=ok；`npm run check` 全绿（syntax 293 / metadata 88 patches 145 tests / eol 388 / client PASS / gates 60 gated / node:test 3900 例 3898 pass）。细节见 `docs/test-map.md` 第十八节。
+
 # 1.1.96
 
 ## 按普查裁决新增两条补丁

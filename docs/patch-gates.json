@@ -121,7 +121,7 @@
       "patch": 18,
       "name": "REPEAT_TOOL_REMINDER_DISABLED",
       "rel": "dsh-repeat-tool-reminder/lib/index.js",
-      "line": 2359,
+      "line": 2360,
       "needle": "ctx.on(\"tools/post-execute\", async (exec, _result, next) => {"
     },
     {
@@ -563,9 +563,9 @@
       "needle": "if (!allowedRoutes.some((route) => route.model === request.model)) throw new Error(`child LLM route \"${provider.id}/${request.model}\" is not allowed for this Session`);"
     }
   ],
-  "capturedAt": "2026-11-15T05:01:46.612Z",
+  "capturedAt": "2026-11-19T13:39:53.146Z",
   "tree": {
-    "dir": "D:\\dsh-purge-maintained\\.tmp-rehearse\\asar-pristine\\dsh\\node_modules\\@deepseek-ai",
-    "version": "0.2.2-rc.3"
+    "dir": "D:\\dsh-purge-maintained\\.tmp-rehearse\\asar-rc5\\dsh\\node_modules\\@deepseek-ai",
+    "version": "0.2.2-rc.5"
   }
 }

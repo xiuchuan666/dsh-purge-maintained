@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-15T05:01:52.562Z",
-  "pluginVersion": "1.1.95",
+  "capturedAt": "2026-11-19T15:10:54.065Z",
+  "pluginVersion": "1.1.97",
   "host": {
-    "version": "0.2.2-rc.3",
+    "version": "0.2.2-rc.5",
     "name": "@deepseek-ai/dsh",
     "packagePath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\app\\dsh\\node_modules\\@deepseek-ai\\dsh\\package.json"
   },
@@ -71,8 +71,8 @@
     },
     "base": {
       "rel": "dsh-base/cordis.patch.yml",
-      "bytes": 21668,
-      "sha256": "fa6787e8caeef1d3a35cc75e9ee5a2e34bc5e7138a00be0353bd6207ad3421e8"
+      "bytes": 21833,
+      "sha256": "dddf2e87f5e6b5419dd95b8c41e1f305b23ed30542f2b142903f04c215529cfb"
     },
     "settings": {
       "rel": "dsh-settings/lib/index.js",
@@ -86,8 +86,8 @@
     },
     "repeat-tool-reminder": {
       "rel": "dsh-repeat-tool-reminder/lib/index.js",
-      "bytes": 97054,
-      "sha256": "f314b54eb8737b083ec25702392aeea41c2457568a811caacfc0ec326b922dca"
+      "bytes": 97076,
+      "sha256": "0b60169a7750c996d230d2cd3f73bea7e489d53b85d9c6b3b4cd13814e18780a"
     },
     "compaction-tool-result-pruner": {
       "rel": "dsh-compaction-tool-result-pruner/lib/index.js",
@@ -101,8 +101,8 @@
     },
     "tool-subagent": {
       "rel": "dsh-tool-subagent/lib/index.js",
-      "bytes": 28458,
-      "sha256": "8168805b03796873c5c02e7b0edfb29b4c383090e70ad7997a96bb0797d0f880"
+      "bytes": 28169,
+      "sha256": "e8191338d8e1b4919eb4ede34ec10aa957a7bc4f2217e965870ba090b9839502"
     },
     "subagent": {
       "rel": "dsh-subagent/lib/index.js",
@@ -117,7 +117,7 @@
     "base-package": {
       "rel": "dsh-base/package.json",
       "bytes": 6401,
-      "sha256": "298b684da00883de6218d790d5bf54a42eeb9ddc2518df2fd77193ef3248db0e"
+      "sha256": "45efcc83b2a6ae6fcfe5cc7cebae4011f52d8e1e37fbff372cd91e07f4b8fe01"
     },
     "preset-standard": {
       "rel": "dsh-web-app/presets/standard.patch.yml",
@@ -181,8 +181,8 @@
     },
     "tool-web": {
       "rel": "dsh-tool-web/lib/index.js",
-      "bytes": 36516,
-      "sha256": "ce0c2cf039b8c79c68a3d306d253a4f8e51d5b34809d25f1f98a3851637a5da1"
+      "bytes": 36822,
+      "sha256": "8bd2e9080394145bf8e7ebf8fa1376d4e89dcefce7c42c2f847b5f38af394d6e"
     },
     "api-session-controller": {
       "rel": "dsh-api-session-controller/lib/index.js",
@@ -251,8 +251,8 @@
     },
     "llm-deepseek": {
       "rel": "dsh-llm-deepseek/lib/index.js",
-      "bytes": 130478,
-      "sha256": "210106fa47dc72deca5a0a4897d903b8bc05fa4435b3836a39bda253d68b41aa"
+      "bytes": 131181,
+      "sha256": "e26f47df4483dd06b5ebd6eeec187f96e0513219580bd4bc68c88cda6aa9b147"
     },
     "session": {
       "rel": "dsh-session/lib/index.js",
@@ -1069,24 +1069,24 @@
     {
       "id": 91,
       "name": "SUBAGENT_ROUTE_POLICY_BYPASS",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "tool-subagent": "would-apply"
+        "tool-subagent": "settled"
       }
     },
     {
       "id": 94,
       "name": "SUBAGENT_MODEL_DISCOVERY_BYPASS",
-      "status": "would-apply",
+      "status": "settled",
       "files": {
-        "tool-subagent": "would-apply"
+        "tool-subagent": "settled"
       }
     }
   ],
   "summary": {
     "patches": 88,
-    "settled": 79,
-    "wouldApply": 2,
+    "settled": 81,
+    "wouldApply": 0,
     "drifted": 0,
     "noFile": 7,
     "na": 0
