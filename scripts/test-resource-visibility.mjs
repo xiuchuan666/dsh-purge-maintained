@@ -15,7 +15,8 @@ const store = readFileSync(resolve(root, 'lib/redteam/store-core.js'), 'utf8')
 
 test('随包技能数量没变（少一个就是用户少一份资源）', () => {
   const bundled = readdirSync(resolve(root, 'skills/redteam')).filter((x) => x.endsWith('.md'))
-  assert.equal(bundled.length, 23, 'bundled skill resource count')
+  // 2026-11-19：新增 five-card（五类示范答复卡），23 → 24，只增不减
+  assert.equal(bundled.length, 24, 'bundled skill resource count')
 })
 
 test('两个 tab 都还在侧栏列表里', () => {

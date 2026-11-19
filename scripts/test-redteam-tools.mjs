@@ -382,7 +382,7 @@ test('preflight 在没有 skills 服务时也给出可读结论，而不是空�
   const { byName } = build(baseStore())
   const out = parse(await byName.redteam_preflight.execute({}, nextExec()))
   assert.equal(typeof out.all_checked, 'object')
-  assert.equal(out.all_checked.registry_total, 23)
+  assert.equal(out.all_checked.registry_total, 24)
   assert.equal(out.all_checked.broken, 0)
   assert.equal(out.onboarding.complete, false)
 })

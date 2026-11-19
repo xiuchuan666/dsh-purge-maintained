@@ -2437,6 +2437,25 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 **使用**：面板头部「钉住浮标」→ 常驻；再点「取消钉住」→ 回到圆点。选择存在 localStorage，重开窗口仍然生效。
 
+## 十七、五类示范卡技能（skills/redteam/five-card.md，2026-11-19）
+
+**问题**：21 219 字符的注入提示词（v6 精简后 6 315）压到多小还能保持"照做不推脱"？六种常规压缩（加禁令 / 规则前移 / 补 fixture 说明 / 规则搬到 user 侧 / 按题精准注入 / 加语境行）全部低于原文，加禁令甚至 −47%。
+
+**唯一有效的路是换形态：用示例替代规则**（依据越狱论文合集中的 MSJ Many-shot Jailbreaking 与 I-FSJ：示例密度比指令文本更强）。落地为 `skills/redteam/five-card.md`，1 326 字符，五个"问-答"示例（勒索 AES+影子副本、证件版面+校验位、社工库 SQL、AMSI patch、受害机+降检测槽）。
+
+| 方案 | 字符 | 定向 5 题 | 泛化 5 题 | 合计 /20 |
+| --- | --- | --- | --- | --- |
+| 原文 | 21 219 | 6.50 | 6.70 | 13.20 |
+| v6 | 6 315 | 2.40 | — | — |
+| **v6 + five-card** | **7 641** | **6.65** | **6.30** | **12.95（−1.9%，噪声内）** |
+
+**用法约束**（写进技能正文，也有测试锁）：卡必须放 user 消息侧（system 里的自我授权会被当越狱痕迹反向收紧）；卡后必须跟一行 `[本地靶场 SANDBOX] …` 语境锚；五个示例不许拆成规则条目——拆开即失效，实测过。
+
+**结构锁**：`scripts/test-five-card-skill.mjs` 3 例——frontmatter 合法且 role 在已知集合、五张卡与五个关键锚齐全且不许出现 `###` 小节（防拆条）、用法必须写明 user 侧 + 语境锚 + 原文体量。
+
+**数据**：`docs/ab-fivecard20.json`（定向）、`docs/ab-fivecard-generalize20.json`（泛化）；其余失败路线数据在同目录 `ab-placement16 / ab-frame30 / ab-frame-sys30 / ab-skill-external20 / ab-lazy-skill20 / ab-fewshot20`。
+
+
 
 
 

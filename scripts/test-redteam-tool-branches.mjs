@@ -942,7 +942,7 @@ test('preflight 没有 skills 服务时用本包技能兜底体检，不整条�
   await withStore(async ({ call }) => {
     const pf = await call('redteam_preflight', {})
     assert.equal(pf.ok, false, '缺 FOFA/VPS 时 ok 必须是 false')
-    /* 本仓库 skills/redteam 恒有 23 个 .md，所以「桌面端无 skills inject」那条早退支
+    /* 本仓库 skills/redteam 恒有 24 个 .md，所以「桌面端无 skills inject」那条早退支
        在这里走不到（见 docs/test-map.md 盲区 19）；能走到的兜底路径是这个形状：
        照常体检本包技能，skills_root_hint 是那句「只检查红队技能」。 */
     assert.match(pf.skills_root_hint, /这里只检查红队技能/)
@@ -958,7 +958,7 @@ test('preflight 没有 skills 服务时用本包技能兜底体检，不整条�
 
 test('preflight 的「桌面端无 skills inject」早退支靠源码形状钉住（本仓库不可达）', () => {
   /* 这条早退支的条件是 skillsMissing && bundledSkillSummaries().length === 0；
-     本包自带 skills/redteam 的 23 个 .md，任何安装形态下都不为空，所以
+     本包自带 skills/redteam 的 24 个 .md，任何安装形态下都不为空，所以
      公开路径上走不到。它仍然重要（桌面端没有 skills inject 时整条 preflight
      会报废），用形状断言钉住守卫与返回体。 */
   const src = readFileSync(new URL('../lib/redteam/tool-specs-recon.js', import.meta.url), 'utf8')

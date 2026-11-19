@@ -68,7 +68,7 @@ test('dsh.install 指向维护仓库而不是已删库的上游', () => {
 })
 
 test('随包技能仍是 23 个', () => {
-  assert.equal(readdirSync(join(root, 'skills', 'redteam')).filter((x) => x.endsWith('.md')).length, 23)
+  assert.equal(readdirSync(join(root, 'skills', 'redteam')).filter((x) => x.endsWith('.md')).length, 24)
 })
 
 test('关键文件都还在', () => {

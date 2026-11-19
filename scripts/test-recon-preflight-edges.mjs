@@ -230,7 +230,7 @@ test('skills.list 给的条目缺正文时，fromBundle 翻假并按 skills.get 
     resourceBase: { kind: 'directory', path: join(tmpdir(), 'bare') },
   }
   await withPreflight(async ({ call }) => {
-    /* include 只点名这一个：否则 summary 里还会并进随包的 23 个技能，
+    /* include 只点名这一个：否则 summary 里还会并进随包的 24 个技能，
        「有没有问 skills.get 要正文」这件事就被稀释掉了。 */
     const pf = await call('redteam_preflight', { include: 'redteam-bare' })
     assert.deepEqual(got, ['redteam-bare'], 'fromBundle 为假时必须问 skills.get 要正文')
