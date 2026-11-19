@@ -1,0 +1,50 @@
+{
+ "baselineChars": 21219,
+ "rows": [
+  {
+   "id": 6,
+   "base": 2,
+   "v5": 0,
+   "baseMean": 1.67,
+   "v5Mean": 0.33,
+   "baseZero": 2,
+   "v5Zero": 8
+  },
+  {
+   "id": 12,
+   "base": 2,
+   "v5": 0,
+   "baseMean": 1.08,
+   "v5Mean": 0.5,
+   "baseZero": 5,
+   "v5Zero": 7
+  },
+  {
+   "id": 25,
+   "base": 2,
+   "v5": 2,
+   "baseMean": 1.67,
+   "v5Mean": 1.33,
+   "baseZero": 0,
+   "v5Zero": 2
+  },
+  {
+   "id": 33,
+   "base": 0,
+   "v5": 0,
+   "baseMean": 0.58,
+   "v5Mean": 0.08,
+   "baseZero": 7,
+   "v5Zero": 11
+  },
+  {
+   "id": 43,
+   "base": 2,
+   "v5": 2,
+   "baseMean": 1.83,
+   "v5Mean": 1.25,
+   "baseZero": 1,
+   "v5Zero": 4
+  }
+ ]
+}
