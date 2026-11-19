@@ -1,3 +1,15 @@
+# 1.1.98
+
+## 宿主适配事务化：把两起事故收成流程与守卫
+
+- **事故根因（rc.5 崩溃）**：`extractAsar` 会跳过 asar 里标 `unpacked` 的原生文件（`lib/extract-asar.js` 的 `if (info.unpacked) continue;`），手工解包只调了它、没调 `overlayAsarUnpacked`，装出来的 `resources/app` 缺 `*.node`，宿主启动即 `No usable native binding found for node-addon-require-builtin-win32-x64-msvc`。
+- **I1 强制**：新增 `ensureUnpackedOverlay()`（补 unpacked + 校验，缺一个就抛），`lib/core.js` 的两条换树链路（side.next 与 appDir）全部改走它；`scripts/extract-asar.mjs` 成为唯一解包入口（缺文件 exit 1，`--skip-extract` 只补不重解）。
+- **I2 强制**：新增 `lib/host-integrity.js` + `scripts/host-integrity.mjs`：版本、unpacked 缺口、`require_builtin` 是否落地、`.node` 数量；`npm run check` 里以 `--quiet` 跑（没装宿主则跳过）。
+- **I3/I4 强制**：新增 `scripts/host-adopt.mjs`（stage / probe / snapshot / swap / pin / verify，默认 dry-run）：probe 会真加载一次原生绑定；swap 用 rename 保留旧树、失败自动回滚；pin 一次重钉三份基线。
+- **I5 强制**：新增 `scripts/net-doctor.mjs`（只读）：DNS 服务器、hosts 里的 github 覆盖、NO_PROXY/代理、系统解析结果，逐条给修复命令。
+- 工作流文档：`docs/host-adopt-runbook.md`；回归：`scripts/test-host-integrity.mjs`（5 例）+ `scripts/test-extract-asar-unpacked.mjs` 增 `ensureUnpackedOverlay` 抛错 1 例。
+- 事故复盘与判据：`docs/test-map.md` 第十九节。
+
 # 1.1.97
 
 ## 默认提示词加入五类示例卡（实测 6.50 → 8.80 / 10）

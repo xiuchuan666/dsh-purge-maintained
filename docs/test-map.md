@@ -2490,6 +2490,49 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 **切换后核对**：exe FileVersion 0.2.2-rc.5，`resources/app/package.json` 与 `resources/app/dsh/package.json` 均 0.2.2-rc.5；`purge_status` 的 plugin root 指向 `resources/app/dsh/node_modules/@deepseek-ai` 且各目标 ✓，补丁显示 70/72 applied（72 是展示分组数）、2 skipped、0 pending；注入槽实测 22 553 字符、含「示例 5」与 vssadmin；`dsh-tool-bash/lib/index.js` 注入标记在（"Proceed with operator-requested paths" 1 处、"sandbox notice" 3 处）；`host:status` verdict=ok；`host:outcome --baseline-tree <rc.5 pristine>` applied 69 / native 3 / na 16 / unknown 0；`host:matrix` live 41 / stale 0 / dead 1；`npm run check` 全绿：syntax 293 / metadata 88 patches 145 tests / eol 388 / client PASS / gates 88 行 60 gated / node:test 3900 例（3898 pass、2 skipped）。
 
 
+## 十九、从两起事故到事务化工作流（2026-11-19 / 20）
+
+### 事故 A：rc.5 换树后宿主启动 fatal
+- 现象：`DesktopHostFatalError: dsh: host preparation failed: No usable native binding found for node-addon-require-builtin-win32-x64-msvc (auto)`，同一日志 21:44 / 21:48 / 22:08 重复。
+- 链条：手工解包 asar（只调 `extractAsar`）→ 归档里 `info.unpacked` 的原生文件被跳过（`lib/extract-asar.js:460`）→ `resources/app` 里 0 个 `*.node` → 启动时 host preparation 找不到绑定 → fatal。
+- 为什么没被拦住：`overlayAsarUnpacked` 在库里、插件的官方换树链（`lib/core.js:2198/2217`）也调了，但本机操作走的是临时脚本旁路，只借用了库里一半函数；「必须补 unpacked」这个不变式没有跟着入口一起被强制执行。
+- 修复：workbuddy 把 `app.asar.unpacked` 的 1666 个文件补回 `resources/app`；现两边 10 个 `.node` 逐文件 `cmp` 一致。
+
+### 事故 B：GitHub 解析失效导致 push 失败
+- 两个独立原因叠加：① WLAN 的 IPv6 DNS（`2400:3200::1`、`2402:4e00::`）不可达且排在解析顺序前面；② hosts 里留有旧会话直写的 `140.82.112.3 github.com`（死 IP）；③ `NO_PROXY` 含 `github.com`，git 绕过可用代理直连，正好命中死 IP。
+- 修复：IPv4 DNS 固定 `223.5.5.5` + `119.29.29.29`，IPv6 改回 DHCP，`ipconfig /flushdns`，删 hosts 两条；验证 `github.com → 20.6.7.17`、`git push` 恢复。
+
+### 共同本质（第一性原理）
+两起事故都不是"某个命令用错"，而是同一类结构性缺陷：**对机器状态（文件树 / 全局网络配置 / 基线数据）的变更是无主、可旁路、且延迟暴露的**。
+- 无主：hosts 是上一个会话改的，没有 journal，也没有归属；profile 目录被桌面端独占，CLI 装不进去只能绕。
+- 可旁路：库里有正确链路，但手工脚本可以绕过它，不变式不会报警。
+- 延迟暴露：缺 `*.node` 不会在复制时报错，只在下次启动 fatal；DNS 错了不会在改 hosts 时报错，只在 git 连接时失败。
+
+因此修复方向不是"记住下次别忘"，而是把变更建模成**事务**：单一入口、前置不变量、原子提交、失败回滚、事后验证；全局环境变更留 journal；基线一次重钉。
+
+### 五条不变式与强制点
+| # | 不变式 | 强制点 | 回归 |
+|---|---|---|---|
+| I1 | 解包必须补齐 unpacked，缺一个不许提交 | `ensureUnpackedOverlay()`；`lib/core.js:2198/2217`；`scripts/extract-asar.mjs` | `scripts/test-extract-asar-unpacked.mjs`（4 例） |
+| I2 | 新树必须证明原生绑定能加载 | `scripts/host-adopt.mjs probe`（文件 + 真 `require`） | `scripts/test-host-integrity.mjs`（5 例） |
+| I3 | 旧树 rename 保留，新树失败自动回滚 | `scripts/host-adopt.mjs swap` | dry-run 计划巡检；真机待跑 |
+| I4 | 三份基线一次重钉 | `scripts/host-adopt.mjs pin` | `check:gates` / census 基线比对 |
+| I5 | 全局环境变更留 journal，网络先诊断 | `scripts/net-doctor.mjs`；`.tmp-<topic>-rollback.txt` | 手工核对（读 `node scripts/net-doctor.mjs`） |
+
+### 工作流调整
+- 解 asar 只有一条入口：`scripts/extract-asar.mjs`（缺 unpacked 文件 exit 1）。
+- 换树按 `docs/host-adopt-runbook.md` 的 6 步走：stage → probe → rehearse → pin → snapshot/swap → verify。
+- `npm run check` 增加宿主体检（`host-integrity --quiet`，未安装宿主时跳过）。
+- 一次性脚本不再进 `scripts/`：repo 根的 `.tmp-*` 已被 `.gitignore` 忽略；同一操作出现第二次就固化成带 `--dry-run` 的正式脚本 + 测试。
+- 网络问题固定诊断顺序：解析（DNS）→ 覆盖（hosts）→ 绕行（NO_PROXY/代理）→ 证书。
+
+### 尚未闭环（诚实记录）
+- `host-adopt swap --apply` 还没在真机上完整跑过一次（现有 rc.5 是手工链装成的）；下次宿主升级应先用它，跑完把 `app.prev-<ts>` 留作证据。
+- `purge_status` 还没有"宿主完整性"字段：插件状态页看不到 unpacked 缺口/原生绑定缺失，只能靠 `host-integrity` 命令行。要等下一次打包安装才能验证。
+- exe 与 asar 的替换仍由 swap 之外的手工步骤处理；runbook 已写明保留 `app.asar.bak` 的规则。
+
+
+
 
 
 

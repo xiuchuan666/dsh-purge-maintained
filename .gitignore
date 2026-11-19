@@ -16,6 +16,9 @@ scripts/tmp-*.mjs
 dsh-redteam-mode-main/
 /1
 
+# 一次性运维脚本/日志/备份/深检产物：一律本机，不入库（正式脚本放 scripts/）
+.tmp-*
+
 # 预演/演练产物：1.4G 的树和打补丁副本，只在本机
 .tmp-preview/
 .tmp-preview-*

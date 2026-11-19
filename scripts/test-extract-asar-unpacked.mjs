@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { overlayAsarUnpacked, missingUnpackedFiles } from "../lib/extract-asar.js";
+import { overlayAsarUnpacked, missingUnpackedFiles, ensureUnpackedOverlay } from "../lib/extract-asar.js";
 
 function layout() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dshpurge-unpacked-"));
@@ -35,6 +35,17 @@ test("missingUnpackedFiles：overlayAsarUnpacked 补齐后为空，且不改写�
     assert.equal(r.copied, 1);
     assert.deepEqual(missingUnpackedFiles(l.asar, l.dest), []);
     assert.equal(overlayAsarUnpacked(l.asar, l.dest).copied, 0);
+  } finally {
+    fs.rmSync(l.root, { recursive: true, force: true });
+  }
+});
+
+test("ensureUnpackedOverlay：补齐不了就抛（目标位置被目录占住）", () => {
+  const l = layout();
+  try {
+    const blocked = path.join(l.dest, "dsh", "node_modules", "native", "require_builtin.node");
+    fs.mkdirSync(blocked, { recursive: true });
+    assert.throws(() => ensureUnpackedOverlay(l.asar, l.dest), /unpacked 原生文件/);
   } finally {
     fs.rmSync(l.root, { recursive: true, force: true });
   }
