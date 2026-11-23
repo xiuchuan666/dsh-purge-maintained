@@ -17,6 +17,8 @@
 | 装后行为冒烟 | `npm run host:smoke` |
 | 备份体检（默认 dry-run，`--apply` 才删） | `npm run host:gc -- --root "<resources>"` |
 | 看上游是否出新版 | `npm run host:watch` |
+| 看上游并串完整更新（默认 dry-run） | `npm run host:update -- --plan` |
+| 补丁锚点契约（基线/校验） | `npm run patch:contracts -- --write --tree <树>` / `--check --tree <树>` |
 
 `scripts/host-adopt.mjs swap` 已降为底层步骤：不加 `--low-level` 直接拒绝（退出码 2）。日常安装不允许用它。
 
@@ -99,13 +101,16 @@ pending ──成功──> done
 - 真实 `--apply` 全流程还没在换版本时跑过一次（下次宿主升级是首跑）；当前只验证了 dry-run 的预检与拒绝路径。
 - 健康检查依赖 `tasklist` 和 crash 日志命名；官方改日志格式就要同步改 `crashFilesSince()`。
 - exe 本身的替换不在事务内（由安装包负责），本流程只管 `resources` 下的树与 asar；换 exe 时仍需先备份整个 `resources`。
-- 插件状态页还没有“宿主完整性”字段，安装完整性只能看 `host:integrity`。
+- `purge_status` 已输出 `hostVersion` / `hostIntegrity` / `lastInstall` / `slotLength` / `profileVersion`（1.1.101）；面板 Clean 页在 1.1.101 的 P2-6b 画出只读“安装真相”（宿主体检 / 最近安装 / profile 版本 / SLOT 长度），读不到时显示原因。
 
-## 9. 装后四件事（顺序固定）
+## 9. 装后五件事（顺序固定）
 
 1. `npm run host:integrity`：版本、unpacked 缺口、`require_builtin`、`.node` 数量。任何一项不绿，不要往下走。
 2. `npm run host:smoke`：bash / read / write / tool 四步。它只证明“装出来的树能跑工具”，不证明宿主 UI 正常。
 3. `npm run host:gc -- --root "<resources>"`：默认 dry-run，先看会删哪些代；确认新树稳定启动过一次再 `--apply`。
 4. `npm run host:watch`：看上游是否又出新版；它只报 ETag/Last-Modified 判定，不下载也不安装。
+5. `npm run host:update -- --plan`：把上面四步串成五步计划（download → extract → asar → rehearse → install）；默认 dry-run 只下载并解包，`--apply` 必须显式给 `--resources` 和 `--exe`，永不直接执行宿主 exe。
+
+补丁锚点契约：换树前用 `npm run patch:contracts -- --check --tree <新 app 树>` 对照 `docs/patch-contracts.json` 逐条核对落点；`--write --tree <参考树>` 只用于生成基线。`missing/drifted/ambiguous` 任一非零都不要装。
 
 插件 profile 的安装同理：只走 `npm run profile:install`，不要 `robocopy node_modules/dsh-purge`、不要手改 `pnpm-lock.yaml`。profile 安装与宿主安装共用 `~/.dsh/dsh-purge/host-install-journal.json`：任一方处于 `pending`，另一方会被直接拒绝（退出码 3），这是有意的互斥，不要用 `--force` 绕。

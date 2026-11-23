@@ -93,6 +93,9 @@ const EXPORT_EXTRA = new Set([
   'endOfBalancedBlock',
   'rewriteStaleLegacyApplyCall',
   'patchApplied',
+  // P2-6：status 的安装真相读取（宿主版本 / unpacked 缺口 / SLOT / journal）。
+  // gatherState 只负责展示，判据要能喂 fixture 目录单独钉，否则只能对着真机碰运气。
+  'readInstallTruth',
 ])
 
 test('core 的公开导出名一字不差（测试用例放开的私有判定除外）', () => {

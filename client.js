@@ -184,6 +184,17 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"metric.purged": "已写入",
 			"metric.purged.skip": "已写入。跳过 {n} 项，本机没有这些文件",
 			"metric.pendingShort": "待处理 {n}",
+			"install.title": "安装真相",
+			"install.none": "安装真相未上报",
+			"install.integrity": "宿主体检",
+			"install.integrityOk": "ok（unpacked 已校验，原生绑定 {m} 个）",
+			"install.integrityGap": "有缺口：{reason}",
+			"install.unpackedMissing": "缺 unpacked {n} 项",
+			"install.lastInstall": "最近安装",
+			"install.profile": "profile 版本",
+			"install.profileValue": "{p} / 插件 {v}",
+			"install.slot": "SLOT 长度",
+			"install.unreadable": "读不到{reason}",
 			"metric.unmatchedShort": "没对上 {n}",
 			"metric.driftedShort": "漂移 {n}",
 			"metric.skipShort": "跳过 {n}",
@@ -547,6 +558,17 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"metric.purged": "Written",
 			"metric.purged.skip": "Written. Skipped {n}; those files are not on this install",
 			"metric.pendingShort": "Pending {n}",
+			"install.title": "Install truth",
+			"install.none": "Install truth not reported",
+			"install.integrity": "Host integrity",
+			"install.integrityOk": "ok (unpacked verified, {m} native bindings)",
+			"install.integrityGap": "gaps: {reason}",
+			"install.unpackedMissing": "missing unpacked: {n}",
+			"install.lastInstall": "Last install",
+			"install.profile": "Profile version",
+			"install.profileValue": "{p} / plugin {v}",
+			"install.slot": "SLOT length",
+			"install.unreadable": "unreadable{reason}",
 			"metric.unmatchedShort": "No match {n}",
 			"metric.driftedShort": "Drifted {n}",
 			"metric.skipShort": "Skipped {n}",
@@ -872,6 +894,15 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-metric{padding:12px;min-height:64px;display:flex;flex-direction:column;gap:4px;border-radius:8px}
 .dshp-metric b{font-family:inherit;font-size:18px;font-weight:600;line-height:28px}
 .dshp-metric span{font-size:12px;line-height:16px;color:var(--dshp-mute)}
+.dshp-truth{margin:0 0 16px;padding:12px;border:1px solid var(--dshp-line);border-radius:8px;background:var(--dshp-paper)}
+.dshp-truth-title{margin:0 0 8px;font-family:inherit;font-size:13px;font-weight:600;color:var(--dshp-ink)}
+.dshp-truth-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.dshp-truth-list li{display:flex;gap:8px;font-size:12px;line-height:16px;color:var(--dshp-mute)}
+.dshp-truth-k{flex:0 0 132px;font-family:var(--dshp-mono);color:var(--dshp-mute)}
+.dshp-truth-v{flex:1 1 auto;color:var(--dshp-ink);overflow-wrap:anywhere}
+.dshp-truth-list li.is-ok .dshp-truth-k::before{content:"✓ ";color:var(--dshp-ok)}
+.dshp-truth-list li.is-bad .dshp-truth-k::before{content:"✗ ";color:var(--dshp-bad)}
+.dshp-truth-list li.is-neutral .dshp-truth-k::before{content:"· ";color:var(--dshp-mute)}
 .dshp-bar{height:4px;border-radius:999px;background:var(--dshp-line);overflow:hidden;margin:8px 0 16px}
 .dshp-bar>i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:var(--dshp-accent);transition:transform 500ms var(--dshp-ease)}
 .dshp-flow{display:flex;align-items:center;gap:0;margin:0 0 16px;overflow-x:auto;padding:4px 0}
@@ -2093,6 +2124,45 @@ body[data-ds-dark-theme] .rt-rep-step-no,.dshp-dock[data-theme="dusk"] .rt-rep-s
 			if (tally.unmatched) metricNotes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
 			if (tally.drifted) metricNotes.push(t("metric.driftedShort", { n: tally.drifted }));
 			if (tally.skipped) metricNotes.push(t("metric.skipShort", { n: tally.skipped }));
+			// P2-6b 安装真相：只读展示后端算好的结论；没有 install_truth 就明说「未上报」，不猜。
+			const truth = s && s.install_truth;
+			const truthRows = !truth ? [] : (() => {
+				const rows = [];
+				const reasons = (truth && truth.reasons) || {};
+				const why = (key) => (reasons[key] ? "（" + reasons[key] + "）" : "");
+				const hi = truth.host_integrity;
+				if (hi && typeof hi === "object") {
+					if (hi.ok === true) {
+						rows.push({ ok: true, k: "install.integrity", v: t("install.integrityOk", { m: hi.nativeCount == null ? "?" : hi.nativeCount }) });
+					} else {
+						const problems = Array.isArray(hi.problems) && hi.problems.length ? hi.problems.join("；") : (hi.reason || "?");
+						rows.push({ ok: false, k: "install.integrity", v: t("install.integrityGap", { reason: problems }) });
+						if (Number.isFinite(hi.unpackedMissingCount) && hi.unpackedMissingCount > 0) {
+							rows.push({ ok: false, k: "install.unpackedMissing", v: t("install.unpackedMissing", { n: hi.unpackedMissingCount }) });
+						}
+					}
+				} else {
+					rows.push({ ok: false, k: "install.integrity", v: t("install.unreadable", { reason: why("host") }) });
+				}
+				const li = truth.last_install;
+				if (li && typeof li === "object") {
+					const bits = [li.state || "?", li.version || "?"];
+					if (li.previousVersion && li.previousVersion !== li.version) bits.push("← " + li.previousVersion);
+					if (li.at) bits.push(li.at);
+					const stateKey = String(li.state || "").toLowerCase();
+					const stateOk = ["done", "completed", "success", "ok"].includes(stateKey);
+					const stateBad = ["failed", "rolled-back", "rolled_back", "error"].includes(stateKey);
+					rows.push({ ok: stateOk ? true : stateBad ? false : null, k: "install.lastInstall", v: bits.join(" · ") + (li.note ? " — " + li.note : "") });
+				} else {
+					rows.push({ ok: false, k: "install.lastInstall", v: t("install.unreadable", { reason: why("lastInstall") }) });
+				}
+				const profileVer = truth.profile_version || "";
+				const pluginVer = truth.plugin_version || "";
+				rows.push({ ok: Boolean(profileVer && pluginVer && profileVer === pluginVer), k: "install.profile", v: profileVer ? t("install.profileValue", { p: profileVer, v: pluginVer || "?" }) : t("install.unreadable", { reason: why("profileVersion") }) });
+				const slotLen = truth.slot_length;
+				rows.push({ ok: Number.isFinite(slotLen), k: "install.slot", v: Number.isFinite(slotLen) ? String(slotLen) : t("install.unreadable", { reason: why("slot") }) });
+				return rows;
+			})();
 
 			const versions = (updateInfo && updateInfo.versions) || [];
 			const channelNow = (updateInfo && updateInfo.channel) || channel || "stable";
@@ -2198,6 +2268,18 @@ body[data-ds-dark-theme] .rt-rep-step-no,.dshp-dock[data-theme="dusk"] .rt-rep-s
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 				),
+				truth ? h("div", { className: "dshp-truth", role: "group", "aria-label": t("install.title") },
+					h("h4", { className: "dshp-truth-title" }, t("install.title")),
+					h("ul", { className: "dshp-truth-list" },
+						truthRows.map((row) => h("li", { key: row.k, className: row.ok === true ? "is-ok" : row.ok === false ? "is-bad" : "is-neutral" },
+							h("span", { className: "dshp-truth-k" }, t(row.k)),
+							h("span", { className: "dshp-truth-v" }, row.v),
+						)),
+					),
+				) : s ? h("div", { className: "dshp-truth", role: "group", "aria-label": t("install.title") },
+					h("h4", { className: "dshp-truth-title" }, t("install.title")),
+					h("p", { className: "dshp-hint", style: { margin: 0, color: "var(--dshp-mute)", fontSize: 12 } }, t("install.none")),
+				) : null,
 				h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
 				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
 				h(PatchGroups, { state: s }),

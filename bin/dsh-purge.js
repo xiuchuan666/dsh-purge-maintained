@@ -4,11 +4,14 @@ import * as core from "../lib/core.js";
 import * as rules from "../lib/rules.js";
 import * as reapply from "../lib/reapply.js";
 import { ensureAllProfileInstall } from "../lib/profile-insert.js";
+import { localVersion } from "../lib/update.js";
+import { installTruthLines } from "../lib/status-render.js";
 
 const args = process.argv.slice(2);
 
 function printStatus(state) {
   const out = [];
+  const pluginVersion = localVersion();
   out.push("dsh-purge 状态 / Status");
   out.push("  宿主 / surface " + (state.surface || "web"));
   out.push("  DSH_HOME      " + state.dsh_home);
@@ -32,6 +35,7 @@ function printStatus(state) {
     const compat = state.host_supported === false ? `  ← 未适配：插件声明 ${state.host_target || "?"}` : "";
     out.push(`  宿主版本 / host  ${state.host_version}${compat}`);
   }
+  for (const truthLine of installTruthLines(state, { prefix: "  ", pluginVersion })) out.push(truthLine);
   for (const p of core.ALL_PATCHES) {
     const s = state.patch_status[p.id];
     const mark = s === "applied" ? "✓" : s === "pending" ? "✗" : s === "drifted" ? "!" : "·";

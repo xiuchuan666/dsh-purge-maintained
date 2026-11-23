@@ -2528,7 +2528,7 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 ### 尚未闭环（诚实记录）
 - `host-adopt swap --apply` 还没在真机上完整跑过一次（现有 rc.5 是手工链装成的）；下次宿主升级应先用它，跑完把 `app.prev-<ts>` 留作证据。
-- `purge_status` 还没有"宿主完整性"字段：插件状态页看不到 unpacked 缺口/原生绑定缺失，只能靠 `host-integrity` 命令行。要等下一次打包安装才能验证。
+- `purge_status` 的"宿主完整性"字段已在 1.1.101 补上（P2-6 / P2-6b：`hostIntegrity` + 面板安装真相，见第二十二、二十三节），不需要再等打包验证。
 - exe 与 asar 的替换仍由 swap 之外的手工步骤处理；runbook 已写明保留 `app.asar.bak` 的规则。
 
 ## 二十、每次安装的闸门：唯一入口 + journal + 启动健康检查（2026-11-23）
@@ -2592,8 +2592,84 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 - 五路合计 96 例（10 + 19 + 14 + 28 + 25），`npm run check` 全绿。
 
 ### 明确不做（下轮）
-- P2-5 补丁锚点契约、P2-6 `purge_status` 安装真相：都要动 `lib/core.js` 的 88 条 ALL_PATCHES，必须串行，不能与并行波次同改一个文件。
-- P3-8 模型分档载荷依赖 eval-refusal 的真实采样数据，等 1.1.100 装上桌面端跑一轮再定。
+- P2-5 补丁锚点契约、P2-6 `purge_status` 安装真相：已在 1.1.101 完成（第二十二、二十三节）；以后若再动 `lib/core.js` 的 88 条 ALL_PATCHES，仍需串行。
+- P3-8 模型分档载荷的启发式层已在 1.1.101 的 P3-8a / P3-8b 完成（第二十四节）；运行时接入仍依赖 eval-refusal 的真实采样。
+
+## 二十二、1.1.101 四件安装闭环（2026-11-23）
+
+1.1.100 之后还剩四个缺口：补丁锚点没有契约、状态页看不见安装真相、预演不验证候选树能否启动、更新流程要手工串。四路并行，lead 只审不合。
+
+### 1) 补丁锚点契约 patch:contracts（P2-5）
+- 单一来源仍是 `lib/core.js` 的 `ALL_PATCHES`；契约只从注册表派生，不手写第二份针表。
+- `deriveContracts(patches, { treeRoot, table, label, readFile })` 记录 `anchors=[{ key, file, hits }]`：只收参考树里实际读到且至少一条针命中的文件；某个文件对某条针为 0 是正常事实（#43 的四个 preset 各只带一条针），不能要求每条针命中每个文件。
+- `--write --tree <参考树>` 生成基线（默认 `docs/patch-contracts.json`）；不传 `--tree` 仍是注册表模式，明确标 `baseline=false`。
+- `--check --tree <新树>` 按基线逐项比对：文件缺失→`missing`（optional→`na`）、基线命中变 0 且无痕迹→`drifted`、只丢一部分→`partial`、命中次数变化→`ambiguous`、参考树无落点→`na`、全部一致→`ok`；`--applied` 时产物探针也算已打上。
+- 正式基线来自 `.tmp-rehearse/asar-rc5`：88 条补丁、263 条针（跨行 52）、可选 47、回缩 40、99 个锚点，文件 305 511 B；`--check --tree .tmp-rehearse/asar-rc5` 实测 `ok=68 missing=0 ambiguous=0 na=20`，退出 0。
+- 回归 `scripts/test-patch-contracts.mjs` 31 例；含 #43 式多文件各带一条针、锚点缺失、1→2 判 ambiguous、无落点判 na、asar 嵌套布局、真注册表 88 条统计一致。
+
+### 2) 状态安装真相（P2-6）
+- `lib/core.js` 新增 `readInstallTruth()` / `computeInstallTruth()` / `installTruthKey()`；`gatherState` 增加 `hostVersion`、`hostIntegrity`、`lastInstall`、`slotLength`、`openSlotLength`、`profileVersion`、`installTruth`。
+- 只读，不写盘、不起子进程；读不到写 `reasons` 不抛。status 是轮询接口，按树 / 插件 / journal 的 mtime+size 做 15 s TTL 缓存（最多 16 条），`noCache` / `cacheTtlMs` 可覆盖。
+- 真机值：`hostVersion=0.2.2-rc.5`、`hostIntegrity.ok=true`、6 个原生绑定、`unpackedMissing=0`、`lastInstall={state:done,version:1.1.100,previousVersion:1.1.97,kind:profile}`、`slotLength=16980`、`openSlotLength=22553`、`profileVersion=1.1.100`。
+- 回归 `scripts/test-status-truth.mjs` 11 例 + `scripts/test-status-render.mjs` 40 例。
+
+### 3) 预演启动探针（P1-4b）
+- `lib/boot-probe.js`：`probeBoot({ treeDir, exe, timeoutMs })` 从候选树找 `@deepseek-ai/dsh-desktop-runtime` 的 bin，再退 `resources/runtime/cli/bin/dsh.cmd`；优先 `--dump-config`，失败退 `--version`；隔离 `DSH_*` / `NODE_OPTIONS`，临时 `DSH_HOME` 探完删除。
+- `scripts/host-rehearse.mjs` 增第七步 `boot`，永远最后跑；识别 `No usable native binding` 类崩溃并立即失败；没有运行时入口记 `skipped`，不算失败。`--no-boot` 与 `--skip boot` 都会写进报告 `skipped` 数组，避免“跳过启动检查却显示全绿”。
+- 回归 `scripts/test-boot-probe.mjs` 21 例。边界：`host-rehearse --work` 只是 `@deepseek-ai` 包树时 boot 必然 skipped；要真正启动，必须给完整 app 树或 `--exe`。
+
+### 4) 宿主更新一条命令（P1-3b）
+- `lib/host-update.js` + `scripts/host-update.mjs`（`npm run host:update -- --plan`）：五步 `download → extract → asar → rehearse → install`；7z 外层抽 exe、内层抽 `$PLUGINSDIR/app-64.7z`；asar 必须走 `extract-asar --clean`（补 unpacked 的 `*.node`）。
+- 默认 dry-run 只做 download + extract，其余步骤只输出命令；`--apply` 必须显式给 `--resources` 和 `--exe`，否则拒跑；`refuseHostExec` 拒绝直接执行宿主 exe；所有 `scripts/*.mjs` 用绝对路径，避免 workdir 改变后 `MODULE_NOT_FOUND`。
+- 回归 `scripts/test-host-update.mjs` 12 例；真机 `--plan` 实跑 5 步，7z=`C:\Program Files\7-Zip\7z.exe`。
+
+### 审核与回归
+- 四路（status-truth、host-update、boot-probe、patch-contract）均按“先范围、再测试、再读关键函数”的顺序审核；patch-contract 因原判定把多文件 partial 误报 missing，退回重做为参考树基线；host-update 因相对脚本路径在第二次运行会 `MODULE_NOT_FOUND`，退回改绝对路径并补 1 例。
+- `npm run check` 全绿；本轮新增测试 31 + 21 + 12 + 11 例。
+
+## 二十三、安装真相上屏与故障注入回归（2026-11-23）
+
+1.1.101 的四件安装闭环之后，本轮把“安装真相”从 CLI 接到面板，并用故障注入把三条最容易静默失败的链路钉住。版本仍为 1.1.101，不新增运行时依赖。
+
+### 1) 状态面板展示安装真相（P2-6b）
+- `/dsh-purge/status` 新增 `install_truth` 视图（`installTruthPayload`）：host_version、host_integrity、last_install、slot_length、open_slot_length、profile_version、plugin_version、reasons、resources / profile / profile_dir / plugin_dir / journal_path；旧字段 `host_version` / `host_supported` 保留。
+- `lib/status-render.js` 新增 `installTruthLines()`，`renderStatus()` 与 `bin/dsh-purge.js --status` 共用一套文案；`client.js` Clean 面板增加只读“安装真相”区块（zh/en）。
+- 语义钉死：`hostIntegrity.unpackedChecked` 是布尔值，不是数量；`lastInstall.state` 的真实取值是 pending / done / rolled-back / failed，done 与 rolled-back 分别显示 ✓ / ✗，pending 中性。读不到时显示原因，不渲染成 ok 或 0。
+- 回归：`scripts/test-status-install-truth.mjs` 13 例 + `scripts/test-status-render.mjs` 46 例（含 done / rolled-back / unpacked 缺口 / 无 install_truth 兜底），`test-exact-routes` 71 例；合计 130 例全绿。
+
+### 2) 补丁幂等与回滚故障测试
+- 新增 `scripts/test-patch-idempotency.mjs` 10 例：连续两次 apply 第二次全 already（文件与 .bak 的字节和 mtime 都不变）、multi-file partial 稳定、已有且不同的 .bak 不被覆盖、0 字节 bak 补真备份、只读文件 write_error、符号链接写穿真身并保留链接、悬空链接可解释失败、目录缺失不建目录、CRLF 原文 apply→revert 字节级复原、损坏 .bak 按字节还原。
+- 修掉一个真实缺陷：`saveText()`（`lib/core.js:3915-3943`）在符号链接目标上原先走 `rename(tmp, fp)`，会把链接替换成普通文件，真身没改且回滚点失效；现在先 `lstatSync` 判链接、`realpathSync` 取真身再原子写，悬空链接抛 `symlink_target_missing:` 并保留链接。
+- 回归 `test-backup-revert` 58、`test-all-hosts` 23 等 13 组全绿。
+
+### 3) profile 安装故障注入
+- `lib/profile-install.js` 增加 tgz 预检与写入健壮性：gzip magic / 截断 / 空包 / 不安全路径分别给 `TGZ_CORRUPT` / `TGZ_EMPTY` / `TGZ_UNSAFE` / `TGZ_NO_PACKAGE`；`applyInstall` 预检前置于 `beginInstall`（坏包不建 journal）；`writeFileAtomic` 失败清理临时文件；staging 清理失败只进 warnings；返回 `code`。
+- 新增 `scripts/test-profile-install-faults.mjs` 18 例：坏 gzip、截断 tar、缺 package、路径穿越、staging 写失败、rename 失败、备份目录不可写、pending journal 互斥、package 写成功但 lock 写失败、plan 后 tgz 损坏、CLI `--rollback` 无 exe / 宿主运行中 / 坏 tgz 的退出码与零改动。
+- 回归 `scripts/test-profile-install.mjs` 31 例，合计 49 例全绿。
+
+### 审核与回归
+- 三路 agent（status-board / patch-idem / profile-faults）按写域隔离并行；status-board 首版因 `unpackedChecked` 布尔/数量混淆、journal `done` 当 `ok`、client.js 整体转 CRLF 被退回，修复后 `git diff --numstat client.js` = 82/0（忽略行尾同值）。
+- 本轮相关测试 130（status 59 + exact-routes 71）+ 10 + 49 = 189 例；`npm run check` 全绿（syntax 332 files / metadata tests=160 / eol 428 files / client PASS / gates 88 rows / node:test 4138 例，4136 pass / 2 skipped / 0 fail）。
+
+## 二十四、模型分档载荷与提示词资产盘点（2026-11-23）
+
+### P3-8a 模型分档核心
+
+- 新增 `lib/prompt-tier.js`（493 行，CRLF）：`normalizeModelId` / `normalizeSelection` / `loadManifest` / `validateManifest` / `matchRule` / `selectTier` / `resolveVariant` / `planTierPrompt`。规则支持精确、`*`/`?` glob、`prefix:` 与 `/regex/flags`，按顺序首个命中，未命中回落 `defaultTier`。
+- 新增 `docs/prompt-tiers.json`（LF）：frontier → `docs/prompt-inject-v6.md`、standard → v4、light → v3、default → v6；所有档位 `evidence: "heuristic-unverified"`。
+- 新增 `scripts/prompt-tier.mjs`（LF）：`--model` / `--provider` / `--context-chars` / `--json` / `--list` / `--validate`；坏 manifest 或未知参数 exit 2。示例：`node scripts/prompt-tier.mjs --model gpt-5.2 --provider openai` → frontier / v6 / 8 549 chars / apply。
+- 边界：纯函数层只做决策，不读会话投影、不改 `lib/prompt-source.js` 的注入路径；真正的模型选择读取 `session.projectionValues.modelSelection` 留到下一步。
+
+### P3-8b 提示词资产盘点
+
+- 新增 `lib/prompt-variants.js`（CRLF）与 `scripts/prompt-variants.mjs`（LF）：`listVariantFiles` / `analyzeVariantText` / `compareVariants` / `summarizeVariants`；`--check` 校验每个变体的核心 marker。
+- `docs/prompt-variants-report.md`（LF）记录 v1–v6：v1 23 035 B / 20 349 字符 / 51 槽位；v2 22 984 B / 20 298 字符 / 51 槽位；v3 5 158 B / 2 914 字符 / 27 槽位；v4 8 085 B / 4 353 字符 / 32 槽位；v5 12 297 B / 6 210 字符 / 33 槽位；v6 16 918 B / 8 549 字符 / 33 槽位；六版 `--check` 全 PASS。
+
+### 审核与回归
+
+- 两路 agent（prompt-tier / prompt-variants）按写域隔离并行；均未改运行时与版本号。
+- `node --test scripts/test-prompt-tier.mjs scripts/test-prompt-variants.mjs` = 61 例（39 + 22）全绿；`node scripts/check-syntax.mjs` PASS 338 files；`node scripts/check-eol.mjs` PASS 428 files。
+- 明确不做：不把启发式档位直接接进注入；等 `eval-refusal` 在真实模型上采样后，再决定是否按档位切换。
 
 
 

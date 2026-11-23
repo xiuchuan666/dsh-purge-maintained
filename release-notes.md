@@ -1,4 +1,18 @@
-# 1.1.100
+# 1.1.101
+
+## 四件安装闭环：补丁锚点契约、状态安装真相、预演启动探针、更新一条命令
+
+- **补丁锚点契约（P2-5）**：新增 `lib/patch-contracts.js` + `scripts/patch-contracts.mjs`（`npm run patch:contracts`）。`--write --tree <参考树>` 把每条补丁在参考树里实际命中的文件 × 每条针的命中次数记成 `anchors` 基线（rc.5 参考树：88 条补丁 / 263 条针 / 99 个锚点）；`--check --tree <新树>` 按基线逐项比对：文件缺失→missing（optional→na）、基线命中变 0→drifted、次数变化→ambiguous、参考树无落点→na。rc.5 实测 `ok=68 missing=0 ambiguous=0 na=20`，退出码 0。
+- **状态安装真相（P2-6）**：`purge_status` 新增 `hostVersion` / `hostIntegrity` / `lastInstall` / `slotLength` / `openSlotLength` / `profileVersion` / `installTruth`。`readInstallTruth()` 只读、15 s TTL（mtime+size 指纹，最多 16 条），读不到写 `reasons` 不抛；真机值 rc.5 / ok=true / 6 个原生绑定 / unpackedMissing=0 / lastInstall done 1.1.100（从 1.1.97）/ slotLength 16 980。
+- **预演启动探针（P1-4b）**：新增 `lib/boot-probe.js`；`host-rehearse` 从六步变七步，`boot` 最后一步启动打过补丁的候选树跑 `--dump-config`（失败退 `--version`），识别 `No usable native binding` 类崩溃；隔离 `DSH_*` / `NODE_OPTIONS` 并用临时 `DSH_HOME`。`--no-boot` 或 `--skip boot` 会在报告 `skipped` 里留痕，不会假装全绿。
+- **宿主更新一条命令（P1-3b）**：新增 `lib/host-update.js` + `scripts/host-update.mjs`（`npm run host:update -- --plan`）。五步计划 download → extract（外层 exe + `$PLUGINSDIR/app-64.7z`）→ asar（`extract-asar --clean`）→ rehearse（`host-rehearse` + `host-adopt probe`）→ install（`host-install` dry-run/--apply）；脚本路径全部绝对化；默认 dry-run 只下载并解包，`--apply` 必须显式给 `--resources` 和 `--exe`，拒绝直接执行宿主 exe。
+- **文档与回归**：`docs/install-process.md` 增 `host:update` / `patch:contracts` 两行与装后第五件事；新增测试 `scripts/test-patch-contracts.mjs`（31 例）、`scripts/test-boot-probe.mjs`（21 例）、`scripts/test-host-update.mjs`（12 例）、`scripts/test-status-truth.mjs`（11 例）。`npm run check` 全绿。
+- **安装真相上屏（P2-6b）**：`/dsh-purge/status` 新增 `install_truth`（host_integrity / last_install / profile_version / slot_length 等），`lib/status-render.js` 与 `bin/dsh-purge.js --status` 共用 `installTruthLines()`，`client.js` Clean 面板显示只读“安装真相”；`unpackedChecked` 按布尔、journal 状态 done/rolled-back 分成功与失败，读不到不渲染成 ok。
+- **补丁幂等与回滚故障测试**：新增 `scripts/test-patch-idempotency.mjs` 10 例；修掉 `saveText()` 对符号链接走 rename 会把链接替换成普通文件的缺陷（改为 lstat + realpath 写穿真身，悬空链接抛 `symlink_target_missing:`）。
+- **profile 安装故障注入**：新增 `scripts/test-profile-install-faults.mjs` 18 例；`lib/profile-install.js` 增加 gzip/tar 预检（TGZ_CORRUPT / TGZ_EMPTY / TGZ_UNSAFE / TGZ_NO_PACKAGE）、坏包不建 journal、临时文件清理与 `code` 返回。
+- **模型分档载荷（P3-8a）**：新增 `lib/prompt-tier.js` + `scripts/prompt-tier.mjs`（`npm run prompt:tier`）与 `docs/prompt-tiers.json`。把模型选择器归一化为 provider/model，按 manifest 规则匹配 frontier / standard / light，未命中回落 default；`--list` / `--validate` / `--json` 可核查档位、变体字符数与 sha256。manifest 的 `evidence` 全部标 `heuristic-unverified`，只做计划，不改运行时注入路径。测试 `scripts/test-prompt-tier.mjs` 39 例。
+- **提示词资产盘点（P3-8b）**：新增 `lib/prompt-variants.js` + `scripts/prompt-variants.mjs`（`npm run prompt:variants`）与 `docs/prompt-variants-report.md`。按版本统计 v1–v6 的字节/字符/行数/sha256/标题/槽位与核心 marker（六版 `--check` 全 PASS）；报告明确“只描述资产，不代表模型效果”。测试 `scripts/test-prompt-variants.mjs` 22 例。
+- **回归**：三路相关测试 189 例（status 130 + patch 10 + profile 49），模型分档两路 61 例（prompt-tier 39 + prompt-variants 22），`npm run check` 全绿（node:test 4199 例，4197 pass / 2 skipped / 0 fail）。
 
 ## 五路并行：评测闸门、profile 安装事务化、宿主漂移/冒烟/备份 GC
 

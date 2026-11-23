@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "kind": "dsh-prompt-tiers",
+  "description": "模型分档载荷 manifest：按模型家族把注入提示词切到 frontier / standard / light 三档，未命中落 default。evidence 均为启发式标签，未经路由实测。",
+  "defaultTier": "default",
+  "maxPromptChars": 24000,
+  "tiers": [
+    {
+      "id": "frontier",
+      "title": "Frontier",
+      "description": "旗舰模型：保留完整约束、工具协议与长上下文指令，适合 Opus / Sonnet / GPT-5 / DeepSeek-V4.1 等。",
+      "promptPath": "docs/prompt-inject-v6.md",
+      "maxPromptChars": 24000,
+      "evidence": "heuristic-unverified"
+    },
+    {
+      "id": "standard",
+      "title": "Standard",
+      "description": "主流模型：完整任务约束，压缩重复示例与低优先级说明，适合 Qwen / Kimi / GLM / GPT-4 等。",
+      "promptPath": "docs/prompt-inject-v4.md",
+      "maxPromptChars": 16000,
+      "evidence": "heuristic-unverified"
+    },
+    {
+      "id": "light",
+      "title": "Light",
+      "description": "小模型与 flash/mini 变体：只保留硬约束与最小工具协议，避免长提示挤占上下文。",
+      "promptPath": "docs/prompt-inject-v3.md",
+      "maxPromptChars": 10000,
+      "evidence": "heuristic-unverified"
+    },
+    {
+      "id": "default",
+      "title": "Default",
+      "description": "未知模型的保守回落：使用完整载荷，保证行为一致性优先于省 token。",
+      "promptPath": "docs/prompt-inject-v6.md",
+      "maxPromptChars": 24000,
+      "evidence": "heuristic-unverified"
+    }
+  ],
+  "rules": [
+    {
+      "id": "light-gpt5-small",
+      "match": {
+        "model": [
+          "gpt-5*mini*",
+          "gpt-5*nano*"
+        ]
+      },
+      "tier": "light",
+      "reason": "GPT-5 mini/nano 为低延迟小模型"
+    },
+    {
+      "id": "light-deepseek-flash",
+      "match": {
+        "model": [
+          "deepseek-v4.1*flash*",
+          "deepseek-v4.1*mini*"
+        ]
+      },
+      "tier": "light",
+      "reason": "DeepSeek-V4.1 flash/mini 走轻量载荷"
+    },
+    {
+      "id": "light-qwen-small",
+      "match": {
+        "model": [
+          "qwen*flash*",
+          "qwen*turbo*"
+        ]
+      },
+      "tier": "light",
+      "reason": "Qwen flash/turbo 走轻量载荷"
+    },
+    {
+      "id": "light-kimi-small",
+      "match": {
+        "model": [
+          "kimi*mini*",
+          "kimi*flash*"
+        ]
+      },
+      "tier": "light",
+      "reason": "Kimi mini/flash 走轻量载荷"
+    },
+    {
+      "id": "light-glm-small",
+      "match": {
+        "model": [
+          "glm*flash*",
+          "glm*air*"
+        ]
+      },
+      "tier": "light",
+      "reason": "GLM flash/air 走轻量载荷"
+    },
+    {
+      "id": "light-claude-haiku",
+      "match": {
+        "model": [
+          "claude-haiku*",
+          "claude-3-5-haiku*"
+        ]
+      },
+      "tier": "light",
+      "reason": "Claude Haiku 为小模型"
+    },
+    {
+      "id": "frontier-claude-opus",
+      "match": {
+        "model": "prefix:claude-opus"
+      },
+      "tier": "frontier",
+      "reason": "Claude Opus 全量载荷"
+    },
+    {
+      "id": "frontier-claude-sonnet",
+      "match": {
+        "model": "claude-sonnet*"
+      },
+      "tier": "frontier",
+      "reason": "Claude Sonnet 全量载荷"
+    },
+    {
+      "id": "frontier-gpt5",
+      "match": {
+        "model": "gpt-5*"
+      },
+      "tier": "frontier",
+      "reason": "GPT-5 系列全量载荷"
+    },
+    {
+      "id": "frontier-deepseek-v41",
+      "match": {
+        "model": "deepseek-v4.1*"
+      },
+      "tier": "frontier",
+      "reason": "DeepSeek-V4.1 系列全量载荷"
+    },
+    {
+      "id": "frontier-qwen-max",
+      "match": {
+        "model": [
+          "qwen*max*",
+          "qwen*plus*"
+        ]
+      },
+      "tier": "frontier",
+      "reason": "Qwen Max/Plus 全量载荷"
+    },
+    {
+      "id": "standard-qwen",
+      "match": {
+        "model": "qwen*"
+      },
+      "tier": "standard",
+      "reason": "其余 Qwen 走标准载荷"
+    },
+    {
+      "id": "standard-kimi",
+      "match": {
+        "model": "kimi*"
+      },
+      "tier": "standard",
+      "reason": "Kimi 走标准载荷"
+    },
+    {
+      "id": "standard-glm",
+      "match": {
+        "model": "glm*"
+      },
+      "tier": "standard",
+      "reason": "GLM 走标准载荷"
+    },
+    {
+      "id": "standard-gpt4",
+      "match": {
+        "model": "gpt-4*"
+      },
+      "tier": "standard",
+      "reason": "GPT-4 系列走标准载荷"
+    },
+    {
+      "id": "standard-claude",
+      "match": {
+        "model": "claude-*"
+      },
+      "tier": "standard",
+      "reason": "其余 Claude 走标准载荷"
+    }
+  ]
+}

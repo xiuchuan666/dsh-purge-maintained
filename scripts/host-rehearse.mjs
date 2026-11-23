@@ -2,19 +2,24 @@
 // Rehearsal: run the upgrade before it happens.
 //
 // A rehearsal takes a PRISTINE install of the next host version, patches a throwaway COPY of it
-// with the whole registry, and then asks five independent questions about the result:
+// with the whole registry, and then asks a fixed set of independent questions about the result:
 //
 //   apply      did every anchor still land?            (core.applyPatches + rehearse-lib buckets)
 //   outcome    is each patch applied, native, stale?   (lib/patch-outcome.mjs, seven states)
 //   behaviour  does the restriction actually go away?  (scripts/behavior-lib.mjs, cross-tree)
 //   choke      did the new version grow a gate we do not cover?  (chokepoints-lib gaps)
 //   gates      does docs/patch-gates.json still describe this tree?  (gate-verify-lib)
+//   surfaces   does the patched copy still export what it exported?  (surface-lib)
+//   boot       can the patched copy actually start?                 (lib/boot-probe.js)
 //
 // Any one of these alone lies. Markers in files prove the text changed, not that the behaviour did;
 // behaviour only covers 12 of 86 patches; the choke scan cannot see what it has no shape for.
 // the gate table is an observation of one version's text, so a miss on another version is drift
 // (expected, and the count is the re-derive job) while a miss on the pinned version means the
 // table and the tree stopped describing each other;
+// boot is the only step that starts the tree: a green text diff on a tree that cannot launch is
+// the exact shape of the rc.5 incident (No usable native binding found for
+// node-addon-require-builtin-win32-x64-msvc), and it was invisible until this step existed.
 // Together they are the answer to 'can we ship this version'.
 //
 // Usage:
@@ -23,9 +28,10 @@
 //   node scripts/host-rehearse.mjs --baseline-tree DIR    # explicit pristine @deepseek-ai tree
 //   node scripts/host-rehearse.mjs --work DIR --keep      # where the patched copy goes, and keep it
 //   node scripts/host-rehearse.mjs --skip choke,gates   # run a subset
+//   node scripts/host-rehearse.mjs --no-boot            # skip the boot probe (CI has no host tree)
 //   node scripts/host-rehearse.mjs --json out.json --limit 10
 //
-// Exit codes: 0 = all five green / 1 = something blocks the upgrade / 2 = usage or environment.
+// Exit codes: 0 = all requested steps green / 1 = something blocks the upgrade / 2 = usage or environment.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,14 +53,15 @@ import { verifyGates } from './gate-verify-lib.mjs';
 import * as surfaces from './surface-lib.mjs';
 import { findAiBase, resolveAiBase } from './host-baseline-lib.mjs';
 import * as lib from './rehearse-lib.mjs';
+import { probeBoot, probeStep, BOOT_TIMEOUT_MS } from '../lib/boot-probe.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const STEP_IDS = ['apply', 'outcome', 'behaviour', 'choke', 'gates', 'surfaces'];
+const STEP_IDS = ['apply', 'outcome', 'behaviour', 'choke', 'gates', 'surfaces', 'boot'];
 
 function usage(message) {
   if (message) console.error('[rehearse] ' + message);
-  console.error('[rehearse] usage: host-rehearse.mjs [--baseline-tree DIR] [--version rcN] [--work DIR] [--keep] [--skip a,b] [--json FILE] [--limit N]');
+  console.error('[rehearse] usage: host-rehearse.mjs [--baseline-tree DIR] [--version rcN] [--work DIR] [--keep] [--skip a,b] [--no-boot] [--exe FILE] [--json FILE] [--limit N]');
   process.exit(2);
 }
 
@@ -73,6 +80,8 @@ function parseArgs(argv) {
     else if (arg === '--work') args.work = need();
     else if (arg === '--skip') args.skip = need().split(',').map((s) => s.trim()).filter(Boolean);
     else if (arg === '--json') args.json = need();
+    else if (arg === '--exe') args.exe = need();
+    else if (arg === '--no-boot') args.noBoot = true;
     else if (arg === '--limit') args.limit = Number(need());
     else if (arg === '--keep') args.keep = true;
     else if (arg === '--help' || arg === '-h') usage();
@@ -439,15 +448,20 @@ async function main() {
   const work = prepared.workBase;
   if (prepared.mirrored.length) console.log('[rehearse] mirrored ' + prepared.mirrored.join(', '));
   const steps = [];
-  const wanted = (id) => !args.skip.includes(id);
+  // --no-boot and --skip boot are the same question asked twice: both must show up as skipped
+  // steps in the report, because 'all green' after skipping the boot probe is a lie by omission.
+  const wanted = (id) => !args.skip.includes(id) && !(id === 'boot' && args.noBoot === true);
   if (wanted('apply')) steps.push(await stepApply(baseline, work, root));
   if (wanted('outcome')) steps.push(stepOutcome(baseline, work));
   if (wanted('behaviour')) steps.push(await stepBehaviour(baseline, work));
   if (wanted('choke')) steps.push(await stepChoke(baseline, profile));
   if (wanted('gates')) steps.push(stepGates(baseline, version));
   if (wanted('surfaces')) steps.push(await stepSurfaces(baseline, work));
+  // Boot comes last: it starts the patched copy, so the copy must already be written and checked.
+  if (wanted('boot')) steps.push(probeStep(probeBoot({ treeDir: work, exe: args.exe, timeoutMs: BOOT_TIMEOUT_MS })));
+  const skipped = STEP_IDS.filter((id) => !wanted(id));
   const verdict = lib.summarizeRehearsal(steps);
-  const report = { schema: lib.REHEARSE_SCHEMA, kind: 'dsh-rehearse', capturedAt: new Date().toISOString(), baseline: baseline, baselineVersion: version, work: work, mirrored: prepared.mirrored, skipped: args.skip, steps: steps, verdict: verdict };
+  const report = { schema: lib.REHEARSE_SCHEMA, kind: 'dsh-rehearse', capturedAt: new Date().toISOString(), baseline: baseline, baselineVersion: version, work: work, mirrored: prepared.mirrored, skipped: skipped, steps: steps, verdict: verdict };
   console.log('');
   for (const line of lib.renderRehearsal(report, { limit: args.limit })) console.log(line);
   if (args.json) {

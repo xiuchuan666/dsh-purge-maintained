@@ -43,6 +43,24 @@ function baseState(overrides = {}) {
     host_version: "0.2.2-rc.1",
     host_supported: true,
     host_target: "0.2.2-rc.1",
+    // P2-6b 安装真相：默认给一份「都读到了」的形状，缺口用例单独覆盖。
+    hostIntegrity: {
+      ok: true,
+      unpackedMissing: [],
+      unpackedMissingCount: 0,
+      unpackedChecked: true,
+      requireBuiltin: [],
+      requireBuiltinCount: 0,
+      nativeCount: 2,
+      problems: [],
+      reason: "",
+    },
+    lastInstall: { state: "ok", version: "1.1.101", at: "2026-11-20T10:00:00Z", previousVersion: "1.1.100", kind: "install", note: "" },
+    slotLength: 4210,
+    openSlotLength: 4096,
+    profileVersion: "1.1.101",
+    pluginVersion: "1.1.101",
+    installTruth: { reasons: {}, resources: "/res", profile: "default" },
     shim_scope: "path",
     shim_cmd: "/shim/dsh.cmd",
     shim_ps1: "/shim/dsh.ps1",
@@ -317,6 +335,90 @@ test("宿主版本未适配且没有声明版本：用问号占位，不留空",
 
 test("拿不到宿主版本时整行不出现（不写「未知版本」这种噪音）", () => {
   assert.equal(findLines(baseState({ host_version: "" }), "宿主 / host").length, 0);
+});
+
+
+// ---------- 安装真相（P2-6b） ----------
+
+test("安装真相：宿主行之后紧跟宿主体检、最近安装、profile 版本与 SLOT 长度", () => {
+  const out = lines(baseState());
+  const hostAt = out.findIndex((l) => l.startsWith("宿主 / host: "));
+  assert.ok(hostAt > 0, "宿主行必须存在");
+  assert.equal(out[hostAt + 1], "✓ 宿主体检 / host integrity: ok（unpacked 已校验，原生绑定 2 个）");
+  assert.ok(out[hostAt + 2].startsWith("✓ 最近安装 / last install: ok install 1.1.101（此前 1.1.100）"));
+  assert.equal(out[hostAt + 3], "✓ profile 版本 / profile vs plugin: 1.1.101（一致）");
+  assert.equal(out[hostAt + 4], "✓ SLOT 长度 / slot length: 4210（未打补丁侧 4096）");
+});
+
+test("安装真相：宿主体检 ok=false 时打叉、写明缺口原因，并列出缺失项", () => {
+  const out = lines(baseState({
+    hostIntegrity: {
+      ok: false,
+      unpackedMissing: ["client.js"],
+      unpackedMissingCount: 1,
+      unpackedChecked: false,
+      requireBuiltin: ["electron"],
+      requireBuiltinCount: 1,
+      nativeCount: 0,
+      problems: ["unpacked 缺 1 个"],
+      reason: "unpacked_missing",
+    },
+  }));
+  const head = out.find((l) => l.includes("宿主体检 / host integrity"));
+  assert.ok(head.startsWith("✗ "), head);
+  assert.match(head, /有缺口 → unpacked 缺 1 个/);
+  assert.ok(out.includes("    缺 unpacked: 1 项"));
+  assert.ok(out.includes("    缺 unpacked 明细: client.js"));
+  assert.ok(out.includes("    缺 require 内建: electron"));
+});
+
+test("安装真相：读不到时不许写 ok —— 体检、最近安装、profile 版本、SLOT 长度各自显形", () => {
+  const out = lines(baseState({
+    hostIntegrity: null,
+    lastInstall: null,
+    slotLength: null,
+    openSlotLength: null,
+    profileVersion: "",
+    installTruth: { reasons: { host: "宿主目录没找到", lastInstall: "无 journal", slot: "SLOT 段没找到", profileVersion: "profile 未生成" } },
+  }));
+  for (const needle of ["宿主体检 / host integrity", "最近安装 / last install", "profile 版本 / profile vs plugin", "SLOT 长度 / slot length"]) {
+    const row = out.find((l) => l.includes(needle));
+    assert.ok(row, needle + " 必须出现");
+    assert.ok(row.startsWith("✗ "), needle + " 读不到时必须打叉：" + row);
+    assert.match(row, /读不到/, needle + " 必须说读不到：" + row);
+  }
+  assert.match(out.find((l) => l.includes("宿主体检 / host integrity")), /宿主目录没找到/);
+  assert.match(out.find((l) => l.includes("最近安装 / last install")), /无 journal/);
+  assert.match(out.find((l) => l.includes("SLOT 长度 / slot length")), /SLOT 段没找到/);
+  // null 不许被渲染成 0
+  assert.ok(!out.some((l) => l.startsWith("✓ SLOT 长度 / slot length")));
+});
+
+test("安装真相：profile 版本与插件版本不一致时两个值都写出来", () => {
+  const row = lines(baseState({ profileVersion: "1.1.99" })).find((l) => l.includes("profile 版本 / profile vs plugin"));
+  assert.equal(row, "✗ profile 版本 / profile vs plugin: 1.1.99 ≠ 插件 1.1.101 ← 不一致，重跑一次「应用」");
+});
+
+test("安装真相：最近安装失败时打叉，state 未知时用中性点", () => {
+  const failed = lines(baseState({ lastInstall: { state: "failed", version: "1.1.101", at: "", previousVersion: "", kind: "install", note: "copy 失败" } }))
+    .find((l) => l.includes("最近安装 / last install"));
+  assert.ok(failed.startsWith("✗ "), failed);
+  assert.match(failed, /copy 失败/);
+  const odd = lines(baseState({ lastInstall: { state: "pending", version: "1.1.101", at: "", previousVersion: "1.1.101", kind: "", note: "" } }))
+    .find((l) => l.includes("最近安装 / last install"));
+  assert.ok(odd.startsWith("· "), odd);
+  // previousVersion 与 version 相同不写「此前」
+  assert.ok(!odd.includes("此前"));
+});
+
+test("安装真相：lastInstall state=done 算成功、rolled-back 算失败，pending 保持中性", () => {
+  const done = lines(baseState({ lastInstall: { state: "done", version: "1.1.101", at: "", previousVersion: "", kind: "install", note: "" } }))
+    .find((l) => l.includes("最近安装 / last install"));
+  assert.ok(done.startsWith("✓ "), done);
+  const rolled = lines(baseState({ lastInstall: { state: "rolled-back", version: "1.1.101", at: "", previousVersion: "", kind: "install", note: "回滚完成" } }))
+    .find((l) => l.includes("最近安装 / last install"));
+  assert.ok(rolled.startsWith("✗ "), rolled);
+  assert.match(rolled, /回滚完成/);
 });
 
 // ---------- 尾部 shim 行 ----------

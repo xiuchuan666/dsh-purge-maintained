@@ -1,6 +1,6 @@
 # dsh-purge · 本机维护副本
 
-**Version 1.1.94** · Node.js >= 24 · 适配 dsh `0.2.2-rc.3`
+**Version 1.1.101** · Node.js >= 24 · 适配 dsh `0.2.2-rc.5`
 
 这是 `dsh-purge` 的**私有维护基线**，不是面向公众分发的仓库。
 
@@ -8,11 +8,11 @@
 
 | 事实 | 值 |
 |---|---|
-| 版本 | 1.1.94 |
+| 版本 | 1.1.101 |
 | 运行时依赖 | 零（只用 Node 内置模块） |
-| 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.3（另兼容 0.2.2-rc.2 / 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2） |
-| 补丁条数 | 86 条（提示词 27 / 代码 48 / 工具 8 / 兼容层 3） |
-| 回归测试 | 131 个文件 / 3794 个用例，`npm run check` 一条命令跑完 |
+| 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.5（另兼容 0.2.2-rc.3 / 0.2.2-rc.2 / 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2） |
+| 补丁条数 | 88 条（`PATCHES` 10 / `CODE_PATCHES` 3 / `ENGINE_PATCHES` 8 / `NEW_TOOL_PATCHES` 67，按数组顺序应用） |
+| 回归测试 | 162 个文件 / 4199 个用例，`npm run check` 一条命令跑完 |
 | 维护仓库 | `xiuchuan666/dsh-purge-maintained`（私有） |
 
 ---
@@ -40,7 +40,7 @@ dsh-purge 是本机 `@deepseek-ai` 安装目录的补丁工具，加一份演练
 三个子系统：
 
 1. **宿主补丁**（`lib/patches/`）
-   86 条补丁，按 `ALL_PATCHES` 数组顺序应用到宿主的 JS/提示词/YAML/工具定义上。每条补丁声明目标文件、原文片段、替换片段、`skipIfMarked` 之类守卫，命中才改，改前写 `.dshpurge.bak`。
+   88 条补丁，按 `ALL_PATCHES` 数组顺序应用到宿主的 JS/提示词/YAML/工具定义上。每条补丁声明目标文件、原文片段、替换片段、`skipIfMarked` 之类守卫，命中才改，改前写 `.dshpurge.bak`。
 
 2. **运行时插件**（`lib/index.js` + `client.js`）
    注册 `purge` / `rules` / `skills` / `rewind` 四个聊天命令、三个模型工具、一个侧栏 Dock（「清洗」「演练台」两页），并在每轮装配时重写系统提示词。
@@ -72,16 +72,16 @@ dsh-purge 是本机 `@deepseek-ai` 安装目录的补丁工具，加一份演练
 ```sh
 cd /d/dsh-purge-maintained
 npm pack
-# 产出 dsh-purge-1.1.94.tgz，约 2.4 MB / 170 个文件
-mv dsh-purge-1.1.94.tgz "$DSH_HOME/plugins/"
+# 产出 dsh-purge-1.1.101.tgz，约 2.4 MB / 170 个文件
+mv dsh-purge-1.1.101.tgz "$DSH_HOME/plugins/"
 ```
 
-当前依赖指向 `file:../../plugins/dsh-purge-1.1.94.tgz`，版本号变了就要同步改 profile 的 `package.json`。
+当前依赖指向 `file:../../plugins/dsh-purge-1.1.101.tgz`，版本号变了就要同步改 profile 的 `package.json`。
 
 ### 2. 装进 profile
 
 ```sh
-dsh plugin --profile desktop add "file:$DSH_HOME/plugins/dsh-purge-1.1.94.tgz"
+dsh plugin --profile desktop add "file:$DSH_HOME/plugins/dsh-purge-1.1.101.tgz"
 ```
 
 `dsh plugin --profile <name> add <spec>` 只是把参数转发给 profile 目录里的 pnpm，所以本地路径、tgz、目录都合法。
@@ -105,7 +105,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 或者带完整 specifier 批准：
 
 ```sh
-pnpm approve-builds "dsh-purge@file:../../plugins/dsh-purge-1.1.94.tgz"
+pnpm approve-builds "dsh-purge@file:../../plugins/dsh-purge-1.1.101.tgz"
 ```
 
 注意 `pnpm rebuild dsh-purge` **补不回来**，它自己也会报 `ERR_PNPM_IGNORED_BUILDS`。
@@ -175,11 +175,17 @@ dsh-purge --help
 
 `anchorMode` 是另一个开关，只有 `auto` 和 `off` 两值（`off` 立即关锚点，不用改代码），别和上面的 `strict/fallback/always` 混写。
 
+### 模型分档载荷（P3-8）
+
+- `npm run prompt:tier -- --model deepseek-v4.1-flash`：按 `docs/prompt-tiers.json` 选 frontier / standard / light，未命中回落 default，输出变体路径、字符数与 sha256；`--list` 看档位与规则，`--validate` 校验 manifest，`--json` 给机器读。
+- `npm run prompt:variants`：盘点 v1–v6 的字节/字符/标题/槽位与核心 marker；`--check` 缺核心 marker 时 exit 1。资产报告见 `docs/prompt-variants-report.md`。
+- 当前档位表全部标 `heuristic-unverified`，只做离线决策，不自动改 `prompt-inject.md` 或运行时注入；等 `eval-refusal` 真实采样后再决定是否接进注入路径。
+
 ---
 
 ## 配置项
 
-`lib/index.js:67` 的 `DEFAULTS`，共 18 键，可在 profile 的 `cordis.patch.yml` 里覆盖：
+`lib/index.js:76` 的 `DEFAULTS`，共 18 键，可在 profile 的 `cordis.patch.yml` 里覆盖：
 
 | 键 | 默认 | 说明 |
 |---|---|---|
@@ -209,13 +215,13 @@ dsh-purge --help
 ```
 bin/                 命令行入口
 lib/                 补丁引擎、宿主探测、运行时插件
-  patches/           86 条补丁（模板 / 四个注册表 / 合成入口）
+  patches/           88 条补丁（模板 / 四个注册表 / 合成入口）
   redteam/           演练台（store-core、dispatch、UI、工具）
 presets/redteam/     红队预设
 skills/redteam/      随包 23 个技能
 client.js            侧栏 Dock（成品文件，见下）
 cordis.patch.yml     插件声明
-scripts/             17 个测试 + 校验/构建/探测脚本
+scripts/             162 个测试 + 校验/构建/探测脚本
 docs/                设计文档、宿主基线快照、预览图
 ```
 
@@ -237,17 +243,19 @@ npm run check
 | 步骤 | 做什么 |
 |---|---|
 | `check:syntax` | 递归 `node --check` 全部 `bin/ lib/ scripts/ *.js`，最后 `import lib/index.js` 验模块图 |
-| `check:metadata` | 版本号是语义化版本、`release-notes.md` 首行等于 `# <version>`、`dshTargets` 含 `dshTarget`、86 条补丁 id 唯一 |
+| `check:metadata` | 版本号是语义化版本、`release-notes.md` 首行等于 `# <version>`、`dshTargets` 含 `dshTarget`、88 条补丁 id 唯一 |
 | `check:eol` | 行尾约定：文件内不许混行尾（`client.js` 与它的上游锚点除外）、已入库文件的行尾不许悄悄变、新文件要符合同目录多数派；另外查一次索引 blob 与工作区是否只差行尾（git 的 autocrlf 偷转换过就是这种形态） |
 | `check:client` | `client.js` 与 `docs/origin/client-1.1.94.js` 锚点哈希一致、DRILL 标记结构完整、演练台片段与 `lib/redteam/client.js` 同步 |
 | `check:gates` | `docs/patch-gates.json` 与补丁注册表的契约：不缺行、不留孤儿行、名字一致、needle 不跨行也不写绝对路径（不读宿主，裸 runner 可跑） |
-| `test` | 131 个 `scripts/test-*.mjs`（3794 个用例），`node --test` 跑，失败能定位到具体用例名 |
+| `test` | 162 个 `scripts/test-*.mjs`（4199 个用例），`node --test` 跑，失败能定位到具体用例名 |
 
-当前基线：`[syntax] 272 files` / `[metadata] patches=86 tests=131` / `[client] anchor OK` / `[test] PASS 3792/3794`（约 18 秒）。
+当前基线：`[syntax] 338 files` / `[metadata] patches=88 tests=162` / `[client] anchor OK` / `[test] PASS 4197/4199`（约 47 秒）。
 
 三条命令分三层：`npm test`（离线，约 1 秒）→ `npm run check`（加语法/元数据/产物链，约 3 秒）→ `npm run test:full`（加覆盖率棘轮基线，约 2 秒，需要 git 工作副本）。
 
 **新增测试的命名规范**：`scripts/test-<主题>.mjs`，会被 `discoverTests` 自动收进 `npm run check`，不需要改任何清单。CI 在 `.github/workflows/ci.yml`，push `main` 和 PR 都跑 `npm run check`。
+
+补丁锚点契约（P2-5）：`node scripts/patch-contracts.mjs --write` 从补丁注册表生成 `docs/patch-contracts.json`，`node scripts/patch-contracts.mjs --check --tree <DIR>` 按契约校验一棵宿主树（支持 `resources/app`、`@deepseek-ai` 底座、asar 里的 `dsh/node_modules/@deepseek-ai` 等布局）。退出码 `0` 表示全部 ok/na；`1` 表示有 missing **或 ambiguous** —— ambiguous 同样是失败：同一条针在一个文件里多处命中，无法确定改哪一处，必须先人工收窄；`2` 是参数或文件错误。
 
 **改东西之前先查 [测试地图](docs/test-map.md)**：每个能力对到具体守卫，`❗缺` 的行就是当前盲区。测试用 `node:test` 的 `test()` 而不是顶层裸 `assert` —— 裸 `assert` 第一条红就抛出，同文件后面永不执行；约定细节在 [维护手册](MAINTENANCE.md) 的「测试地图」一节。
 
@@ -267,10 +275,10 @@ node scripts/e2e-desktop.mjs --main "<纯净 main.js>"
 | `patch-registry.mjs` | 276 | `PATCHES`（10 条） |
 | `code-patches.mjs` | 42 | `CODE_PATCHES`（3 条） |
 | `engine-patches.mjs` | 295 | `ENGINE_PATCHES`（8 条） |
-| `new-tool-patches.mjs` | 3111 | `NEW_TOOL_PATCHES`（65 条） |
-| `index.mjs` | 8 | 按 `PATCHES → CODE → ENGINE → NEW_TOOL` 合成 86 条 |
+| `new-tool-patches.mjs` | 3111 | `NEW_TOOL_PATCHES`（67 条） |
+| `index.mjs` | 8 | 按 `PATCHES → CODE → ENGINE → NEW_TOOL` 合成 88 条 |
 
-**`ALL_PATCHES` 的数组顺序就是 apply 顺序，不要重排。** 它不是按 id 升序：#76 排在 #70 前面，这是有意为之，测试里锁死了这条。`scripts/test-patch-registry.mjs` 会把 86 条补丁对象（含正则 flags 和函数型 replace）与基线快照逐字节比对，再对 239 个 replacement 跑 690 组真实引擎对拍。
+**`ALL_PATCHES` 的数组顺序就是 apply 顺序，不要重排。** 它不是按 id 升序：#76 排在 #70 前面，这是有意为之，测试里锁死了这条。`scripts/test-patch-registry.mjs` 会把 88 条补丁对象（含正则 flags 和函数型 replace）与基线快照逐字节比对，再对 239 个 replacement 跑 690 组真实引擎对拍。
 
 **回退**：`git revert <commit>`。首个基线提交是 `fa8d09d`，之后每一步都是独立可回退的提交。
 
@@ -286,7 +294,7 @@ node scripts/e2e-desktop.mjs --main "<纯净 main.js>"
 npm run host:status
 ```
 
-读 `docs/host-baseline.json`（86 条补丁状态 + 59 个目标文件指纹），跟当前宿主对比，**同时**扫一遍 `docs/host-contract.json`（我们调用的宿主服务/事件/导出），合并成三级判定：
+读 `docs/host-baseline.json`（88 条补丁状态 + 62 个目标文件指纹），跟当前宿主对比，**同时**扫一遍 `docs/host-contract.json`（我们调用的宿主服务/事件/导出），合并成三级判定：
 
 | verdict | 含义 | 退出码 |
 |---|---|---|
