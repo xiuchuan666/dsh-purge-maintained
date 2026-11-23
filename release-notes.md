@@ -1,3 +1,27 @@
+# 1.1.100
+
+## 五路并行：评测闸门、profile 安装事务化、宿主漂移/冒烟/备份 GC
+
+- **拒绝率闸门**：新增 `lib/eval-refusal.js` + `scripts/eval-refusal.mjs`（`--plan / --run / --check / --hash`）。题集 `docs/eval/probes.jsonl` 10 题（5 定向 + 5 泛化），指纹 `d8b16566c8035da4`；单题 0–2、聚合 0–10；阈值 7.0/6.0、baseline 容差 0.15。`--check` 从 `rows` 重算总分、拒收 `--limit` 抽样报告、题集漂移即退出 3。e2e 假网关：`total=9.00`、`errors=0`、`runExit/checkExit=0`。
+- **profile 安装事务化**：新增 `lib/profile-install.js` + `scripts/profile-install.mjs`（`npm run profile:install`）。手写 tar 解析（拒绝路径穿越）、tgz sha256/size 校验、只改 `pnpm-lock.yaml` 的 `dsh-purge` 段、journal + 备份 + 换树 + 健康检查（版本 + SLOT ≥ 16 000）+ 失败自动还原。桌面 profile 仍由 Electron 独占，这条是唯一离线直装通道。
+- **宿主漂移预警**：新增 `lib/host-watch.js` + `scripts/host-watch.mjs`（`npm run host:watch`）。ETag 优先，只有长度相同记 `unknown`；`.part` + Content-Length 校验；`buildPlan` 只出命令，永不拼 `--apply`。
+- **装后冒烟**：新增 `lib/host-smoke.js` + `scripts/host-smoke.mjs`（`npm run host:smoke`）。bash/read/write/tool 四步，只写 workdir；真机 4/4 PASS。
+- **备份 GC**：新增 `lib/host-gc.js` + `scripts/host-gc.mjs`（`npm run host:gc`）。默认保留两代、默认 dry-run；realpath 双端复核、拒符号链接与 `~/.dsh` 根。
+- **边界**：四条工具都不进 `npm run check`——分别要真机 dsh、外网、`--root`、已提交的评测报告；版本一升评测报告必然缺失，接进 CI 就是假红。定位是安装/发布前后的手动闸门。
+- **回归**：五路 96 例（host-gc 10 / host-smoke 19 / host-watch 14 / profile-install 28 / eval-refusal 25），`npm run check` 全绿。
+
+# 1.1.99
+
+## 每次安装的保护：唯一入口 + journal + 启动健康检查 + 自动回滚
+
+- **问题**：1.1.98 的 swap 只在“换树”这一瞬间有回滚；安装入口不唯一（手工 robocopy 可绕过）、没有前置检查、没有启动后验证。rc.5 崩溃正是漏解 unpacked 后直接覆盖，失败暴露在下一次启动。
+- **唯一入口**：新增 `scripts/host-install.mjs`（`npm run host:install`）。预检（journal / 新树 probe / 磁盘 1.25 倍 / 进程状态）→ 关宿主 → rename 旧树为 `app.prev-<ts>` → 复制新树 → 再 probe → 启动并做 15 s 健康检查（进程存活 + 无新 `crash-*.log`）→ 失败自动回滚并重启旧树。默认 dry-run；退出码 0/1/2/3。
+- **journal**：`~/.dsh/dsh-purge/host-install-journal.json` 记录 pending/done/rolled-back 与每一步；`pending` 期间拒绝新安装，`--rollback` 只依赖 journal 里的 `previous`/`asarBackup`。
+- **底层步骤隔离**：`host-adopt swap` 现在必须显式 `--low-level`，否则退出 2。
+- **复用**：`probeTree()` 抽到 `lib/host-probe.js`，安装与 probe 用同一判据（真 `require` 一次原生绑定）。
+- **文档**：新增 `docs/install-process.md`（唯一入口、禁止清单、P1–P9 检查表、journal 状态机、失败处置）；`docs/host-adopt-runbook.md` 第 5 步与 I3 同步改走 `host:install`。
+- **回归**：`scripts/test-host-install.mjs` 8 例；真机 dry-run 实测 probe OK、磁盘 451 MB/需 564 MB/可用 51 154 MB、宿主运行中拒绝（exit 2）。
+
 # 1.1.98
 
 ## 宿主适配事务化：把两起事故收成流程与守卫

@@ -18,6 +18,7 @@ function parse(argv) {
     const a = argv[i];
     if (a === "--apply") out.apply = true;
     else if (a === "--json") out.json = true;
+    else if (a === "--low-level") out.lowLevel = true;
     else if (a === "--asar") out.asar = argv[++i];
     else if (a === "--dest") out.dest = argv[++i];
     else if (a === "--tree") out.tree = argv[++i];
@@ -92,6 +93,10 @@ function cmdSnapshot(args) {
 }
 
 function cmdSwap(args) {
+  if (!args.lowLevel) {
+    console.error("[host-adopt] swap 是底层步骤；完整安装请用 npm run host:install -- --tree <appDir> --stop --apply（预检/快照/启动健康检查/自动回滚都在那里）。确实要手搓再加 --low-level。");
+    return 2;
+  }
   const resources = path.resolve(args.resources || defaultResources());
   const tree = path.resolve(args.tree || "");
   const appDir = path.join(resources, "app");

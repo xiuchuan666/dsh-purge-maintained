@@ -9,13 +9,17 @@
 
 任何一步绕过事务，失败都会延迟到"下一次启动"才暴露，而且暴露点离根因很远（例：漏解 unpacked → `No usable native binding`）。
 
+## 唯一入口
+
+宿主安装只走 `scripts/host-install.mjs`（`npm run host:install`）：预检（journal / probe / 磁盘 / 进程）→ 关宿主 → rename 旧树 → 复制新树 → 再 probe → 启动健康检查（15 s 稳定期 + 新 crash 日志监测）→ 失败自动回滚。`host-adopt swap` 降为底层步骤，必须显式 `--low-level`。完整检查表与禁止清单见 `docs/install-process.md`。
+
 ## 不变式（每次换树必须全满足）
 
 | # | 不变式 | 现在的强制点 |
 |---|---|---|
 | I1 | asar 解出的树必须补齐 `app.asar.unpacked`，缺一个文件就不许提交 | `scripts/extract-asar.mjs`、`ensureUnpackedOverlay()`（`lib/core.js:2198/2217` 的更新链也走它） |
 | I2 | 新树必须先证明能加载原生绑定，才允许靠近安装目录 | `scripts/host-adopt.mjs probe --tree <appDir>`（文件存在 + 真 `require` 一次） |
-| I3 | 旧树用 rename 保留，新树失败必须自动回滚 | `scripts/host-adopt.mjs swap --tree <appDir> --apply` |
+| I3 | 旧树用 rename 保留，新树失败必须自动回滚 | `scripts/host-install.mjs`（`swap` 需 `--low-level`） |
 | I4 | 三份基线一次重钉、一个 commit | `scripts/host-adopt.mjs pin --tree <appDir>` |
 | I5 | 全局环境变更必须留 journal + 可回滚命令；网络问题先诊断再动手 | `scripts/net-doctor.mjs`、`.tmp-dns-rollback.txt` 的格式约定 |
 
@@ -38,9 +42,10 @@ node scripts/host-rehearse.mjs --baseline-tree .tmp-rehearse/app-<ver>/dsh/node_
 # 4. 基线一次重钉（dry-run 先看命令；--apply 才写）
 node scripts/host-adopt.mjs pin --tree .tmp-rehearse/app-<ver>
 
-# 5. 快照 + 换树（先 dry-run，确认步骤后再 --apply；旧树保留为 app.prev-<ts>）
-node scripts/host-adopt.mjs snapshot --apply
-node scripts/host-adopt.mjs swap --tree .tmp-rehearse/app-<ver> --resources "<安装目录>/resources" --apply
+# 5. 安装（唯一入口：预检 + 快照 + 换树 + 启动健康检查 + 失败自动回滚）
+#    先 dry-run 看拒绝条件，再加 --stop --apply
+node scripts/host-install.mjs --tree .tmp-rehearse/app-<ver> --resources "<安装目录>/resources"
+node scripts/host-install.mjs --tree .tmp-rehearse/app-<ver> --resources "<安装目录>/resources" --stop --apply
 
 # 6. 装后核对
 node scripts/host-integrity.mjs --resources "<安装目录>/resources"
