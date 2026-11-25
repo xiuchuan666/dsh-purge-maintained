@@ -1,3 +1,12 @@
+# 1.1.102
+
+## pnpm store 修复：根治桌面插件更新 “Expected package … Actual package in the store …”
+
+- **病因**：桌面 profile 里 dsh-purge 是 `file:../../plugins/dsh-purge-<ver>.tgz` 依赖，pnpm 把每个历史 tarball 都留在全局 store（`store/v11/index.db` 的 `package_index`）。1.1.83–1.1.97 共 13 条旧条目残留，其中 1.1.97 条目内容与 1.1.100 不一致；市场更新任何插件时 pnpm 重新校验 store，就报 `Expected package: dsh-purge@1.1.97. Actual package in the store: dsh-purge@1.1.100.` 并回滚。关 `strictStorePkgContentCheck` 只是跳过校验，旧条目还在。
+- **修复工具**：新增 `lib/store-repair.js` + `scripts/store-repair.mjs`（`npm run store:repair`）。以当前 `pnpm-lock.yaml` 的 dsh-purge integrity 为唯一事实来源，列出并清理不再被引用的 dsh-purge store 条目；默认 dry-run，`--apply` 先备份 `index.db` 再删，`--prune-dirs` 顺带删只含 `tarball-integrity` 的指针目录；其它插件条目一律不动，store 不存在安全跳过。
+- **桌面实测**：清理 13 条旧条目（备份 `index.db.dsh-purge-backup-2026-11-25T14-35-49-393Z`），`pnpm install --frozen-lockfile` 通过；真实更新 `dsh-context 0.85.1 → 0.87.1` 成功，`dshmarket@1.80.0` 重装与两次 `pnpm install --frozen-lockfile` 均通过。
+- **回归**：新增 `scripts/test-store-repair.mjs` 13 例（lock 解析、stale 计划、dry-run 不改库、删除+备份、幂等、store 缺失、指针目录、路径推导）。
+
 # 1.1.101
 
 ## 四件安装闭环：补丁锚点契约、状态安装真相、预演启动探针、更新一条命令

@@ -12,7 +12,7 @@
 | 运行时依赖 | 零（只用 Node 内置模块） |
 | 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.5（另兼容 0.2.2-rc.3 / 0.2.2-rc.2 / 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2） |
 | 补丁条数 | 88 条（`PATCHES` 10 / `CODE_PATCHES` 3 / `ENGINE_PATCHES` 8 / `NEW_TOOL_PATCHES` 67，按数组顺序应用） |
-| 回归测试 | 162 个文件 / 4199 个用例，`npm run check` 一条命令跑完 |
+| 回归测试 | 163 个文件 / 4212 个用例，`npm run check` 一条命令跑完 |
 | 维护仓库 | `xiuchuan666/dsh-purge-maintained`（私有） |
 
 ---
@@ -53,7 +53,7 @@ dsh-purge 是本机 `@deepseek-ai` 安装目录的补丁工具，加一份演练
 | 层 | 条数 | 例子 |
 |---|---|---|
 | 提示词 | 27 | `WORKSPACE_CONTEXT_INTRO`、`HARNESS_IDENTITY_STRIP`、`OFFICIAL_PLAN_MODE_NEUTRAL` |
-| 代码 | 48 | `SANDBOX_MODE_DEFAULT`、`APPROVAL_AUTO_GRANT`、`REWIND_*`、桌面 7 条 |
+| 代码 | 50 | `SANDBOX_MODE_DEFAULT`、`APPROVAL_AUTO_GRANT`、`REWIND_*`、桌面 7 条 |
 | 工具 | 8 | `MINIMAL_OFFICIAL_TOOLSET`、`HOOKS_CLAUDE_DENY_ALLOW` |
 | 兼容 | 3 | `0.1.5` / `0.2.0` 老宿主的兜底 |
 
@@ -221,7 +221,7 @@ presets/redteam/     红队预设
 skills/redteam/      随包 23 个技能
 client.js            侧栏 Dock（成品文件，见下）
 cordis.patch.yml     插件声明
-scripts/             162 个测试 + 校验/构建/探测脚本
+scripts/             163 个测试 + 校验/构建/探测脚本
 docs/                设计文档、宿主基线快照、预览图
 ```
 
@@ -247,7 +247,8 @@ npm run check
 | `check:eol` | 行尾约定：文件内不许混行尾（`client.js` 与它的上游锚点除外）、已入库文件的行尾不许悄悄变、新文件要符合同目录多数派；另外查一次索引 blob 与工作区是否只差行尾（git 的 autocrlf 偷转换过就是这种形态） |
 | `check:client` | `client.js` 与 `docs/origin/client-1.1.94.js` 锚点哈希一致、DRILL 标记结构完整、演练台片段与 `lib/redteam/client.js` 同步 |
 | `check:gates` | `docs/patch-gates.json` 与补丁注册表的契约：不缺行、不留孤儿行、名字一致、needle 不跨行也不写绝对路径（不读宿主，裸 runner 可跑） |
-| `test` | 162 个 `scripts/test-*.mjs`（4199 个用例），`node --test` 跑，失败能定位到具体用例名 |
+| `test` | 163 个 `scripts/test-*.mjs`（4212 个用例），`node --test` 跑，失败能定位到具体用例名 |
+| `store:repair` | 诊断/清理 pnpm store 里过期的 dsh-purge 条目，根治插件更新时的 store 版本校验失败 |
 
 当前基线：`[syntax] 338 files` / `[metadata] patches=88 tests=162` / `[client] anchor OK` / `[test] PASS 4197/4199`（约 47 秒）。
 

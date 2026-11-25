@@ -2677,3 +2677,9 @@ npm run impact:patches -- --rehearsal .tmp-rehearse/rc3.json   # 带上预演判
 
 
 
+
+## 二十五、pnpm store 修复与桌面插件更新回归（2026-11-25）
+
+- 症状：市场更新任何插件都失败并回滚，报 `Expected package: dsh-purge@1.1.97. Actual package in the store: dsh-purge@1.1.100.`；根因是 store/v11/index.db 残留 13 条旧 dsh-purge tarball 条目，而不是网络或 strictStorePkgContentCheck 本身。
+- 处置：`npm run store:repair -- --profile <desktop> --apply --prune-dirs` 清掉 13 条旧条目并备份 index.db；随后 `pnpm install --frozen-lockfile` 通过，`dsh-context 0.85.1→0.87.1` 真实更新成功，`dshmarket@1.80.0` 重装通过。（billion-context 0.1.220 / dsh-im 5.13.1 在当前 npm 镜像里尚未发布，与本次故障无关。）
+- 覆盖：`scripts/test-store-repair.mjs` 13 例全绿；临时 sqlite 夹具，不碰真实 profile/store。
