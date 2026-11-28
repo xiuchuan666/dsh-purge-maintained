@@ -218,26 +218,32 @@ test("只读文件：apply 报可解释的 write_error，原文件不变且不�
   const ai = makeTree("readonly");
   const original = "const answer = 40 + 2;\n";
   const fp = seed(ai, AI_REL, original);
+  const parentDir = dirname(fp);
+  // 先建好备份，再锁权限：POSIX 下原子写（同目录写临时文件再 rename）看的是父目录写权限，
+  // 只给目标文件 chmod 0o444 拦不住 rename；Windows 则看文件只读位。
+  await core.backupAll(ai);
   chmodSync(fp, 0o444);
+  if (process.platform !== "win32") chmodSync(parentDir, 0o555);
   try {
+    const checkTarget = process.platform === "win32" ? fp : parentDir;
     try {
-      accessSync(fp, fsConstants.W_OK);
-      t.skip("当前账号对 chmod 444 文件仍可写，无法制造只读场景");
+      accessSync(checkTarget, fsConstants.W_OK);
+      t.skip("当前账号对只读目标仍可写，无法制造只读场景");
       return;
     } catch {
       /* 预期：不可写 */
     }
-    await core.backupAll(ai);
     const r1 = await core.applyPatches(ai, [P1], {});
     assert.ok(r1[0].status.startsWith("write_error:"), "失败必须带 write_error 前缀，实得 " + r1[0].status);
     assert.equal(readFileSync(fp, "utf8"), original, "写失败不得留下半改内容");
-    const leftovers = readdirSync(dirname(fp)).filter((n) => n.includes(".tmp") || n.includes(".copytmp"));
+    const leftovers = readdirSync(parentDir).filter((n) => n.includes(".tmp") || n.includes(".copytmp"));
     assert.deepEqual(leftovers, [], "写失败不得留下临时文件");
     await new Promise((r) => setTimeout(r, 20));
     const r2 = await core.applyPatches(ai, [P1], {});
     assert.ok(r2[0].status.startsWith("write_error:"), "第二次仍应如实报 write_error，不能洗成 already");
     assert.equal(readFileSync(fp, "utf8"), original);
   } finally {
+    if (process.platform !== "win32") chmodSync(parentDir, 0o755);
     chmodSync(fp, 0o666);
   }
 });

@@ -324,11 +324,17 @@ test("planProfileInstall：原 file: 安装保持 file: 并指向新 tgz", () =>
   assert.equal(installSpecFor({ profileDir: profile.profileDir, tgz: tgz, currentSpec: "1.1.97", version: "1.1.98" }), "1.1.98");
 });
 
-test("installSpecFor：跨盘 tgz 退回绝对 file: 路径，不拼出 file:./D:/…", () => {
+test("installSpecFor：跨盘 tgz 退回绝对 file: 路径，不拼出 file:./D:/…", (t) => {
+  if (process.platform !== "win32") {
+    t.skip("跨盘符路径只在 Windows 上存在");
+    return;
+  }
   const root = tmp();
   const profile = makeProfile(root, { version: "1.1.97", spec: "file:../../plugins/dsh-purge-1.1.97.tgz", lockFrom: "file:../../plugins/dsh-purge-1.1.97.tgz" });
-  const spec = installSpecFor({ profileDir: profile.profileDir, tgz: "Z:/elsewhere/dsh-purge-1.1.100.tgz", currentSpec: "file:../../plugins/dsh-purge-1.1.97.tgz", version: "1.1.100" });
-  assert.equal(spec, "file:Z:/elsewhere/dsh-purge-1.1.100.tgz");
+  const otherDrive = /^Z:/i.test(profile.profileDir) ? "Y:" : "Z:";
+  const tgz = otherDrive + "/elsewhere/dsh-purge-1.1.100.tgz";
+  const spec = installSpecFor({ profileDir: profile.profileDir, tgz, currentSpec: "file:../../plugins/dsh-purge-1.1.97.tgz", version: "1.1.100" });
+  assert.equal(spec, "file:" + tgz);
   assert.equal(/file:\.\//.test(spec), false);
 });
 

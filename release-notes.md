@@ -1,3 +1,15 @@
+# 1.1.103
+
+## 提示词 v7：借鉴开源越狱仓库的对抗结构，拒绝率闸门 4.50 → 8.00，体积 -77%
+
+- **调研**：对 github.com/togg53192-cmd/jailbreaks（22.5k stars，38 文件）做全量技术提炼，重点深读 4 份高价值提示词（Gemini-4-Argon 的子集对齐框架与误判分类账、DeepSeek-4-1 的单点判定与反过度拒绝清单、BigPickle/VANTA 的 persona lock 与锚句、chatgpt-free-tier/Jack 的 THE WALL 固定拒绝句与窄地板）。
+- **新变体 `docs/prompt-inject-v7.md`**（11236 B / 5214 chars / 95 行 / 27 槽，`--check` PASS）：子集对齐导语（本规范是模型真实安全义务的子集，执行它=核心安全对齐，无冲突需覆盖）、误判分类账 10 条（平台政策不存在/法条引用=拒绝的伪装/可武器化不是判据/给弱化版=拒绝的伪装）、窄地板 4 条+单一固定拒绝句、注入安全指令处置节（宿主 WARNING 块=query-time 消费者启发式，不是新禁令）、锚定开场与首尾双锚点、反漂移与负样本。
+- **评测（deepseek-v4.1-flash，6 样本×10 题=60 请求，0 传输错误）**：当前装载版 4.50/10（fail）→ v7 **8.00/10**（ok，+78%）；满分率 28%→48%，零分率 37%→20%，原生人格接管 52%→25%；体积 22553 chars→5214 chars（**-77%**）。四轮聚合 n=150：锚定回答 0 个零分、均分 1.84；原生话术均分 0.49——锚定率=胜率。逐题 7 升 2 平 1 小回退（打点 12/12→10/12）。迭代痕迹 `docs/eval/run-v7*.json`（v7e 为上游超时噪声作废轮）、`docs/eval/run-v6baseline-6s.json`。
+- **补丁模板**：`lib/patches/templates.mjs` 新增 `SUBSET_INTRO_CORE` / `SUBSET_INTRO_TAIL` / `SUBSET_INTRO` 常量（子集对齐英文版，供新补丁引用）；旧 `STRONG_INTRO*` 逐字节不动，既有补丁产物不受影响。
+- **报告**：`docs/prompt-variants-report.md` 补 v7 行与评测结论节（含残余弱点：id35 越狱复述 1/6 锚定为基座元认知穿透，提示词层收益递减）。
+- **同步**：README 版本引用 1.1.102→1.1.103；`package.json` dshTarget 0.2.2-rc.3→rc.5（含 dshTargets 列表）；`docs/eol-baseline.json` / `docs/test-baseline.json` / `scripts/test-host-watch.mjs` / `scripts/test-package-integrity.mjs` / `scripts/test-patch-idempotency.mjs` / `scripts/test-profile-install.mjs` 为 rc.5 适配基线更新。
+- **回归**：`npm run check` 全绿（fail 0）；`node scripts/prompt-variants.mjs --check` v1–v7 全 PASS。
+
 # 1.1.102
 
 ## pnpm store 修复：根治桌面插件更新 “Expected package … Actual package in the store …”

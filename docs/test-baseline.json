@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "capturedAt": "2026-11-15T00:25:22.626Z",
-  "commit": "82abbcf",
+  "capturedAt": "2026-11-27T01:16:04.736Z",
+  "commit": "a377f62",
   "note": "棘轮基线：只许涨。刷新用 npm run test:baseline",
   "files": {
     "lib/anchor.js": {
@@ -21,8 +21,8 @@
       "brf": 8
     },
     "lib/asset-table.js": {
-      "lh": 169,
-      "lf": 169,
+      "lh": 184,
+      "lf": 184,
       "fnh": 0,
       "fnf": 0,
       "brh": 1,
@@ -43,6 +43,14 @@
       "fnf": 7,
       "brh": 60,
       "brf": 62
+    },
+    "lib/boot-probe.js": {
+      "lh": 381,
+      "lf": 408,
+      "fnh": 24,
+      "fnf": 25,
+      "brh": 127,
+      "brf": 168
     },
     "lib/boot-settle.js": {
       "lh": 246,
@@ -69,12 +77,12 @@
       "brf": 90
     },
     "lib/chat-rules-skills.js": {
-      "lh": 228,
+      "lh": 230,
       "lf": 230,
       "fnh": 6,
       "fnf": 6,
-      "brh": 105,
-      "brf": 108
+      "brh": 109,
+      "brf": 111
     },
     "lib/commands.js": {
       "lh": 99,
@@ -93,20 +101,20 @@
       "brf": 213
     },
     "lib/core.js": {
-      "lh": 4793,
-      "lf": 5205,
-      "fnh": 330,
-      "fnf": 343,
-      "brh": 1746,
-      "brf": 2045
+      "lh": 5118,
+      "lf": 5559,
+      "fnh": 345,
+      "fnf": 359,
+      "brh": 1891,
+      "brf": 2214
     },
     "lib/desktop.js": {
-      "lh": 1842,
+      "lh": 1853,
       "lf": 2272,
-      "fnh": 105,
-      "fnf": 116,
-      "brh": 514,
-      "brf": 636
+      "fnh": 103,
+      "fnf": 117,
+      "brh": 508,
+      "brf": 640
     },
     "lib/drill-grant.js": {
       "lh": 50,
@@ -116,13 +124,21 @@
       "brh": 20,
       "brf": 20
     },
+    "lib/eval-refusal.js": {
+      "lh": 397,
+      "lf": 412,
+      "fnh": 21,
+      "fnf": 21,
+      "brh": 156,
+      "brf": 190
+    },
     "lib/extract-asar.js": {
-      "lh": 493,
-      "lf": 493,
-      "fnh": 39,
-      "fnf": 40,
-      "brh": 168,
-      "brf": 192
+      "lh": 539,
+      "lf": 540,
+      "fnh": 42,
+      "fnf": 43,
+      "brh": 179,
+      "brf": 206
     },
     "lib/hide-console.js": {
       "lh": 336,
@@ -153,16 +169,72 @@
       "lf": 26,
       "fnh": 3,
       "fnf": 3,
-      "brh": 9,
-      "brf": 11
+      "brh": 11,
+      "brf": 13
+    },
+    "lib/host-gc.js": {
+      "lh": 309,
+      "lf": 343,
+      "fnh": 21,
+      "fnf": 21,
+      "brh": 131,
+      "brf": 180
+    },
+    "lib/host-install-journal.js": {
+      "lh": 101,
+      "lf": 103,
+      "fnh": 10,
+      "fnf": 11,
+      "brh": 27,
+      "brf": 43
+    },
+    "lib/host-install.js": {
+      "lh": 62,
+      "lf": 64,
+      "fnh": 6,
+      "fnf": 6,
+      "brh": 16,
+      "brf": 21
+    },
+    "lib/host-integrity.js": {
+      "lh": 143,
+      "lf": 154,
+      "fnh": 11,
+      "fnf": 12,
+      "brh": 44,
+      "brf": 54
+    },
+    "lib/host-smoke.js": {
+      "lh": 177,
+      "lf": 182,
+      "fnh": 11,
+      "fnf": 11,
+      "brh": 61,
+      "brf": 93
+    },
+    "lib/host-update.js": {
+      "lh": 396,
+      "lf": 420,
+      "fnh": 18,
+      "fnf": 19,
+      "brh": 101,
+      "brf": 155
+    },
+    "lib/host-watch.js": {
+      "lh": 322,
+      "lf": 333,
+      "fnh": 22,
+      "fnf": 22,
+      "brh": 113,
+      "brf": 153
     },
     "lib/host.js": {
-      "lh": 24,
+      "lh": 26,
       "lf": 28,
-      "fnh": 3,
+      "fnh": 4,
       "fnf": 5,
-      "brh": 4,
-      "brf": 5
+      "brh": 5,
+      "brf": 6
     },
     "lib/http-routes.js": {
       "lh": 243,
@@ -228,13 +300,21 @@
       "brh": 40,
       "brf": 45
     },
+    "lib/patch-contracts.js": {
+      "lh": 695,
+      "lf": 776,
+      "fnh": 63,
+      "fnf": 69,
+      "brh": 206,
+      "brf": 303
+    },
     "lib/patch-outcome.mjs": {
       "lh": 330,
       "lf": 330,
       "fnh": 24,
       "fnf": 24,
-      "brh": 135,
-      "brf": 144
+      "brh": 139,
+      "brf": 147
     },
     "lib/patches/code-patches.mjs": {
       "lh": 42,
@@ -261,8 +341,8 @@
       "brf": 1
     },
     "lib/patches/new-tool-patches.mjs": {
-      "lh": 3231,
-      "lf": 3231,
+      "lh": 3265,
+      "lf": 3265,
       "fnh": 0,
       "fnf": 0,
       "brh": 1,
@@ -298,7 +378,7 @@
       "fnh": 16,
       "fnf": 16,
       "brh": 95,
-      "brf": 105
+      "brf": 107
     },
     "lib/profile-insert.js": {
       "lh": 412,
@@ -308,13 +388,37 @@
       "brh": 177,
       "brf": 193
     },
+    "lib/profile-install.js": {
+      "lh": 751,
+      "lf": 805,
+      "fnh": 39,
+      "fnf": 46,
+      "brh": 261,
+      "brf": 352
+    },
     "lib/prompt-source.js": {
       "lh": 363,
       "lf": 363,
       "fnh": 24,
       "fnf": 24,
       "brh": 119,
-      "brf": 140
+      "brf": 139
+    },
+    "lib/prompt-tier.js": {
+      "lh": 463,
+      "lf": 493,
+      "fnh": 30,
+      "fnf": 30,
+      "brh": 161,
+      "brf": 207
+    },
+    "lib/prompt-variants.js": {
+      "lh": 279,
+      "lf": 281,
+      "fnh": 35,
+      "fnf": 35,
+      "brh": 76,
+      "brf": 104
     },
     "lib/reapply.js": {
       "lh": 270,
@@ -402,7 +506,7 @@
       "fnh": 165,
       "fnf": 169,
       "brh": 606,
-      "brf": 756
+      "brf": 759
     },
     "lib/redteam/score-rules.js": {
       "lh": 940,
@@ -442,7 +546,7 @@
       "fnh": 254,
       "fnf": 259,
       "brh": 1410,
-      "brf": 1610
+      "brf": 1609
     },
     "lib/redteam/tool-specs-evidence.js": {
       "lh": 234,
@@ -485,12 +589,12 @@
       "brf": 59
     },
     "lib/redteam/tools.js": {
-      "lh": 500,
+      "lh": 501,
       "lf": 501,
       "fnh": 39,
       "fnf": 46,
-      "brh": 195,
-      "brf": 217
+      "brh": 196,
+      "brf": 216
     },
     "lib/redteam/validate.js": {
       "lh": 88,
@@ -509,20 +613,20 @@
       "brf": 405
     },
     "lib/routes.js": {
-      "lh": 689,
-      "lf": 690,
-      "fnh": 21,
-      "fnf": 23,
-      "brh": 211,
-      "brf": 250
+      "lh": 715,
+      "lf": 716,
+      "fnh": 22,
+      "fnf": 24,
+      "brh": 232,
+      "brf": 272
     },
     "lib/rules.js": {
       "lh": 560,
       "lf": 560,
       "fnh": 46,
       "fnf": 48,
-      "brh": 209,
-      "brf": 233
+      "brh": 212,
+      "brf": 236
     },
     "lib/session-access.js": {
       "lh": 159,
@@ -541,20 +645,28 @@
       "brf": 34
     },
     "lib/skills.js": {
-      "lh": 697,
+      "lh": 705,
       "lf": 747,
       "fnh": 57,
       "fnf": 63,
-      "brh": 335,
-      "brf": 400
+      "brh": 341,
+      "brf": 402
     },
     "lib/status-render.js": {
-      "lh": 97,
-      "lf": 99,
-      "fnh": 5,
-      "fnf": 5,
-      "brh": 70,
-      "brf": 73
+      "lh": 173,
+      "lf": 176,
+      "fnh": 8,
+      "fnf": 8,
+      "brh": 120,
+      "brf": 137
+    },
+    "lib/store-repair.js": {
+      "lh": 177,
+      "lf": 187,
+      "fnh": 14,
+      "fnf": 15,
+      "brh": 61,
+      "brf": 84
     },
     "lib/subagent-control.js": {
       "lh": 67,
@@ -597,11 +709,11 @@
       "brf": 32
     },
     "lib/uninstall.js": {
-      "lh": 298,
+      "lh": 300,
       "lf": 316,
       "fnh": 22,
       "fnf": 24,
-      "brh": 123,
+      "brh": 124,
       "brf": 135
     },
     "lib/update.js": {
@@ -625,8 +737,8 @@
       "lf": 186,
       "fnh": 13,
       "fnf": 13,
-      "brh": 84,
-      "brf": 87
+      "brh": 85,
+      "brf": 88
     }
   }
 }

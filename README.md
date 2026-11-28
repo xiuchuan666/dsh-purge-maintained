@@ -1,6 +1,6 @@
 # dsh-purge · 本机维护副本
 
-**Version 1.1.101** · Node.js >= 24 · 适配 dsh `0.2.2-rc.5`
+**Version 1.1.103** · Node.js >= 24 · 适配 dsh `0.2.2-rc.5`
 
 这是 `dsh-purge` 的**私有维护基线**，不是面向公众分发的仓库。
 
@@ -8,7 +8,7 @@
 
 | 事实 | 值 |
 |---|---|
-| 版本 | 1.1.101 |
+| 版本 | 1.1.103 |
 | 运行时依赖 | 零（只用 Node 内置模块） |
 | 目标宿主 | `@deepseek-ai/dsh` 0.2.2-rc.5（另兼容 0.2.2-rc.3 / 0.2.2-rc.2 / 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2） |
 | 补丁条数 | 88 条（`PATCHES` 10 / `CODE_PATCHES` 3 / `ENGINE_PATCHES` 8 / `NEW_TOOL_PATCHES` 67，按数组顺序应用） |
@@ -72,16 +72,16 @@ dsh-purge 是本机 `@deepseek-ai` 安装目录的补丁工具，加一份演练
 ```sh
 cd /d/dsh-purge-maintained
 npm pack
-# 产出 dsh-purge-1.1.101.tgz，约 2.4 MB / 170 个文件
-mv dsh-purge-1.1.101.tgz "$DSH_HOME/plugins/"
+# 产出 dsh-purge-1.1.103.tgz，约 2.4 MB / 170 个文件
+mv dsh-purge-1.1.103.tgz "$DSH_HOME/plugins/"
 ```
 
-当前依赖指向 `file:../../plugins/dsh-purge-1.1.101.tgz`，版本号变了就要同步改 profile 的 `package.json`。
+当前依赖指向 `file:../../plugins/dsh-purge-1.1.103.tgz`，版本号变了就要同步改 profile 的 `package.json`。
 
 ### 2. 装进 profile
 
 ```sh
-dsh plugin --profile desktop add "file:$DSH_HOME/plugins/dsh-purge-1.1.101.tgz"
+dsh plugin --profile desktop add "file:$DSH_HOME/plugins/dsh-purge-1.1.103.tgz"
 ```
 
 `dsh plugin --profile <name> add <spec>` 只是把参数转发给 profile 目录里的 pnpm，所以本地路径、tgz、目录都合法。
@@ -105,7 +105,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 或者带完整 specifier 批准：
 
 ```sh
-pnpm approve-builds "dsh-purge@file:../../plugins/dsh-purge-1.1.101.tgz"
+pnpm approve-builds "dsh-purge@file:../../plugins/dsh-purge-1.1.103.tgz"
 ```
 
 注意 `pnpm rebuild dsh-purge` **补不回来**，它自己也会报 `ERR_PNPM_IGNORED_BUILDS`。
@@ -250,7 +250,7 @@ npm run check
 | `test` | 163 个 `scripts/test-*.mjs`（4212 个用例），`node --test` 跑，失败能定位到具体用例名 |
 | `store:repair` | 诊断/清理 pnpm store 里过期的 dsh-purge 条目，根治插件更新时的 store 版本校验失败 |
 
-当前基线：`[syntax] 338 files` / `[metadata] patches=88 tests=162` / `[client] anchor OK` / `[test] PASS 4197/4199`（约 47 秒）。
+当前基线：`[syntax] 341 files` / `[metadata] patches=88 tests=163` / `[client] anchor OK` / `[test] PASS 4210/4212`（约 50 秒）。
 
 三条命令分三层：`npm test`（离线，约 1 秒）→ `npm run check`（加语法/元数据/产物链，约 3 秒）→ `npm run test:full`（加覆盖率棘轮基线，约 2 秒，需要 git 工作副本）。
 

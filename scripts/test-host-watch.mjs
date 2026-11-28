@@ -173,7 +173,7 @@ test("buildPlan：四步顺序固定，7z 只在 extract，命令含 --tree 与 
   assert.match(plan[2].command, /extract-asar\.mjs/);
   assert.match(plan[3].command, /host-rehearse\.mjs/);
   assert.ok(plan[3].extra.some((cmd) => /host-install\.mjs --tree/.test(cmd) && !/--apply/.test(cmd)));
-  assert.equal(extractDirFor("C:\\tmp\\package.exe"), path.join("C:\\tmp", "package-extract"));
+  assert.equal(extractDirFor(path.join(dir, "package.exe")), path.join(dir, "package-extract"));
   assert.equal(fs.existsSync(dest), false);
   fs.rmSync(dir, { recursive: true, force: true });
 });
